@@ -36,33 +36,43 @@ export const authorityScope = {
     'tests/worker/delivery-policy-routing.test.mjs',
     'tests/worker/delivery-check-packs.test.mjs'],
   reusedFixtures: ['tests/worker/shared-feature-fixture.mjs', 'tests/worker/shared-ready-review-fixture.mjs'],
-  supportFiles: ['tests/helpers/typed-boundaries.mjs', 'scripts/mutation/suites/workflow-fixture.mjs'],
+  supportFiles: ['tests/helpers/typed-boundaries.mjs', 'scripts/mutation/suites/workflow-fixture.mjs', 'scripts/mutation/suites/workflow-local-fixture.mjs'],
   timeoutMs: 12 * 60 * 1000,
 };
 
 
 /** Workflow authority is measured independently so its denominator and budget stay explicit. */
 export const workflowScope = {
-  id: 'worker-workflow-v1',
+  id: 'worker-workflow-v2',
   reportDirectory: 'reports/mutation/workflow',
   targets: [
+    'src/worker/application/delivery-acceptance.ts',
+    'src/worker/application/delivery-policy.ts',
+    'src/worker/application/delivery-completion.ts',
+    'src/worker/application/local-merge-contracts.ts',
+    'src/worker/application/local-merge-view.ts',
+    'src/worker/application/local-merge-runtime.ts',
+    'src/worker/application/local-merge-baseline.ts',
+    'src/worker/infrastructure/journal/requests/local-merge.ts',
     'src/worker/application/release-runtime.ts',
     'src/worker/application/release-view.ts',
     'src/worker/application/remote-delivery-runtime.ts',
     'src/worker/application/remote-delivery-history.ts',
     'src/worker/application/remote-delivery-rework.ts',
     'src/worker/application/shared-review-rework.ts',
+    'src/worker/application/shared-feature-policy.ts',
+    'src/worker/application/shared-local-merge-projection.ts',
     'src/worker/application/shared-release-projection.ts',
     'src/worker/infrastructure/journal/requests/publication.ts',
     'src/worker/infrastructure/journal/requests/release.ts',
   ],
   suitePrefix: 'workflow-',
-  testFiles: ['scripts/mutation/suites/workflow-*.test.mjs', '.mutation-build/tests/*.test.mjs'],
+  testFiles: ['scripts/mutation/suites/workflow-*.test.mjs', 'scripts/mutation/suites/delivery-policy.test.mjs', '.mutation-build/tests/*.test.mjs'],
   reusedTests: ['tests/worker/remote-delivery-runtime.test.mjs', 'tests/worker/remote-delivery-journal.test.mjs',
-    'tests/worker/release-runtime.test.mjs', 'tests/worker/release-journal.test.mjs'],
+    'tests/worker/release-runtime.test.mjs', 'tests/worker/release-journal.test.mjs', 'tests/worker/local-merge-journal.test.mjs', 'tests/worker/local-merge-status.test.mjs'],
   reusedFixtures: ['tests/worker/remote-delivery-fixtures.mjs', 'tests/worker/release-fixtures.mjs',
     'tests/worker/request-gate-fixtures.mjs', 'tests/worker/fixture-cleanup.mjs'],
-  supportFiles: ['scripts/mutation/suites/workflow-fixture.mjs'],
+  supportFiles: ['scripts/mutation/suites/workflow-fixture.mjs', 'scripts/mutation/suites/workflow-local-fixture.mjs', 'scripts/mutation/suites/delivery-policy.test.mjs', 'tests/helpers/typed-boundaries.mjs'],
   timeoutMs: 12 * 60 * 1000,
 };
 const mutationScopes = { authority: authorityScope, workflow: workflowScope };

@@ -7,11 +7,14 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 test('named mutation scopes preserve historical authority membership and independently declare workflow invariants', () => {
   assert.equal(scope.id, process.env.WERK_MUTATION_SCOPE === 'workflow' ? workflowScope.id : authorityScope.id);
-  assert.equal(selectMutationScope().id, 'worker-delivery-authority-v5'); assert.equal(selectMutationScope('workflow').id, 'worker-workflow-v1');
+  assert.equal(selectMutationScope().id, 'worker-delivery-authority-v5'); assert.equal(selectMutationScope('workflow').id, 'worker-workflow-v2');
   assert.ok(authorityScope.targets.includes('src/worker/application/consumption.ts'));
-  for (const path of ['release-runtime.ts', 'release-view.ts', 'remote-delivery-runtime.ts', 'remote-delivery-history.ts', 'shared-review-rework.ts']) assert.ok(workflowScope.targets.includes('src/worker/application/' + path));
+  for (const path of ['release-runtime.ts', 'release-view.ts', 'remote-delivery-runtime.ts', 'remote-delivery-history.ts', 'shared-review-rework.ts', 'delivery-acceptance.ts', 'delivery-policy.ts', 'delivery-completion.ts', 'local-merge-contracts.ts', 'local-merge-view.ts', 'local-merge-runtime.ts', 'local-merge-baseline.ts', 'shared-feature-policy.ts', 'shared-local-merge-projection.ts']) assert.ok(workflowScope.targets.includes('src/worker/application/' + path));
   assert.ok(workflowScope.targets.includes('src/worker/infrastructure/journal/requests/publication.ts'));
   assert.ok(workflowScope.targets.includes('src/worker/infrastructure/journal/requests/release.ts'));
+  assert.ok(workflowScope.targets.includes('src/worker/infrastructure/journal/requests/local-merge.ts'));
+  assert.ok(workflowScope.testFiles.includes('scripts/mutation/suites/delivery-policy.test.mjs'));
+  assert.ok(workflowScope.supportFiles.includes('scripts/mutation/suites/delivery-policy.test.mjs'));
   assert.equal(workflowScope.reportDirectory, 'reports/mutation/workflow'); assert.ok(workflowScope.timeoutMs <= 12 * 60 * 1000);
   assert.equal(mutationTargets.length, new Set([...authorityScope.targets, ...workflowScope.targets]).size);
   assert.throws(() => selectMutationScope('unknown')); assert.throws(() => selectMutationScope('__proto__'));

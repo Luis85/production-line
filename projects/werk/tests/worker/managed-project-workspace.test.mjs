@@ -51,7 +51,7 @@ async function fixture(t) {
   return { workspace, repository: pathToFileURL(source).toString(), digest, get updates() { return updates; }, get configured() { return configured; },
     approve(configurationDigest = digest) { approvals = [{ repositoryId: 'sample', configurationDigest }]; }, revoke() { approvals = []; },
     claudeExecutable(path) { providers = [{ id: 'claude-cli', executable: path, model: '', apiKey: '', authenticationMode: 'cli-account' }]; },
-    async changePolicy() { policy.version++; await writeFile(join(source, '.werk', 'delivery-policy.json'), JSON.stringify(policy)); git('add', '.werk/delivery-policy.json'); git('commit', '-m', 'Updated project policy'); return deliveryPolicySnapshot(policy, git('rev-parse', 'HEAD')).configurationDigest; },
+    async changePolicy(change = {}) { Object.assign(policy, change); policy.version++; await writeFile(join(source, '.werk', 'delivery-policy.json'), JSON.stringify(policy)); git('add', '.werk/delivery-policy.json'); git('commit', '-m', 'Updated project policy'); return deliveryPolicySnapshot(policy, git('rev-parse', 'HEAD')).configurationDigest; },
     items: () => repositories.items };
 }
 
@@ -123,4 +123,23 @@ test('prerequisite diagnostics refuse a configured directory as a Claude executa
   const h = await fixture(t); h.claudeExecutable(h.workspace.config.stateDir);
   const view = await managedProjectsView(h.workspace);
   assert.equal(view.diagnostics.find(item => item.id === 'claude').available, false);
+});
+
+
+test('GitHub diagnostics require explicit current policy approval and remain optional for plain Git', async t => {
+  const h = await fixture(t);
+  const github = async () => (await managedProjectsView(h.workspace)).diagnostics.find(item => item.id === 'github');
+  assert.equal((await github()).required, false, 'A worker without an opted-in project does not require GitHub.');
+  await managedProjectCommand(h.workspace, { action: 'register', operationId: 'plain-git-diagnostics', id: 'sample', repository: h.repository });
+  h.approve();
+  await managedProjectCommand(h.workspace, { action: 'reconcile', operationId: 'plain-git-enable', id: 'sample' });
+  let row = await github(); assert.equal(row.required, false); assert.equal(row.applicable, false); assert.match(row.detail, /Plain Git.*PullRequest Markdown/);
+  const push = { remote: 'origin', repository: 'example/project', base: 'main', push: true, pullRequest: false, draft: true };
+  h.approve(await h.changePolicy({ remoteDelivery: push }));
+  assert.equal((await github()).required, false, 'Git push alone does not require a GitHub CLI.');
+  const digest = await h.changePolicy({ remoteDelivery: { ...push, pullRequest: true } });
+  assert.equal((await github()).required, false, 'Unapproved GitHub configuration does not activate the integration.');
+  h.approve(digest); row = await github(); assert.equal(row.required, true); assert.equal(row.applicable, true);
+  assert.match(row.detail, /approved project policy.*GitHub/);
+  h.revoke(); assert.equal((await github()).required, false, 'Revocation removes the optional integration prerequisite.');
 });

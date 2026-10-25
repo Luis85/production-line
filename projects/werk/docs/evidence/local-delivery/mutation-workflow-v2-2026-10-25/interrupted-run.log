@@ -1,0 +1,17 @@
+[32m17:00:39 (775022) INFO ProjectReader[39m Found 19 of 474 file(s) to be mutated.
+[32m17:00:39 (775022) INFO Instrumenter[39m Instrumented 19 source file(s) with 2955 mutant(s)
+[32m17:00:39 (775022) INFO ConcurrencyTokenProvider[39m Creating 3 test runner process(es).
+[32m17:00:40 (775022) INFO Sandbox[39m Running build command "node scripts/mutation/build.mjs" in "/workspace/production-line/projects/werk/.stryker-tmp/sandbox-MrMFOP".
+[32m17:00:41 (775022) INFO DryRunExecutor[39m Starting initial test run (tap test runner with "perTest" coverage analysis). This may take a while.
+[32m17:00:44 (775022) INFO DryRunExecutor[39m Initial test run succeeded. Ran 15 tests in 2 seconds (net 773.4105700000001 ms, overhead 1694.58943 ms).
+Mutation testing 4% (elapsed: <1m, remaining: ~3m) 163/2955 tested (0 survived, 0 timed out)
+Mutation testing 7% (elapsed: <1m, remaining: ~3m) 201/2955 tested (4 survived, 0 timed out)
+Mutation testing 12% (elapsed: <1m, remaining: ~3m) 280/2955 tested (15 survived, 0 timed out)
+Mutation testing 17% (elapsed: <1m, remaining: ~3m) 334/2955 tested (21 survived, 0 timed out)
+Mutation testing 21% (elapsed: <1m, remaining: ~3m) 374/2955 tested (28 survived, 0 timed out)
+Mutation testing 25% (elapsed: ~1m, remaining: ~2m) 416/2955 tested (37 survived, 0 timed out)
+Mutation testing 29% (elapsed: ~1m, remaining: ~2m) 460/2955 tested (44 survived, 0 timed out)
+Mutation testing 32% (elapsed: ~1m, remaining: ~2m) 497/2955 tested (56 survived, 0 timed out)
+Mutation testing 33% (elapsed: ~1m, remaining: ~2m) 509/2955 tested (64 survived, 0 timed out)
+Mutation testing 36% (elapsed: ~1m, remaining: ~2m) 549/2955 tested (73 survived, 0 timed out)
+Mutation testing 43% (elapsed: ~1m, remaining: ~2m) 649/2955 tested (85 survived, 0 timed out)

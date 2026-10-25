@@ -23,8 +23,8 @@ iteration: ""
 
 # Pull Request
 
-The hosting-service PR belongs to a stable Feature Request and configured repository/base. Its current published head identifies the candidate presented for human review. A Markdown PullRequest note is the review handoff and projection; it is not itself a GitHub PR.
+The default PullRequest is a Markdown file belonging to the stable Feature Request. It is the review handoff: accepted outcome, implementation/source and review Git branches, exact candidate and quality evidence. Shared intake publishes it through ordinary Git; local intake retains its review package locally. A person reviews the delivered increment and explicitly allows the worker to merge the exact candidate into the displayed assigned main checkout, without a GitHub API prerequisite.
 
-The initial hosting-service PR follows successful independent verification. Later verified rework updates the same owned branch/PR with an expected-head guard. Reviews and evidence are bound to the current candidate; unrelated remote changes cause a conflict.
+A hosting-service PR is a separate optional artifact. Explicit committed integration policy and exact local approval enable its creation after verification. A GitHub repository URL or installed `gh` is not consent. When enabled, verified rework retains the same owned open host PR and guards updates against its expected prior head; stale checks/acceptance cannot transfer to changed code.
 
-Remote state (open, closed, merged), merge commit and release milestones are observed separately. Closed-without-merge cannot complete the integration step. Unknown mutation outcomes retain their intent until reconciled.
+Optional host state, actual merge commit and release milestones are observed separately. A Markdown handoff, closed PR or local acceptance does not prove integration or publication. Unknown mutation outcomes retain intent until reconciled.

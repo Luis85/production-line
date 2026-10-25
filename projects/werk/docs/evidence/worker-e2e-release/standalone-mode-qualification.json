@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "storybook-standalone-mode-qualification",
+  "provenance": {
+    "sourceReportSha256": "ffd793260515cf26ce6702c8b5a4ee1e9704bace2e21ac7cbb7b5666f34737e2",
+    "sourceCommit": null,
+    "data": "Synthetic Storybook state, not live provider or Git operation evidence.",
+    "normalization": "Full DOM text and temporary absolute screenshot paths omitted."
+  },
+  "coverage": [
+    "first-use guide remains visible for standalone Claude with legacy mode=mock metadata",
+    "standalone requests do not display an orchestrator assignment-mode badge",
+    "genuine fleet simulation remains explicitly labelled"
+  ],
+  "summary": {
+    "cases": 9,
+    "ready": 9,
+    "errors": 0,
+    "overflow": 0,
+    "widths": [
+      390,
+      768,
+      1440
+    ]
+  },
+  "cases": [
+    {
+      "story": "worker-main-checkout-workflow--first-worker-home",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-main-checkout-workflow--standalone-assignment-mode",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-main-checkout-workflow--fleet-assignment-simulation",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-main-checkout-workflow--first-worker-home",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-main-checkout-workflow--standalone-assignment-mode",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-main-checkout-workflow--fleet-assignment-simulation",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-main-checkout-workflow--first-worker-home",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-main-checkout-workflow--standalone-assignment-mode",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-main-checkout-workflow--fleet-assignment-simulation",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    }
+  ]
+}

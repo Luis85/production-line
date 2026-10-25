@@ -1,13 +1,15 @@
-# Deliver a worker request through GitHub Releases
+# Optionally deliver a worker request through GitHub Releases
 
-Use this guide to run the standalone worker workflow from a request to published build assets. It targets a native Windows worker using Claude Code CLI and a project-configured GitHub Release destination. Read the [workflow reference](../reference/worker-release-workflow.md) for identities, gates and recovery; consult the [qualification ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md) before treating fixture results as native/live qualification.
+Use this guide only when your project explicitly opts into GitHub hosting-service PRs and GitHub Releases. The primary worker journey uses Git branches and a PullRequest Markdown handoff, then asks you to allow the reviewed increment into its displayed main checkout without GitHub CLI or API access. Follow [archive to main checkout](../tutorials/worker-home-to-main.md) for that default journey. See [the core delivery contract](../reference/worker-release-workflow.md#git-and-markdown-handoff) and [shared Git workflow](shared-feature-intake.md).
+
+This optional extension targets a native Windows worker using Claude Code CLI and a project-configured GitHub Release destination. A GitHub repository URL, installed `gh`, provider login or project registration does not enable it. Commit the integration policy and approve its exact digest locally before host actions become available. Read the [workflow reference](../reference/worker-release-workflow.md) for identities, gates and recovery; consult the [qualification ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md) before treating fixture results as native/live qualification.
 
 ## Prepare the worker and project
 
 1. Install a prebuilt worker with [project worker setup](project-worker.md) and use Node 24.x. Keep private worker state separate from shared Git content.
 2. Configure Claude Code CLI in the account that runs the worker and check it in **Settings → Providers & accounts**. Review approved file/command/MCP access independently of provider authentication.
 3. Register the remote project through managed-project settings, or explicitly adopt the intended existing checkout. Choose its shared branch and request directory. A registration failure keeps actionable diagnostics; it does not authorize changing an unrelated checkout.
-4. Authenticate Git and GitHub CLI in that same worker account. The worker uses their official host authentication. Never copy credentials into a Feature Request, prompt, policy, URL or release asset.
+4. For this optional integration, authenticate Git and GitHub CLI in that same worker account. The worker uses their official host authentication. Never copy credentials into a Feature Request, prompt, policy, URL or release asset.
 5. Commit the project's template, readiness/completion rules, approved build/check configuration and `.werk/delivery-policy.json`. Approve the exact displayed policy digest in **Settings → Project delivery**.
 
 A managed clone lives in `<state-dir>/projects/<project-id>/checkout`. A registered project is not automatically ready for execution: missing templates, unapproved policy, unavailable tools and unresolved readiness still require action.
@@ -36,9 +38,9 @@ For a remote clone, `register-project.json` contains the selected project and a 
 
 Use `projects adopt --file adopt-project.json` with `operationId`, `id`, the existing absolute `path`, and optional branch/feature-directory settings. For a saved incomplete operation, inspect `projects list`, then use `projects reconcile --file command.json`; use `projects retry --file command.json` only for a known incomplete clone, with a new operation ID. Schema discovery on the installed runtime gives the exact accepted fields. Registration and adoption never auto-approve project policy.
 
-## Configure the release destination
+## Opt into GitHub and configure the release destination
 
-Preserve the policy's existing required fields and candidate `remoteDelivery` settings. Add a `release` section for the same repository/base. Configure `mergeMethod`, the exact build executable and argument list, timeout, expected artifact paths, tag prefix and prerelease behavior. Use the installed policy validator/schema and [policy reference](../reference/delivery-policy.md) for accepted bounds.
+Keep both `remoteDelivery` and `release` absent for Git-only delivery. To enable this extension, add explicit candidate `remoteDelivery` settings using [candidate publication](publish-worker-candidates.md), and preserve the policy's other required fields. Add a `release` section for the same repository/base. Configure `mergeMethod`, the exact build executable and argument list, timeout, expected artifact paths, tag prefix and prerelease behavior. Use the installed policy validator/schema and [policy reference](../reference/delivery-policy.md) for accepted bounds.
 
 For example, the additional policy section can run Node directly and package one exact output file:
 
@@ -80,7 +82,7 @@ Use **Request changes** on the current candidate and describe the required corre
 
 Rework runs fresh checks and updates the same owned PR using its retained previous head. Earlier human acceptance no longer applies. If the remote head changed outside the worker's expected head, inspect the conflict before continuing; the worker does not overwrite that change.
 
-Record required human acceptance for the exact current candidate. Then use the merge action. Repository branch protection and hosting-service reviews still apply. Wait for a confirmed merge receipt containing the actual integrated commit. A closed PR or local acceptance does not replace it.
+Record required human acceptance for the exact current candidate. Then use the explicitly enabled merge action. For an owned draft GitHub PR, this action marks it ready for review and rechecks the expected head and current policy before merging. Repository branch protection and hosting-service reviews still apply. Wait for a confirmed merge receipt containing the actual integrated commit. A closed PR or local acceptance does not replace it.
 
 ## Build and publish
 

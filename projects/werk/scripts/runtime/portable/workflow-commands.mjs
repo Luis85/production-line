@@ -11,17 +11,19 @@ export function workflowCommands(catalog, action) {
   };
   catalog['feature templates'] = { ...action('/api/features', 'templates', [], false, ['project-id'], { 'project-id': 'projectId' }), mutating: false,
     description: 'List committed project templates and the default selection.' };
+  catalog['request local-merge'] = { ...action('/api/requests', 'local_merge', ['id']), mutating: false, description: 'Inspect the exact assigned main checkout and guarded local merge availability.' };
   catalog['request release'] = { ...action('/api/requests', 'release', ['id']), mutating: false,
     description: 'Inspect merge, merged-commit build, checksummed artifacts and confirmed GitHub release state.' };
   for (const [name, operation] of Object.entries({
     push: 'push_candidate', 'create-pr': 'create_pull_request', 'reconcile-publication': 'reconcile_publication',
+    'merge-local': 'merge_local_candidate', 'reconcile-local-merge': 'reconcile_local_merge',
     merge: 'merge_candidate', 'build-release': 'build_release', 'publish-release': 'publish_release',
     'reconcile-release': 'reconcile_release', 'confirm-release-stopped': 'confirm_release_stopped',
     'request-changes': 'request_changes',
   })) catalog['request ' + name] = {
     ...action('/api/requests', operation, ['id', 'if-match', 'key'], true), mutating: true,
     timeoutMs: operation === 'build_release' ? 3780000 : 180000,
-    input: 'JSON deliveryRunId, inputRevision, candidateCommit, candidateDigest; publish-release adds releaseTag, reconcile-release/confirm-release-stopped add releaseOperationId, reconcile-publication adds publicationOperationId, request-changes/confirm-release-stopped add note.',
+    input: 'JSON deliveryRunId, inputRevision, candidateCommit, candidateDigest; merge-local adds mainCheckout,mainBranch,mainHead; reconcile-local-merge adds localMergeOperationId; publish-release adds releaseTag, reconcile-release/confirm-release-stopped add releaseOperationId, reconcile-publication adds publicationOperationId, request-changes/confirm-release-stopped add note.',
     description: 'Run the guarded operation against the exact retained candidate. Reuse --key for an uncertain-response replay; reconcile unknown outcomes before a new mutation.',
   };
 }

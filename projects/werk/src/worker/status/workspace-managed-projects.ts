@@ -1,3 +1,6 @@
+import { managedProjectSetupStorage } from '../infrastructure/managed-project-setup-storage.js';
+import { managedSetupCommand } from './workspace-managed-setup.js';
+import type { ManagedSetupPlan, ManagedSetupResult, ManagedSetupPlanCommand, ManagedSetupApplyCommand, ManagedSetupReconcileCommand } from '../application/managed-project-setup.js';
 import { access, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { extname, resolve } from 'node:path';
@@ -20,15 +23,17 @@ async function executable(path: string) {
   if (!path || process.platform === 'win32' && extname(path).toLowerCase() !== '.exe') return false;
   try { if (!(await stat(path)).isFile()) return false; await access(path, constants.X_OK); return true; } catch { return false; }
 }
-async function diagnostics(workspace: WorkspaceContext): Promise<ManagedProjectsView['diagnostics']> {
+async function diagnostics(workspace: WorkspaceContext, githubRequired: boolean): Promise<ManagedProjectsView['diagnostics']> {
   const claude = workspace.settings.value.providers.find(item => item.id === 'claude-cli')?.executable;
   return Promise.all(([
-    { id: 'git', name: 'git', configured: undefined, detail: 'Git is required for managed clones. Transport authentication uses the worker host account.' },
-    { id: 'claude', name: 'claude', configured: claude, detail: 'Claude Code uses the configured executable. Check its account in Settings → Providers; executable availability does not establish authentication.' },
-    { id: 'github', name: 'gh', configured: undefined, detail: 'GitHub CLI is required for pull requests and releases. Authenticate it in the worker host account.' },
+    { id: 'git', name: 'git', configured: undefined, required: true, applicable: true, detail: 'Git is required for managed clones. Transport authentication uses the worker host account.' },
+    { id: 'claude', name: 'claude', configured: claude, required: workspace.settings.value.defaultProvider === 'claude-cli', applicable: true, detail: 'Claude Code uses the configured executable. Check its account in Settings → Providers; executable availability does not establish authentication.' },
+    { id: 'github', name: 'gh', configured: undefined, required: githubRequired, applicable: githubRequired, detail: githubRequired
+      ? 'An approved project policy enables GitHub pull requests or releases. GitHub CLI must be available and authenticated in the worker host account for those actions.'
+      : 'GitHub CLI is optional. Plain Git publishes a feature branch and a PullRequest Markdown note; GitHub actions require an explicit approved project policy.' },
   ] as const).map(async item => {
     const path = item.configured || await findExecutable(item.name);
-    return { id: item.id, available: await executable(path), detail: item.detail };
+    return { id: item.id, available: await executable(path), detail: item.detail, required: item.required, applicable: item.applicable };
   }));
 }
 async function workflow(project: ManagedProject, signal: AbortSignal): Promise<ManagedProjectsView['projects'][number]['workflow']> {
@@ -45,13 +50,14 @@ async function workflow(project: ManagedProject, signal: AbortSignal): Promise<M
 export async function managedProjectsView(workspace: WorkspaceContext): Promise<ManagedProjectsView> {
   const state = await managedProjectStorage(workspace.config.stateDir).load(), git = managedProjectGit(workspace.config.stateDir);
   const signal = signalFor(workspace);
+  let githubRequired = false;
   const projects = await Promise.all(state.projects.map(async project => {
     const { operations: _operations, ...item } = project;
     const assignment = workspace.settings.value.repositories.items.find(value => value.id === project.id && resolve(value.path) === resolve(project.path));
     const binding = assignment ? workspace.featureProjects.resolve(project.id).sharedRuntime.intake.binding : undefined;
     const intakeEnabled = project.intake === 'shared' ? !!binding?.enabled && binding.repositoryId === project.id : assignment?.features?.directory === project.featuresDirectory;
     let policyApproved = false, policyPresent = false, baseline = project.head, intakeBlockedReason: string | null = null;
-    try { const observation = await intakePolicy(workspace, project, signal); policyApproved = observation.approved; policyPresent = observation.present; baseline = observation.baseline; }
+    try { const observation = await intakePolicy(workspace, project, signal); policyApproved = observation.approved; policyPresent = observation.present; baseline = observation.baseline; githubRequired ||= observation.approved && observation.githubEnabled; }
     catch { signal.throwIfAborted(); intakeBlockedReason = 'The committed delivery policy could not be checked. Restore repository access, then recheck project setup.'; }
     const configuredWorkflow = await workflow({ ...project, head: baseline }, signal);
     intakeBlockedReason = project.status !== 'ready' ? project.detail : intakeBlockedReason ?? (
@@ -60,9 +66,15 @@ export async function managedProjectsView(workspace: WorkspaceContext): Promise<
       : !policyApproved ? 'The current committed delivery policy is not approved. Review its exact configuration in Project delivery.'
       : project.intake === 'shared' && !configuredWorkflow.configured ? 'Commit the project Feature Request workflow and templates, then recheck setup.'
       : !intakeEnabled ? 'The delivery policy is approved. Recheck project setup to enable intake.' : null);
-    return { ...item, intakeEnabled, policyApproved, intakeBlockedReason, workflow: configuredWorkflow };
+    const setupState = project.mode === 'clone' ? await managedProjectSetupStorage(workspace.config.stateDir, project.id).load() : undefined;
+    const pending = setupState?.operations.findLast(operation => operation.status === 'prepared' || operation.status === 'unknown');
+    const setup: ManagedSetupResult | undefined = pending ? { schemaVersion: 1, projectId: project.id, operationId: pending.operationId, branch: pending.plan.branch,
+      ...(pending.commit ? { commit: pending.commit } : {}), ...(pending.status === 'prepared' ? { resumePlan: pending.plan } : {}), status: 'unknown', requiresPolicyApproval: true,
+      detail: pending.status === 'prepared' ? 'Setup was interrupted before its first push. Inspect the retained preview and explicitly resume the same operation.'
+        : 'The saved workflow publication needs reconciliation. Its push will not be repeated.' } : undefined;
+    return { ...item, ...(setup ? { setup } : {}), intakeEnabled, policyApproved, intakeBlockedReason, workflow: configuredWorkflow };
   }));
-  return { schemaVersion: 1, home: git.home, projects, diagnostics: await diagnostics(workspace) };
+  return { schemaVersion: 1, home: git.home, projects, diagnostics: await diagnostics(workspace, githubRequired) };
 }
 async function intakePolicy(workspace: WorkspaceContext, project: ManagedProject, signal: AbortSignal) {
   const assignment = workspace.settings.value.repositories.items.find(item => item.id === project.id && resolve(item.path) === resolve(project.path));
@@ -71,9 +83,9 @@ async function intakePolicy(workspace: WorkspaceContext, project: ManagedProject
   const baseline = binding?.enabled && binding.repositoryId === project.id ? await runtime!.selectedBaseline(signal)
     : (await repositoryGit(project.path, ['rev-parse', '--verify', 'HEAD^{commit}'], signal, 30000, 65536)).trim();
   const listing = await repositoryGit(project.path, ['ls-tree', '-z', baseline, '--', deliveryPolicyPath], signal, 30000, 65536);
-  if (!/^100(?:644|755) blob /.test(listing)) return { approved: false, present: false, baseline };
+  if (!/^100(?:644|755) blob /.test(listing)) return { approved: false, present: false, baseline, githubEnabled: false };
   const policy = await readDeliveryPolicy(project.path, signal, undefined, baseline);
-  return { approved: workspace.deliveryApprovals.view().approvals.some(item => item.repositoryId === project.id && item.configurationDigest === policy.configurationDigest), present: true, baseline };
+  return { approved: workspace.deliveryApprovals.view().approvals.some(item => item.repositoryId === project.id && item.configurationDigest === policy.configurationDigest), present: true, baseline, githubEnabled: !!policy.configuration.remoteDelivery?.pullRequest || !!policy.configuration.release };
 }
 async function attach(workspace: WorkspaceContext, project: ManagedProject, signal: AbortSignal) {
   const current = workspace.settings.value.repositories;
@@ -103,12 +115,17 @@ async function attach(workspace: WorkspaceContext, project: ManagedProject, sign
   }
 }
 /** The same admission gate protects CLI and HTTP setup; state stays private and no policy is approved here. */
-export async function managedProjectCommand(workspace: WorkspaceContext, input: unknown): Promise<ManagedProjectsView> {
+export function managedProjectCommand(workspace: WorkspaceContext, input: ManagedSetupPlanCommand): Promise<ManagedSetupPlan>;
+export function managedProjectCommand(workspace: WorkspaceContext, input: ManagedSetupApplyCommand | ManagedSetupReconcileCommand): Promise<ManagedSetupResult>;
+export function managedProjectCommand(workspace: WorkspaceContext, input: unknown): Promise<ManagedProjectsView>;
+export async function managedProjectCommand(workspace: WorkspaceContext, input: unknown): Promise<ManagedProjectsView | ManagedSetupPlan | ManagedSetupResult> {
   assertRepositoryChangeAllowed(workspace);
   if (workspace.featureProjects.busy) throw new DomainError('conflict', 'Wait for shared intake synchronization before changing project registration.');
   workspace.repositoriesUpdating = true;
   const signal = signalFor(workspace), git = managedProjectGit(workspace.config.stateDir);
   try {
+    const action = (input as { action?: unknown } | null)?.action;
+    if (action === 'setup_plan' || action === 'setup_apply' || action === 'setup_reconcile') return await managedSetupCommand(workspace, input, signal);
     const manager = new ManagedProjects({ ...managedProjectStorage(workspace.config.stateDir), ...git, attach: project => attach(workspace, project, signal) });
     await manager.command(input, signal);
     return await managedProjectsView(workspace);

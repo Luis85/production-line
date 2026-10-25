@@ -1,5 +1,9 @@
 # Deliver a local Feature Request for human review
 
+For the primary release-archive journey in a dedicated worker home, follow
+[archive to main checkout](worker-home-to-main.md). This tutorial covers the
+separate direct-in-project local intake setup.
+
 This tutorial installs a worker in a Git project, submits a canonical Markdown
 Feature Request, runs a real project check and inspects the resulting local Git
 candidate before human acceptance. The daemon owns execution; Markdown and the
@@ -227,10 +231,14 @@ commit and a unique command ID. Missing manual results or stale evidence reject
 acceptance. Use request changes for feedback; an accepted/cancelled request needs
 explicit reopening before more work.
 
-Only human acceptance completes the Feature Request. The local note and commit
-remain distinct from a pushed branch, remote pull request or merge. The developer's
-checkout is preserved; integrate the reviewed candidate through your normal Git
-workflow. `feature wait` observing a stopped execution is not itself a success or
+With a review-only policy, human acceptance completes the Feature Request. New
+web-generated `localMerge: true` policy instead keeps delivery in progress until
+the separately authorized local main-checkout merge is confirmed. The local note
+and candidate commit alone do not prove that merge, a pushed branch or a hosting-service
+PR. To enable worker-managed local merge, commit and locally approve `localMerge: true`
+before new work is admitted; an older accepted policy does not silently gain that
+authority. Inspect the main checkout path, branch and current head before permitting
+that exact candidate; ordinary manual Git integration remains available. `feature wait` observing a stopped execution is not itself a success or
 acceptance assertion. A wait timeout leaves work running.
 
 ## 6. Inspect the before/after pair

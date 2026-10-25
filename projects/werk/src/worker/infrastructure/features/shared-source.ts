@@ -28,7 +28,7 @@ export function sharedSource(blob: SharedBlob) {
 export function renderSharedSource(record: SharedFeatureRecord) {
   const parsed = parseFeature(record.sourceMarkdown);
   const feedback = record.reviewReworks?.at(-1)?.command;
-  const progress = { ...(record.release ? { releaseJson: JSON.stringify(record.release) } : {}), ...(feedback ? { reviewFeedback: { operationId: feedback.operationId, inputRevision: feedback.inputRevision!, candidateCommit: feedback.candidateCommit!, note: feedback.note!.trim() } } : {}), schemaVersion: 1, summary: record.progress ?? `Worker status: ${record.status.replaceAll('_', ' ')}.`, sourceBodyHash: sharedHash(parsed.body), task: record.taskNote ?? null, review: record.reviewNote };
+  const progress = { ...(record.localMerge ? { localMergeJson: JSON.stringify(record.localMerge) } : {}), ...(record.release ? { releaseJson: JSON.stringify(record.release) } : {}), ...(feedback ? { reviewFeedback: { operationId: feedback.operationId, inputRevision: feedback.inputRevision!, candidateCommit: feedback.candidateCommit!, note: feedback.note!.trim() } } : {}), schemaVersion: 1, summary: record.progress ?? `Worker status: ${record.status.replaceAll('_', ' ')}.`, sourceBodyHash: sharedHash(parsed.body), task: record.taskNote ?? null, review: record.reviewNote };
   parsed.document.set('werkOwner', record.owner);
   parsed.document.set('werkTask', record.taskNote ? `[[${record.taskNote.replace(/\.md$/, '')}]]` : null);
   parsed.document.set('werkPullRequest', record.reviewNote ? `[[${record.reviewNote.replace(/\.md$/, '')}]]` : null);

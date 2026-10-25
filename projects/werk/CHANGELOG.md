@@ -11,6 +11,8 @@ Qualification: native Windows with a real Claude Code CLI account and worker-man
 
 ### Added
 
+- The prebuilt `worker.mjs` entry point starts a standalone worker from a dedicated home without project-local installation or a Factory fleet. The primary webview journey previews and approves a workflow setup Git commit/push, follows request/Git activity, and asks permission to merge the reviewed increment into the exact displayed main checkout.
+- New web-generated `localMerge: true` policy keeps delivery in progress after candidate acceptance until its guarded plain-Git local merge is confirmed; older review-only policies retain their completion semantics.
 - Managed worker projects can clone a configured remote branch beneath private worker state or explicitly adopt an existing checkout, with durable registration/reconciliation/retry identities and prerequisite diagnostics.
 - The standalone request workflow retains its start prompt and exposes Intake through Publish milestones, owned-PR feedback/rework, exact-candidate human acceptance, verified merge, an exact-merged-source build and GitHub Release publication.
 - Optional committed release policy pins the GitHub destination, merge method, direct build executable/arguments, timeout, exact artifact paths, tag prefix and prerelease choice. Build receipts retain artifact digests; publication adds `SHA256SUMS` and `werk-release-manifest.json`.
@@ -18,6 +20,7 @@ Qualification: native Windows with a real Claude Code CLI account and worker-man
 
 ### Changed
 
+- Git and PullRequest Markdown are the default review handoff, with explicit user permission for the worker's exact main-checkout merge and existing manual Git integration still available. GitHub PRs, hosting-service merge and GitHub Releases require explicit committed integration policy and local approval; repository URLs and GitHub CLI availability do not opt in.
 - Candidate publication can opt into approved automatic publication after verification. Initial branch creation remains create-only; later verified candidates use the retained expected remote head and same owned open PR, preserving immutable candidate/operation history.
 - Release-enabled delivery remains in progress after local acceptance until the exact release source and expected published assets are confirmed. Existing local-only requests retain their established completion semantics.
 - The process landscape, ready/done rules, domain notes, operating guides and scoped backlog now describe the complete standalone workflow while retaining separate leased orchestrator publication and native/live qualification requirements.

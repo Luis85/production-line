@@ -1,3 +1,5 @@
+import { localMergePending } from './local-merge-contracts.js';
+import { deliveryCompletionPending } from './delivery-completion.js';
 import { releasePending } from './release-contracts.js';
 import { deliveryVerificationEligibility } from './delivery-verification-eligibility.js';
 import type { DevelopmentScopeView } from './development.js';
@@ -94,7 +96,7 @@ export function evaluateDeliveryBehavior(board: DeliveryBlackboard, profile = de
   return { profileId: profile.id, profileVersion: profile.version, selectedNode: selected?.id ?? 'no-action', selectedAction: selected?.action ?? 'wait', reason: selected?.reason ?? 'No permitted next action.', waitingFor: selected?.waitingFor ?? null, conditions };
 }
 function deliveryControls(run: DeliveryRun, terminal = false): DeliveryControl[] {
-  if (releasePending(run.release) || run.release?.merge) return [];
+  if (localMergePending(run.localMerge) || run.localMerge?.merged || releasePending(run.release) || run.release?.merge) return [];
   if (remotePublicationPending(run)) return run.control?.action === 'cancel' ? [] : ['cancel'];
   if (terminal) return ['reopen'];
   if (['outcome_unknown', 'reconciling'].includes(run.status)) return run.control?.action === 'cancel' ? ['confirm_stopped'] : ['confirm_stopped', 'cancel'];
@@ -112,11 +114,11 @@ export function refreshDelivery(request: WorkerRequest): void {
   request.delivery.decision = evaluateDeliveryBehavior(deliveryBlackboard(request), request.delivery.profile);
   if (remotePublicationPending(request.delivery)) request.delivery.decision = { ...request.delivery.decision, selectedAction: 'reconcile', reason: 'A saved remote publication has an unresolved outcome. Reconcile its branch or pull request receipt before continuing.', waitingFor: 'Read-only remote publication reconciliation' };
   if (releasePending(request.delivery.release)) request.delivery.decision = { ...request.delivery.decision, selectedAction: 'reconcile', reason: 'A saved merge, build or release publication has an unresolved outcome.', waitingFor: 'Release operation observation or read-only reconciliation' };
+  if (localMergePending(request.delivery.localMerge)) request.delivery.decision = { ...request.delivery.decision, selectedAction: 'reconcile', reason: 'The approved main checkout merge has an unresolved outcome.', waitingFor: 'Read-only main checkout reconciliation' };
   request.delivery.allowedControls = deliveryControls(request.delivery, ['cancelled', 'done'].includes(request.phase));
 }
 export function deliveryLifecycle(request: WorkerRequest): NonNullable<WorkerRequest['lifecycle']> {
-  const releaseConfigured = !!(request.input.context as { deliveryPolicy?: DeliveryPolicySnapshot } | undefined)?.deliveryPolicy?.configuration?.release;
-  if (request.phase === 'done' && releaseConfigured && !request.delivery?.release?.published) return 'in_progress';
+  if (request.phase === 'done' && deliveryCompletionPending(request)) return 'in_progress';
   if (request.phase === 'cancelled' || request.phase === 'done') return request.phase;
   if (request.phase === 'review') return 'in_review';
   if (request.delivery?.steps.some(step => ['implementing', 'repairing'].includes(step.phase))) return 'in_progress';

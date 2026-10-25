@@ -1,3 +1,5 @@
+import type { ManagedSetupPlan, ManagedSetupResult, ManagedSetupPlanCommand, ManagedSetupApplyCommand, ManagedSetupReconcileCommand } from '../application/managed-project-setup.js';
+import type { ManagedProjectsView } from '../application/managed-projects.js';
 import { featureTemplateView } from './workspace-feature-templates.js';
 import { tickAutomaticPublication } from './workspace-automatic-publication.js';
 import { managedProjectsView, managedProjectCommand } from './workspace-managed-projects.js';
@@ -121,7 +123,10 @@ export class WorkerWorkspace {
     return result;
   }
   managedProjectsView() { return managedProjectsView(this.context); }
-  managedProjectCommand(input: unknown) { return this.observed(() => managedProjectCommand(this.context, input)); }
+  managedProjectCommand(input: ManagedSetupPlanCommand): Promise<ManagedSetupPlan>;
+  managedProjectCommand(input: ManagedSetupApplyCommand | ManagedSetupReconcileCommand): Promise<ManagedSetupResult>;
+  managedProjectCommand(input: unknown): Promise<ManagedProjectsView>;
+  managedProjectCommand(input: unknown): Promise<ManagedProjectsView | ManagedSetupPlan | ManagedSetupResult> { return this.observed(() => managedProjectCommand(this.context, input)); }
   repositoryStatus() { return repositoryStatus(this.context); }
   repositoryCommand(input: unknown) { return this.observed(() => repositoryCommand(this.context, input)); }
   toolAccess(): ToolAccessView { return toolAccess(this.context); }

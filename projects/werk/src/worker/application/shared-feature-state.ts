@@ -1,3 +1,4 @@
+import type { LocalMergeProjection } from './local-merge-markdown.js';
 import type { ReleaseProjection } from './release-markdown.js';
 import type { FeatureIntakeMeasurement, FeatureIntakeMeasurementUpdate } from './feature-intake-measurement.js';
 import type { FeaturePreparation } from './feature-preparation.js';
@@ -6,7 +7,7 @@ import type { ReadyReviewInput, ReadyReviewResult, ReadyReviewAttempt, ReadyRevi
 import type { FeatureWorkflowSnapshot, SharedFeatureInput } from './feature-workflow.js';
 import type { InteractionCommand, InteractionView } from './interactions.js';
 import type { TaskNoteIdentity } from './task-notes.js';
-import type { RequestCommand, WorkerRequest } from './request-gates.js';
+import type { GatePolicy, RequestCommand, WorkerRequest } from './request-gates.js';
 import type { SharedFeatureView, SharedIntakeConfig } from './shared-intake-contract.js';
 import { DomainError } from '../../shared/errors.js';
 import type { DevelopmentEvidence, DevelopmentScopeView } from './development.js';
@@ -70,9 +71,10 @@ export interface SharedReviewReworkReceipt {
   status: 'pending_source' | 'pending_dispatch' | 'dispatched';
 }
 export interface SharedFeatureRecord extends SharedFeatureView, Omit<FeaturePreparation, 'selection'> {
+  executionPolicy?: GatePolicy;
   readyReviewState?: SharedReadyReviewCheckpoint;
   reviewReworks?: SharedReviewReworkReceipt[];
-  release?: ReleaseProjection;
+  release?: ReleaseProjection; localMerge?: LocalMergeProjection;
   binding: SharedIntakeConfig;
   sourcePath: string;
   sourceMarkdown: string;

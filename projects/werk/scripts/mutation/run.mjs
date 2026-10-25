@@ -63,7 +63,7 @@ async function main() {
   if (afterSources.digest !== metadata.compiledSources.digest) execution.error = 'Compiled TypeScript source files changed during analysis; rerun on a stable tree.';
   if (afterTests.digest !== metadata.tests.digest || afterConfig.digest !== metadata.configuration.digest) execution.error = 'Mutation test or configuration files changed during analysis; rerun on a stable tree.';
   const report = await optionalJson(join(output, 'mutation.json'));
-  const baseline = await optionalJson(join(root, selectedScope === 'authority' ? 'scripts/mutation/baseline.json' : 'scripts/mutation/baselines/worker-workflow-v1.json'));
+  const baseline = await optionalJson(join(root, selectedScope === 'authority' ? 'scripts/mutation/baseline.json' : `scripts/mutation/baselines/${scope.id}.json`));
   const summary = summarizeReport(report, { ...metadata, reportDigest: report ? sha256(await readFile(join(output, 'mutation.json'))) : null }, baseline, execution), markdown = formatSummary(summary);
   await writeFile(join(output, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
   await writeFile(join(output, 'summary.md'), markdown);

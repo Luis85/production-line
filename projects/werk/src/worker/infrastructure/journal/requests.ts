@@ -21,7 +21,7 @@ import { requestBindFeature, requestBindTurn, requestEnsure } from './requests/a
 import { requestCommand, requestPolicy, requestReplayCommand, requestSetPolicy } from './requests/commands.js';
 import { requestFailExecution, requestPrepareExecution, requestRecordResult, requestStartExecution } from './requests/execution.js';
 import { requestEvaluate, requestHoldRecovery } from './requests/gates.js';
-import { requestEvents, requestExecution, requestForSession, requestForTurn, requestHasActiveReview, requestUnresolvedExecutions, requestList } from './requests/queries.js';
+import { requestEvents, requestExecution, requestForSession, requestForTurn, requestHasActiveReview, requestUnresolvedExecutions, requestList, requestRetainedHistoryReason } from './requests/queries.js';
 import { requestCompleteReview, requestFailReview, requestObserveReviewUsage, requestQueuedReviews, requestReserveReview, requestStartReview } from './requests/reviews.js';
 import { RequestStore } from './requests/store.js';
 
@@ -52,6 +52,7 @@ export class WorkerRequestJournal implements RequestGatePort, FeatureIdentityJou
   execution(id: string, turnId: string) {
     return requestExecution(this.store, id, turnId);
   }
+  retainedHistoryReason(sessionId: string): string | null { return requestRetainedHistoryReason(this.store, sessionId); }
   hasActiveReview(sessionId: string): boolean {
     return requestHasActiveReview(this.store, sessionId);
   }

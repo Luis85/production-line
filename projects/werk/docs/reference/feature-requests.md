@@ -66,7 +66,8 @@ request text cannot grant tools or weaken trusted checks. `feature` and
 | `depends_on` | Same-project request IDs or `repositoryId:requestId` references; unknown references, cycles and prerequisites absent from the selected baseline hold dispatch. |
 | `review`, `control` | Guarded candidate decisions and execution controls described below, separate from requirement content. |
 | `readiness_decision`, `criterion_decision` | Exact-subject decisions permitted by the accepted policy; see [readiness and criterion decisions](../how-to/configure-delivery-readiness.md). |
-| `publication` | Explicit push, remote PR or reconciliation command under an approved remote-delivery policy; see [candidate publication](../how-to/publish-worker-candidates.md). |
+| `publication` | Explicit optional GitHub push, remote PR or reconciliation command under an approved integration policy; see [candidate publication](../how-to/publish-worker-candidates.md). |
+| `local_merge` | Explicit candidate-bound main-checkout merge or read-only reconciliation under approved `localMerge: true` policy; see below. |
 
 Provider/model/effort, approved file scope and instruction-profile selectors use
 the same authority boundaries as legacy intake. Worker-owned status, questions,
@@ -127,6 +128,40 @@ terminal work uses a fresh command ID. Intake pause is a project action, separat
 from the selected run's step pause. Stop requests remain pending until the
 execution outcome is known; uncertain work must be reconciled before retry.
 
+### Main-checkout merge from Markdown
+
+After reviewing and accepting the exact current candidate, `local_merge` carries the same explicit permission as the webview. The committed accepted policy must enable `localMerge: true` and have its exact local approval. Copy the destination path, branch and current main head from the worker's local-merge view; do not infer them from another clone or the candidate branch.
+
+```yaml
+local_merge:
+  command_id: CMD-0042-merge-main-01
+  action: merge_local_candidate
+  run_id: <current delivery run ID>
+  request_revision: 2
+  candidate_commit: <complete candidate commit from the current review package>
+  main_checkout: 'C:\WerkHome\.werk\worker\projects\example\checkout'
+  main_branch: main
+  main_head: <complete current main commit from the local-merge view>
+```
+
+`request_revision` is the accepted semantic input revision, not the mutable journal revision used by CLI `--if-match`. Both Git commit fields must be complete lowercase SHA-1 or SHA-256 identifiers. The path must be the exact absolute assigned checkout, and the branch must be a valid Git branch. Missing/unknown fields or an `operation_id` on a new merge are rejected. A stale candidate/run/revision or dirty/staged/untracked/conflicting main checkout cannot be authorized by editing generated status.
+
+If the outcome is unknown, replace the command with a new command ID and identify the saved operation:
+
+```yaml
+local_merge:
+  command_id: CMD-0042-observe-main-01
+  action: reconcile_local_merge
+  operation_id: CMD-0042-merge-main-01
+  run_id: <same retained delivery run ID>
+  request_revision: 2
+  candidate_commit: <same retained candidate commit>
+```
+
+Reconciliation uses the saved destination; `main_checkout`, `main_branch` and `main_head` are forbidden on that command. It reads the exact saved Git state and never repeats a merge, resets files or discards work. Repeat an acknowledged command with its identical payload/ID; changed content needs a new command ID.
+
+The confirmed local merge does not push main automatically. Publish/synchronize the resulting main commit before later shared requests can use it as an accepted baseline. Requests prepared against an older baseline must be refreshed/reprepared or replaced to include the accepted increment. Confirmed merge request history is retained in this version so admission-safety evidence cannot disappear; deletion is blocked until a future independent durable project receipt ledger supports safe cleanup. See [the delivery contract](worker-release-workflow.md#explicit-main-checkout-merge).
+
 Commands are durably consumed once. Repeated saves return the prior acknowledgement;
 changed content under the same command ID is rejected. Stale candidate, revision
 or run targets produce a rejection with the next action to reconcile. UI commands
@@ -135,8 +170,10 @@ use these same application rules. Editing generated status cannot accept work.
 A delivery's lifecycle is `draft`, `submitted`, `ready`, `in_progress`,
 `in_review`, `done` or `cancelled`. Its run status and phase are separate facts.
 A completed invocation or successful verification does not establish `done`;
-local delivery waits for human acceptance of the verified candidate. A local
-review note is not a remote pull request or merge.
+local delivery requires human acceptance of the verified candidate. New
+`localMerge: true` policy additionally waits for the explicitly approved main-checkout
+merge receipt. Older policies keep their established review-completion behavior.
+A Markdown review note does not itself prove a merge or hosting-service PR.
 
 The [local delivery explanation](../explanation/local-delivery-worker.md) describes
 the journey and the [acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/2026-10-20-local-delivery-acceptance.md)

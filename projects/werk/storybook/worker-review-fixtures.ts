@@ -58,8 +58,9 @@ export function installReviewFixture(variant: ReviewFixture = 'verified') {
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
     if (path === '/api/tasks' && body.action === 'get') return unavailable || variant === 'missing' ? Response.json({ error: 'This feature request is no longer available on this worker.' }, { status: 404 }) : Response.json({ session, chat });
     if (path === '/api/taskboard/detail') return Response.json(task);
-    if (path === '/api/shared-intake') return Response.json({ requests: [shared] });
+    if (path === '/api/shared-intake') return Response.json({ config: { repositoryId: feature.repositoryId }, requests: [shared] });
     if (path === '/api/requests') {
+      if (body.action === 'local_merge') return Response.json({ configured: false, reason: 'No assigned main checkout is available in this illustrative fixture.', candidate: null, target: null, state: { operations: [] }, canMerge: false, canReconcile: false });
       if (body.action === 'release') return Response.json({ configured: false, authorized: false, reason: null, target: null, candidate: null, state: { operations: [] }, canMerge: false, canBuild: false, canPublish: false, canReconcile: false, canConfirmStopped: false });
       if (body.action === 'publication') return Response.json({ configured: false, authorized: false, reason: null, target: null, candidate: null, canPush: false, canCreatePullRequest: false, canReconcile: false, publications: [] });
       if (body.action === 'list') return Response.json({ schemaVersion: 1, rows: [{ ...request, title: request.input.title, kind: request.input.kind }], total: 1, nextOffset: null });

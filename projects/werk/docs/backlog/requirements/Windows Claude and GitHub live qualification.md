@@ -17,4 +17,4 @@ Qualify the packaged native Windows runtime with an authenticated Claude Code CL
 
 Exit: sanitized retained evidence records actual runtime/OS/provider/request/PR/source/build/release identities and expected asset digests. Linux fixtures, API mocks and green source checks do not complete this PBI.
 
-Follow the [acceptance scenario](../../reports/worker-release-workflow-acceptance.md#end-to-end-acceptance-scenario). This item remains Open until that evidence exists.
+Follow the [acceptance scenario](../../reports/worker-release-workflow-acceptance.md#optional-github-end-to-end-acceptance-scenario). This item remains Open until that evidence exists.

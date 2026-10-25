@@ -160,6 +160,8 @@ export async function action(host: Pick<LocalTaskRuntime, "preparations" | "task
         body.action === "restore" ||
         body.action === "delete"
       ) {
+        const retention = body.action === 'delete' && host.sessions.requests.retainedHistoryReason(task.sessionId);
+        if (retention) throw new DomainError('conflict', retention);
         if (
           body.action !== "restore" &&
           host.sessions.requests.hasActiveReview(task.sessionId)

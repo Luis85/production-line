@@ -5,7 +5,8 @@ import { publication } from '../../worker/remote-delivery-fixtures.mjs';
 import { defaultGatePolicy } from '../../../src/worker/dist/worker/application/request-gates.js';
 const { publicationLink } = await frontend('src/worker/webview/delivery-publication-view.ts');
 const { releaseCommand, releaseLink, releaseTagIssue } = await frontend('src/worker/webview/delivery-release-view.ts');
-const { workflowTimeline, workflowReleaseNextStep } = await frontend('src/worker/webview/workflow-timeline.ts');
+const { localMergeCommand } = await frontend('src/worker/webview/local-merge-view.ts');
+const { workflowTimeline, workflowReleaseNextStep, workflowLocalMergeNextStep } = await frontend('src/worker/webview/workflow-timeline.ts');
 const { managedProjectCommand, emptyManagedProjectDraft } = await frontend('src/worker/webview/managed-project-view.ts');
 const { readFeaturePriority } = await frontend('src/worker/webview/feature-priority.ts');
 const { readFeatureDetails, writeFeatureDetail } = await frontend('src/worker/webview/feature-authoring-fields.ts');
@@ -59,6 +60,7 @@ test('publishing needs current permission and a selected tag; transport never in
 });
 test('workflow completion follows matching merge, build and release receipts, never a model completion claim', () => {
   const request = requestFixture();
+  request.delivery.release = { operations: [] };
   let stages = workflowTimeline(request);
   assert.equal(stages.length, 8); assert.equal(stages[4].state, 'complete');
   assert.deepEqual(stages.slice(5).map(stage => stage.state), ['pending', 'pending', 'pending']);
@@ -135,4 +137,40 @@ test('release version feedback rejects invalid tags before offering publication'
   assert.match(releaseTagIssue('v1..0', 'v'), /Avoid repeated dots/);
   assert.equal(releaseTagIssue('v1.0.0', 'v'), '');
   assert.equal(releaseCommand(request, view, 'publish_release', { tag: 'v1..0' }), null);
+});
+
+
+test('plain Git stops at review and never infers GitHub consent from the repository URL', () => {
+  const request = requestFixture();
+  request.input.context = { repository: 'https://github.com/example/project.git', deliveryPolicy: { schemaVersion: 1, baseline: '1'.repeat(40), configurationDigest: 'policy', profile: { id: 'feature', maxRepairAttempts: 2, verificationInputs: ['tests/'] }, configuration: { reviewDirectory: 'reviews' } } };
+  assert.deepEqual(workflowTimeline(request).map(stage => stage.id), ['intake', 'prepare', 'produce', 'verify', 'review']);
+  assert.equal(workflowReleaseNextStep(request), null);
+  request.delivery.release = { operations: [] };
+  assert.equal(workflowTimeline(request).length, 8, 'retained release evidence remains inspectable even without a current release policy');
+});
+
+
+test('main checkout merge commands bind the candidate, checkout path, branch and observed main head', () => {
+  const request = requestFixture(), candidate = request.delivery.review.candidate;
+  const view = { configured: true, reason: null, candidate, target: { repositoryId: 'project', checkoutPath: 'C:\\Projects\\app', branch: 'main', head: 'a'.repeat(40) }, state: { operations: [] }, canMerge: true, canReconcile: false };
+  const fields = localMergeCommand(request, view);
+  assert.equal(fields.action, 'merge_local_candidate'); assert.equal(fields.mainCheckout, view.target.checkoutPath); assert.equal(fields.mainBranch, 'main'); assert.equal(fields.mainHead, view.target.head); assert.equal(fields.candidateDigest, candidate.candidateDigest);
+  assert.equal(localMergeCommand(request, { ...view, canMerge: false }), null);
+  assert.equal(localMergeCommand(request, { ...view, candidate: { ...candidate, candidateDigest: 'changed' } }), null);
+  const receipt = { operationId: 'merge-one', repositoryId: 'project', checkoutPath: view.target.checkoutPath, mainBranch: 'main', mainHead: view.target.head, candidate, status: /** @type {const} */ ('unknown'), createdAt: request.createdAt, updatedAt: request.createdAt, detail: 'Inspect main checkout.' };
+  view.canReconcile = true; view.state.operations.push(receipt);
+  assert.equal(localMergeCommand(request, view, receipt).localMergeOperationId, receipt.operationId);
+  assert.equal(localMergeCommand(request, view, { ...receipt, checkoutPath: 'other-checkout' }), null);
+});
+
+test('opt-in local merge stays visible until its exact current candidate is confirmed in the main checkout', () => {
+  const request = requestFixture();
+  request.input.context = { deliveryPolicy: { schemaVersion: 1, baseline: '1'.repeat(40), configurationDigest: 'policy', profile: { id: 'feature', maxRepairAttempts: 2, verificationInputs: ['tests/'] }, configuration: { reviewDirectory: 'reviews', localMerge: true } } };
+  request.lifecycle = 'in_progress';
+  assert.equal(workflowTimeline(request).length, 6); assert.equal(workflowTimeline(request)[4].state, 'complete'); assert.equal(workflowTimeline(request)[5].state, 'pending');
+  assert.equal(workflowLocalMergeNextStep(request)?.title, 'Approve merge into main checkout');
+  request.delivery.localMerge = { operations: [], merged: { branch: 'main', previousHead: 'a'.repeat(40), candidateCommit: request.delivery.review.candidate.candidateCommit, mergeCommit: 'b'.repeat(40), tree: 'c'.repeat(40), mergedAt: request.createdAt } };
+  assert.equal(workflowTimeline(request)[5].state, 'complete');
+  assert.equal(workflowLocalMergeNextStep(request)?.title, 'Main checkout merge confirmed');
+  request.delivery.localMerge.merged.candidateCommit = 'old-candidate'; assert.equal(workflowTimeline(request)[5].state, 'pending');
 });

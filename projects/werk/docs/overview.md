@@ -18,9 +18,10 @@ merging.
 
 | You want to… | Start here |
 | --- | --- |
-| Install a worker in your project | [Project-worker quick start](#install-a-project-worker) |
+| Start a standalone worker in its own home | [Archive-to-main-checkout quick start](#start-a-dedicated-worker-home) |
+| Install a worker directly in an existing project | [Project-worker setup](#install-a-project-worker) |
 | Work locally from Markdown with review before merge | [Local delivery worker](explanation/local-delivery-worker.md) |
-| Deliver a reviewed request through GitHub Releases | [Complete worker release workflow](how-to/deliver-worker-release.md) |
+| Explicitly opt into GitHub PRs and Releases | [Optional GitHub release workflow](how-to/deliver-worker-release.md) |
 | Let a team submit requests through Git and Obsidian | [Shared Markdown queue](how-to/shared-feature-intake.md) |
 | Design features by day and implement them overnight | [Evening handoff and morning review](how-to/shared-feature-intake.md#work-during-the-day-implement-overnight) |
 | Create and follow requests in the browser | [Worker webview](how-to/use-worker-webview.md) |
@@ -32,6 +33,35 @@ merging.
 This overview describes the current source branch. Downloaded applications and the
 hosted documentation reflect their published release; use that release's guides
 when working with an older installation.
+
+## Start a dedicated worker home
+
+Use Node 24.x, Git and a complete verified runtime archive containing the standalone
+`worker.mjs` launcher. Extract it into a fresh worker home, preserving its
+`werk-<version>` top directory. From the outer home, start the prebuilt worker:
+
+```sh
+node ./werk-<version>/worker.mjs
+```
+
+Replace `<version>` with the extracted version. The current directory is its home;
+`--home PATH` selects it explicitly. The worker opens its webview and keeps private
+state in `<home>/.werk/worker`. Startup prints the local URL and private credential
+file path; unlock locally without putting the token in the URL. This starts the
+standalone worker; no project-local `init`, npm step or Factory fleet is needed.
+
+In the webview, configure the provider, clone/register the project, preview its
+workflow setup and approve its Git commit/push. Separately approve the exact
+committed delivery policy and recheck project setup. Then create a Feature Request,
+follow Kanban, Git commits/pushes, activity and updates to that same request,
+review the delivered increment and explicitly allow its merge into the displayed
+main checkout. New web-generated setup includes `localMerge: true`, so delivery
+waits for that merge confirmation after candidate acceptance.
+
+The [primary tutorial](tutorials/worker-home-to-main.md) follows this literal
+archive-to-main journey. A newly built candidate archive and the currently public
+released binary are separate artifacts; use the matching version's documentation.
+GitHub PRs and Releases remain optional committed/approved integrations.
 
 ## Install a project worker
 
@@ -124,7 +154,8 @@ review evidence keep the same request identity.
    the same request. You can also answer through its webview conversation.
 6. **Review the result.** After the configured `fr-done-check.json` checks, the worker publishes
    a feature branch and a PullRequest Markdown note with evidence. A human
-   reviews the changes and decides whether to merge.
+   reviews the changes and explicitly allows the exact candidate into the displayed
+   main checkout when ready. The merge action identifies its path, branch and current head.
 
 | Artifact | What the team uses it for |
 | --- | --- |
@@ -132,8 +163,13 @@ review evidence keep the same request identity.
 | Task note | A question, supported continuation, or operator action needed to proceed |
 | PullRequest note | The review handoff: implementation branch, results and verification evidence |
 
-A **PullRequest note is a Markdown file**, not an automatically opened GitHub or
-GitLab pull request. A blocked Task may require a configuration change; answering
+The default **PullRequest is a Markdown file** delivered with the Git branches
+and quality evidence. Review the delivered increment and explicitly allow its
+merge into the displayed main checkout; no GitHub
+API or GitHub CLI is needed. A GitHub repository URL, installed `gh` or provider
+login does not opt the project into a hosting-service integration.
+
+A PullRequest note does not automatically open a GitHub or GitLab pull request. A blocked Task may require a configuration change; answering
 it does not grant new permissions. The developer checkout stays untouched by
 shared implementation and publication. See the
 [shared workflow guide](how-to/shared-feature-intake.md) for ownership,
@@ -145,11 +181,13 @@ For a worker that watches your own folder, choose `init --intake local`. New
 `worker.request/v1` notes start as drafts; set `intent: submit` after writing the
 acceptance criteria and approved paths. The worker pins the committed project
 policy, implements in an owned worktree, runs required checks and creates a local
-review note. Accept the exact candidate through Markdown or the webview before
-merging it yourself. Local intake does not automatically push branches or notes.
-A project can separately authorize [candidate publication](how-to/publish-worker-candidates.md);
-each push or remote PR remains an explicit action with its own recorded outcome.
-The optional [release workflow](how-to/deliver-worker-release.md) continues through
+review note. Accept the exact candidate through Markdown or the webview, then
+explicitly approve its merge into the displayed main checkout. Older review-only
+policies and manual Git integration retain their established behavior. Local intake does not automatically push branches or notes.
+A project can explicitly opt into [GitHub candidate publication](how-to/publish-worker-candidates.md)
+through committed integration policy and local approval of its exact digest.
+Each authorized push or hosting-service PR retains its own recorded outcome.
+The separately enabled optional [GitHub release workflow](how-to/deliver-worker-release.md) continues through
 current-candidate acceptance, verified merge, a build of the actual merged commit
 and confirmed GitHub Release assets. It retains the request identity and records
 each milestone separately; release-enabled delivery completes after publication.

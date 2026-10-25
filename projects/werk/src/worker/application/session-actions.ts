@@ -94,6 +94,8 @@ export async function sessionAction(context: SessionActionContext, input: unknow
         else if (body.action === "rename")
           record.title = text(body.title, "Session title", 120);
         else if (body.action === "archive" || body.action === "delete") {
+          const retention = body.action === 'delete' && context.requests.retainedHistoryReason(record.id);
+          if (retention) throw new DomainError('conflict', retention);
           if (context.requests.hasActiveReview(record.id))
             throw new DomainError(
               "conflict",

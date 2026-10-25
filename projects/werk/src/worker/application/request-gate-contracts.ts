@@ -206,6 +206,7 @@ export interface WorkerRequest {
   } | null;
 }
 export interface RequestSummary {
+  completion?: 'local_merge' | 'release';
   lifecycle?: DeliveryLifecycle;
   delivery?: Pick<DeliveryRun, 'id' | 'status' | 'phase' | 'decision' | 'allowedControls'>;
   id: string;
@@ -264,12 +265,15 @@ export interface RequestCommand {
     | "build_release"
     | "publish_release"
     | "reconcile_release"
-    | "confirm_release_stopped";
+    | "confirm_release_stopped"
+    | "merge_local_candidate"
+    | "reconcile_local_merge";
   requestId: string;
   expectedRevision: number;
   operationId: string;
   publicationOperationId?: string;
   releaseOperationId?: string;
+  localMergeOperationId?: string; mainCheckout?: string; mainBranch?: string; mainHead?: string;
   releaseTag?: string;
   assessmentId?: string;
   proposalId?: string;
@@ -303,6 +307,7 @@ export interface RequestGatePort {
   forTurn(sessionId: string, turnId: string): WorkerRequest | undefined;
   forSession(sessionId: string): WorkerRequest | undefined;
   hasActiveReview(sessionId: string): boolean;
+  retainedHistoryReason(sessionId: string): string | null;
   bindTurn(id: string, turnId: string, inputRevision?: number, answeredTurnId?: string): WorkerRequest;
   evaluate(id: string, stage: GateStage): GateEvaluation;
   prepareExecution(id: string, turnId: string, runId: string): WorkerRequest;

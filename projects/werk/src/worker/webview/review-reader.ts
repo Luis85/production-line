@@ -52,7 +52,7 @@ export async function readFeatureReview(identity: ReviewIdentity, read: Read): P
   if (session.interaction?.sessionId && session.interaction.sessionId !== session.id || task?.interaction?.sessionId && task.interaction.sessionId !== session.id)
     throw new Error('Interaction evidence belongs to another conversation. Refresh before continuing.');
   const references = [session.feature, task?.feature].filter(reference => !!reference);
-  if (references.some(reference => (['key', 'id', 'source', 'scope'] as const).some(field => reference[field] !== references[0]![field])))
+  if (references.some(reference => (['key', 'id', 'source', 'scope', 'repositoryId'] as const).some(field => reference[field] !== references[0]![field])))
     throw new Error('Feature Request identities do not agree. Refresh to inspect one matching request.');
   const feature = session.feature ?? task?.feature;
   if (task?.requestId && session.requestId && task.requestId !== session.requestId)
@@ -66,11 +66,16 @@ export async function readFeatureReview(identity: ReviewIdentity, read: Read): P
     throw new Error('Request evidence changed while loading. Refresh to review one matching request revision.');
   let shared: SharedFeatureView | null = null;
   if (feature?.source === 'shared_git') {
-    const intake = await read<SharedIntakeView>('/api/shared-intake');
+    const projectId = feature.repositoryId;
+    if (projectId !== undefined && (typeof projectId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(projectId)))
+      throw new Error('The retained Feature Request project identity is invalid. Refresh before continuing.');
+    const intake = await read<SharedIntakeView>('/api/shared-intake' + (projectId ? '?projectId=' + encodeURIComponent(projectId) : ''));
+    if (projectId && intake.config?.repositoryId !== projectId)
+      throw new Error('Shared Feature Request project identity changed. Refresh to inspect its assigned project.');
     const matching = intake.requests.filter(item => item.feature?.key === feature.key);
     if (matching.length !== 1) throw new Error('Shared Feature Request ownership is unavailable. Refresh before making a decision.');
     shared = matching[0]!;
-    if (!shared.isLocal || shared.feature && (['id', 'source', 'scope'] as const).some(field => shared!.feature![field] !== feature[field]))
+    if (!shared.isLocal || shared.feature && (['id', 'source', 'scope', 'repositoryId'] as const).some(field => shared!.feature![field] !== feature[field]))
       throw new Error('Shared Feature Request ownership changed. Refresh to inspect its current owner.');
     if (shared.taskId && task && shared.taskId !== task.id)
       throw new Error('Shared Feature Request task identity changed. Refresh before continuing.');

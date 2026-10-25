@@ -18,6 +18,7 @@ import type { RequestCommand } from './request-gates.js';
 export interface FeatureGateProjection {
   lifecycle?: import('./delivery-contracts.js').DeliveryLifecycle;
   release?: import('./release-markdown.js').ReleaseProjection;
+  localMerge?: import('./local-merge-markdown.js').LocalMergeProjection;
   publications?: import('./remote-delivery-contracts.js').RemotePublication[];
   delivery?: { runId: string; status: string; phase: string; reason: string; waitingFor: string | null; controls: string[]; checkpoint?: { branch: string; candidateCommit: string } };
   requestId: string; revision: number; inputRevision: number; phase: RequestPhase;

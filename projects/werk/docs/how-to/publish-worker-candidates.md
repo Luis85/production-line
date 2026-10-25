@@ -1,10 +1,14 @@
-# Publish a verified worker candidate
+# Optionally publish a verified candidate to GitHub
 
-A local review package is the default delivery result. An approved project can additionally publish the exact candidate branch and its GitHub PR through explicit actions or an approved automatic-publication policy. Neither publication action accepts, merges or releases the feature. The Feature Request remains the central record; the optional [release workflow](deliver-worker-release.md) records those downstream actions separately.
+The default shared delivery result is a Git branch and PullRequest Markdown handoff; local intake retains its review package locally. Review the delivered increment and explicitly allow its guarded merge into the displayed assigned main checkout without a hosting-service API; existing manual Git integration remains available. A GitHub URL or installed GitHub CLI does not opt the project into hosting-service PR creation.
+
+The local main-checkout merge requires an explicitly enabled and machine-approved `localMerge: true` policy. Its prepared tree may differ from the verified candidate only in retained workflow request, Task, review and operation metadata; other source changes require rework and verification against the new main baseline. Applicable external Git merge drivers or clean/smudge/process filters are unsupported because they can run host commands during preparation or checkout. Unused host filter registrations do not block ordinary repositories. The worker checks current and pinned-tree attributes before preparing or applying the merge, and never pushes main automatically.
+
+A local review package is the default local result. An approved project can additionally publish the exact candidate branch and its GitHub PR through explicit actions or an approved automatic-publication policy. Neither publication action accepts, merges or releases the feature. The Feature Request remains the central record; the optional [release workflow](deliver-worker-release.md) records those downstream actions separately.
 
 ## Configure the destination
 
-Add a `remoteDelivery` section to the project's existing `.werk/delivery-policy.json`, preserving its other required fields:
+To explicitly enable GitHub integration, add a `remoteDelivery` section to the project's existing `.werk/delivery-policy.json`, preserving its other required fields:
 
 ```json
 {
@@ -23,7 +27,7 @@ The repository must have exactly one push URL for the named remote, and it must 
 
 Commit the policy, then open **Settings → Project delivery** in the worker and approve the exact displayed project policy digest. Repository content cannot grant this permission itself. A different configuration digest needs its own local approval. Revoking approval prevents further mutations, including the next step of an active publication. Restore the intended policy approval before reconciling an unresolved operation.
 
-Set optional `remoteDelivery.automatic: true` only when both `push` and `pullRequest` are enabled and the exact committed policy is locally approved. The worker then publishes a verified candidate and its PR after checks pass, including verified rework. Omitting `automatic` preserves manual publication and existing policy snapshots. Unknown operations, revoked approval and destination conflicts still block new mutations.
+Set optional `remoteDelivery.automatic: true` only when both `push` and `pullRequest` are enabled and the exact committed policy is locally approved. The worker then publishes a verified candidate and its PR after checks pass, including verified rework. Omitting `automatic` within an enabled integration preserves manual GitHub publication and existing policy snapshots. Omitting the entire `remoteDelivery` section keeps Git-only delivery; no GitHub API action or `gh` prerequisite is introduced. Unknown operations, revoked approval and destination conflicts still block new mutations.
 
 ## Publish from the webview
 

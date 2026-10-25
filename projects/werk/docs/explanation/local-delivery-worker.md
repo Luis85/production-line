@@ -25,7 +25,7 @@ This document records the implementation direction for [PRD-LDW-001](https://git
 6. Follow the request in Markdown or the webview. Request lifecycle, run status and execution phase answer different questions: whether the feature is accepted, whether execution can proceed, and what the worker is currently doing.
 7. Inspect checks and any bounded repair attempts. A model's completion statement does not establish a passing build or test. Missing or stale evidence remains visible and blocks the relevant gate.
 8. Review the local candidate and its Markdown package. Check the linked branch/commit, criterion results, failed or unavailable checks, limitations and required manual work. Record acceptance or request changes against that exact candidate.
-9. Publish through the team's configured delivery workflow. The optional [release workflow](../reference/worker-release-workflow.md) records the current-candidate merge, exact-source build and GitHub Release assets separately. Local acceptance does not imply that any of those remote results exists.
+9. Review the PullRequest Markdown handoff, inspect the assigned main checkout/path, branch and head, then explicitly allow the worker to merge that exact increment. Newly generated `localMerge: true` policy keeps delivery in progress until this local merge is confirmed. Shared intake publishes its Git branch and note without a hosting-service API; local mode keeps its candidate/review package locally. The explicitly enabled optional [GitHub release workflow](../reference/worker-release-workflow.md) records the current-candidate merge, exact-source build and GitHub Release assets separately. Local acceptance does not imply that any of those remote results exists.
 
 ## Request authority and communication
 
@@ -83,7 +83,7 @@ Readiness, advisory-review and older provider attempts can also stop with an unk
 
 Evidence identifies its request, requirement revision, candidate, check definition, evaluator, environment and observation time. A relevant code, baseline, requirement or check-definition change makes earlier evidence stale. Automated criteria and manual criteria have separate outcomes; unavailable observations do not become zero-cost or passing results. Baseline checks run separately and distinguish observed regressions, resolved failures and pre-existing failures. A known baseline failure never exempts the candidate automatically. Exact policy-permitted criterion decisions are disclosed separately from the original check observations.
 
-The worker uses its own Git workspace and preserves the developer's checkout and staging area. Candidate packaging must not mutate the very code tree it claims was verified. Unaccepted work and its evidence remain inspectable after a failure, interruption or cancellation.
+Implementation runs in the worker's isolated Git workspace. Updating the assigned main checkout requires a separate approval naming its exact path, branch and current head; a dirty or stale target blocks that operation. Candidate packaging must not mutate the very code tree it claims was verified. Unaccepted work and its evidence remain inspectable after a failure, interruption or cancellation.
 
 ## Monitoring and retention
 
@@ -93,10 +93,21 @@ Historical submission times that were never observed remain unknown: **All time*
 
 Temporary service logs have a bounded retention setting. Accepted delivery evidence and unaccepted work use an explicit preserve policy; an expired temporary log must not erase the candidate, its decisions or its review package. The run inspector shows the selected behavior path, conditions, wait reason and accepted runtime/repair limits. Bounded policy authoring edits declarative configuration; it does not execute arbitrary behavior code or silently approve the resulting policy.
 
-Optional [remote candidate publication](../how-to/publish-worker-candidates.md) records push and PR creation separately and reconciles an unknown acknowledgement before another mutation. The optional [worker release workflow](../how-to/deliver-worker-release.md) extends that durable pattern through verified merge, exact-source build and GitHub Releases. Its configured downstream gates retain the delivery lifecycle in progress until publication is confirmed. Existing orchestrator and factory views remain the fleet surfaces; they do not manufacture integrated success from independent worker branches.
+Explicitly enabled optional [GitHub candidate publication](../how-to/publish-worker-candidates.md) records push and PR creation separately and reconciles an unknown acknowledgement before another mutation. The optional [worker release workflow](../how-to/deliver-worker-release.md) extends that durable pattern through verified merge, exact-source build and GitHub Releases. Its configured downstream gates retain the delivery lifecycle in progress until publication is confirmed. Existing orchestrator and factory views remain the fleet surfaces; they do not manufacture integrated success from independent worker branches.
 
 ## Qualification and further reading
 
 The implementation is assessed with real filesystem/Git fixtures, deterministic provider protocol fixtures, browser interactions and a separate native provider pilot. Each proves a different boundary. In particular, mocked provider output proves neither provider account eligibility nor the reliability of an installed runtime on another operating system.
 
 Use the [project worker guide](../how-to/project-worker.md), [shared intake guide](../how-to/shared-feature-intake.md), [worker webview guide](../how-to/use-worker-webview.md) and [execution modes](modes.md) for operating instructions. The [acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/2026-10-20-local-delivery-acceptance.md) is the source for iteration-specific coverage, limitations and pending work.
+
+
+## Workflow boundaries and hardening
+
+Application code owns policy, accepted candidate identity, completion targets, setup intent and recovery decisions. Local checkout integration and optional hosted release delivery use separate ports. Their shared acceptance predicate is neutral application code; the checkout workflow does not depend on the GitHub release implementation. Status handlers compose the use cases and validate machine/project authority, while infrastructure owns Git objects, filesystem operations, provider processes and durable storage. The webview, portable CLI and canonical Markdown submit the same guarded request commands.
+
+The local merge records intent and its prepared commit before touching the checkout. Its final tree must match the verified candidate, except for narrowly retained workflow-note paths from the frozen intake snapshot. Source, template and policy divergence requires fresh verification. Recovery observes a saved operation instead of repeating a possibly completed mutation.
+
+Shared admission checks the exact retained execution baseline against every confirmed local merge, including history beyond the first catalog page. A second request prepared before an increment merged remains held until it is prepared against a baseline containing that increment. Publishing main remains an explicit operator action. Confirmed merge receipts are retained in this release so deleting a task cannot erase that admission evidence; archiving remains available and historical receipts do not block provider settings changes. A future independent project receipt ledger can allow safe history cleanup.
+
+Candidate acceptance can arrive before shared synchronization finishes. The worker still confirms the feature-branch push and PullRequest Markdown handoff before projecting integration progress. Repository-authored progress is validated presentation; it cannot supply execution authority or fabricate a merge receipt.

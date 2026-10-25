@@ -7,14 +7,17 @@ import type { WorkerRequest } from '../../application/request-gates';
 import type { ReleaseOperation, ReleaseView } from '../../application/release-contracts';
 import type { GateCommandFields } from '../request-gate-controller';
 import { date, request, state } from '../store';
+import { acceptedDeliveryPolicy } from '../delivery-policy-view';
 import { useWorkerSnapshot } from '../useWorkerSnapshot';
-import { releaseCandidateMatches, releaseCommand, releaseLink, releaseStatusLabels, releaseTagIssue, type ReleaseCommand } from '../delivery-release-view';
+import { deliveryCandidateMatches } from '../delivery-candidate-view';
+import { releaseCommand, releaseLink, releaseStatusLabels, releaseTagIssue, type ReleaseCommand } from '../delivery-release-view';
 const props = defineProps<{ subject: WorkerRequest; disabled: boolean; pending: (action: string) => boolean }>();
 const emit = defineEmits<{ command: [GateCommandFields] }>();
 const { data, error, loading, refreshing, refresh, readAt, now } = useWorkerSnapshot(() => request<ReleaseView>('/api/requests', 'POST', { action: 'release', requestId: props.subject.id }), [() => props.subject.id], [() => props.subject.revision]);
+const visible = computed(() => !!acceptedDeliveryPolicy(props.subject.input.context)?.configuration.release || !!props.subject.delivery?.release || !!data.value?.configured || !!data.value?.state.operations.length || !!data.value?.state.merge || !!data.value?.state.build || !!data.value?.state.published);
 const tag = ref(''), stopNote = ref(''), confirmMerge = ref(false), confirmPublish = ref(false), confirmStopped = ref(false);
 const stale = computed(() => props.disabled || state.paused || !!error.value || !data.value || !readAt.value || now.value - Date.parse(readAt.value) > 15000);
-const matches = computed(() => !!data.value && releaseCandidateMatches(props.subject, data.value));
+const matches = computed(() => !!data.value && deliveryCandidateMatches(props.subject, data.value));
 const tagIssue = computed(() => releaseTagIssue(tag.value, data.value?.target?.tagPrefix ?? ''));
 const publishedLink = computed(() => data.value ? releaseLink(data.value) : null);
 watch([() => props.subject.id, () => props.subject.delivery?.review?.candidate.candidateCommit, () => state.draftEpoch], () => { tag.value = ''; stopNote.value = ''; confirmMerge.value = false; confirmPublish.value = false; confirmStopped.value = false; });
@@ -25,12 +28,12 @@ function command(action: ReleaseCommand, receipt?: ReleaseOperation) {
 }
 </script>
 <template>
-  <section class="delivery-release" aria-labelledby="delivery-release-title">
+  <section v-if="visible" class="delivery-release" aria-labelledby="delivery-release-title">
     <header><h3 id="delivery-release-title">Merge, build and publish</h3><UButton type="button" color="neutral" variant="ghost" :loading="refreshing" :disabled="!state.unlocked" @click="refresh">Refresh release</UButton></header>
     <p>Follow the reviewed candidate into its merged commit, verified build and published GitHub Release. Each action retains its own result.</p>
     <p v-if="error" class="error-text" role="alert">{{ error }} Refresh before continuing.</p><p v-else-if="loading && !data" role="status">Checking this candidate’s release policy…</p>
     <template v-if="data">
-      <p v-if="!data.configured">Configure the project’s release destination and build in <RouterLink to="/settings#delivery-policy">Project delivery</RouterLink> to continue through publication.</p>
+      <p v-if="!data.configured">Retained release evidence is shown below. GitHub release actions are not enabled by the current policy.</p>
       <p v-if="data.reason" role="status">{{ data.reason }}</p>
       <template v-if="data.target">
         <dl><div><dt>Release repository</dt><dd>{{ data.target.repository }}</dd></div><div><dt>Merge destination</dt><dd>{{ data.target.base }} · {{ data.target.mergeMethod }}</dd></div><div v-if="data.state.merge"><dt>Confirmed merge commit</dt><dd><code>{{ data.state.merge.mergeCommit }}</code></dd></div><div v-if="data.state.build"><dt>Built commit</dt><dd><code>{{ data.state.build.commit }}</code></dd></div></dl>

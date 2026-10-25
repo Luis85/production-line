@@ -10,6 +10,7 @@ import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/jou
 import { workspaceModelFactory } from '../../src/worker/dist/worker/infrastructure/workspace-services.js';
 import { defaultDeliveryProjectPolicy } from '../../src/worker/dist/worker/application/delivery-policy.js';
 import { defaultFeatureWorkflow, defaultFeatureCheck } from '../../src/worker/dist/worker/application/feature-workflow.js';
+import { parseFeature } from '../../src/worker/dist/worker/infrastructure/features/document.js';
 import { authoringTemplateFor } from '../../src/worker/dist/worker/infrastructure/feature-authoring-assets.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
@@ -110,11 +111,16 @@ for (const aliased of [false, true]) test('shared v1 release policy without name
     if (record?.taskId) {
       const task = worker.board.executionDetail(record.taskId);
       result = task.requestId ? worker.sessions.requests.get(task.requestId) : undefined;
-      if (result?.phase === 'review' && !worker.sessions.executor.busy) break;
+      if (result?.phase === 'review' && record.status === 'ready_for_review' && record.publication === 'synced' && !worker.sessions.executor.busy) break;
     }
     await delay(20);
   }
+  const handedOff = worker.sharedIntakeView('project').requests.find(item => item.id === 'shared-release-feature');
   assert.equal(result?.phase, 'review', JSON.stringify(worker.sharedIntakeView('project')));
+  assert.equal(handedOff?.status, 'ready_for_review'); assert.equal(handedOff.publication, 'synced'); assert.ok(handedOff.reviewNote && handedOff.featureBranch);
+  const review = parseFeature(git(remote, 'show', 'main:' + handedOff.reviewNote)).data;
+  assert.equal(review.policyDigest, result.policyDigest); assert.notEqual(review.workflowPolicyDigest, result.policyDigest);
+  assert.equal(git(remote, 'show', handedOff.featureBranch + ':src/value.mjs'), 'export const value = 2;');
   assert.equal(context.config.stateDir, await realpath(state));
   assert.equal(calls.length, 1); assert.equal(calls[0].provider.id, 'claude-cli');
   const acceptedContext = /** @type {{deliveryPolicy:import('../../src/worker/application/delivery-policy.ts').DeliveryPolicySnapshot}} */ (result.input.context);

@@ -78,7 +78,7 @@ export async function removeLinks(path: string, limit = 500000): Promise<number 
 }
 const retainedReason = 'Werk kept this publication worktree because it contains symbolic links or junctions it could not safely remove. Delete the links themselves, then remove the worktree.';
 export interface GitBlob { revision: string; content: string; mode: string; }
-export interface GitIoOptions { repository: string; remote: string; stateDirectory: string; }
+export interface GitIoOptions { repository: string; remote: string; stateDirectory: string; literalObjects?: boolean; }
 /**
  * Git opens worktree metadata before long-path configuration and bounds a child's
  * GIT_DIR to 220 UTF-8 bytes on Windows; a relative argument preserves the same path.
@@ -106,7 +106,7 @@ export class FeatureGitIo {
   }
   async git(cwd: string, args: string[], signal: AbortSignal, input?: string, allowNonZeroExit = false) {
     const mode = gitLaunchMode(args);
-    const env = { ...gitEnvironment(mode === 'plain' ? 'host-local' : 'host'), GIT_AUTHOR_NAME: 'Werk Worker', GIT_AUTHOR_EMAIL: 'worker@werk.invalid', GIT_COMMITTER_NAME: 'Werk Worker', GIT_COMMITTER_EMAIL: 'worker@werk.invalid' };
+    const env = { ...gitEnvironment(mode === 'plain' ? 'host-local' : 'host'), GIT_AUTHOR_NAME: 'Werk Worker', GIT_AUTHOR_EMAIL: 'worker@werk.invalid', GIT_COMMITTER_NAME: 'Werk Worker', GIT_COMMITTER_EMAIL: 'worker@werk.invalid', ...(this.options.literalObjects ? { GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1' } : {}) };
     try {
       return await runProcess(await gitExecutable(cwd, env, mode), ['--literal-pathspecs', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', '-c', 'commit.gpgSign=false', ...args], { cwd, env, mode, observation: { kind: 'git', label: 'Git operation' }, signal, input, timeoutMs: 30000, maxOutputBytes: 2 * 1024 * 1024, allowNonZeroExit });
     } catch (error) {

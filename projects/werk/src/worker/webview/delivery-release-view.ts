@@ -1,3 +1,4 @@
+import { deliveryCandidateMatches } from './delivery-candidate-view';
 import { releaseTag } from '../application/release-tag';
 import type { WorkerRequest } from '../application/request-gates';
 import type { ReleaseOperation, ReleaseView } from '../application/release-contracts';
@@ -9,14 +10,9 @@ export function releaseTagIssue(tag: string, prefix: string): string {
   try { releaseTag(tag.trim(), prefix); return ''; } catch { return 'Use a tag of 1–100 letters, numbers, dots, underscores or hyphens. Avoid repeated dots and trailing dots or .lock.'; }
 }
 export const releaseStatusLabels = { pending: 'Operation pending', unknown: 'Outcome unknown · reconcile first', confirmed: 'Confirmed', not_observed: 'Not found', failed: 'Failed' };
-export function releaseCandidateMatches(request: WorkerRequest, view: ReleaseView): boolean {
-  const candidate = request.delivery?.review?.candidate;
-  return !!candidate && !!view.candidate && candidate.requestId === request.id && candidate.runId === request.delivery?.id && candidate.inputRevision === request.inputRevision && candidate.inputHash === request.inputHash && candidate.policyDigest === request.policyDigest &&
-    ['requestId', 'runId', 'inputRevision', 'inputHash', 'policyDigest', 'candidateCommit', 'candidateDigest', 'baseline', 'branch', 'tree', 'patchDigest', 'checkDefinitionDigest'].every(key => candidate[key as keyof typeof candidate] === view.candidate![key as keyof typeof candidate]);
-}
 /** Every mutation carries the exact inspected candidate; the worker checks its current authority again. */
 export function releaseCommand(request: WorkerRequest, view: ReleaseView, action: ReleaseCommand, input: { receipt?: ReleaseOperation; tag?: string; note?: string } = {}): GateCommandFields | null {
-  if (!view.authorized || !releaseCandidateMatches(request, view)) return null;
+  if (!view.authorized || !deliveryCandidateMatches(request, view)) return null;
   const recovery = action === 'reconcile_release' || action === 'confirm_release_stopped';
   const receipt = input.receipt;
   if (recovery && (!receipt || !['pending', 'unknown'].includes(receipt.status) || !view.state.operations.some(operation => operation.operationId === receipt.operationId))) return null;

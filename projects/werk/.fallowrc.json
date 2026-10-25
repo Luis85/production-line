@@ -2,6 +2,7 @@
   "minimumVersion": "3.33.1",
   "entry": [
     "werk.mjs",
+    "worker.mjs",
     "src/{worker,factory,orchestrator}/cli.ts",
     "src/worker/authoring/cli.ts",
     "src/**/webview/main.ts",
@@ -25,10 +26,12 @@
     "scripts/release/smoke.mjs",
     "scripts/release/system-smoke.mjs",
     "scripts/runtime/child.mjs",
+    "scripts/runtime/portable/home.mjs",
     "scripts/runtime/portable/npm-entry.mjs",
     "scripts/system/child.mjs",
     "tests/ui/browser/repository-intake.mjs",
     "tests/ui/browser/visual-navigation.mjs",
+    "tests/worker/worker-home-browser.mjs",
     "tests/worker/webview-smoke.mjs",
     "tests/**/*.test.{mjs,cjs}"
   ],

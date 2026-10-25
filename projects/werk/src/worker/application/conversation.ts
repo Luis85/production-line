@@ -205,6 +205,8 @@ export class WorkerConversation {
   }
 
   async clear() {
+    const retention = this.runtime.evidence?.requests?.retainedHistoryReason(this.runtime.sessionId);
+    if (retention) throw new DomainError('conflict', retention);
     if (this.runtime.evidence?.requests?.hasActiveReview(this.runtime.sessionId))
       throw new DomainError(
         "conflict",

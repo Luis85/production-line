@@ -46,6 +46,8 @@ async function consumeCommands(record: FeatureRecord, file: FeatureFile, queue: 
         requestId: request.id, expectedRevision: request.revision, operationId: value.commandId,
         inputRevision: value.requestRevision ?? request.inputRevision,
         ...(value.releaseOperationId ? { releaseOperationId: value.releaseOperationId } : {}),
+        ...(value.localMergeOperationId ? { localMergeOperationId: value.localMergeOperationId } : {}),
+        ...(value.mainCheckout !== undefined ? { mainCheckout: value.mainCheckout, mainBranch: value.mainBranch, mainHead: value.mainHead } : {}),
         ...(value.releaseTag ? { releaseTag: value.releaseTag } : {}),
         ...(value.publicationOperationId ? { publicationOperationId: value.publicationOperationId } : {}),
         ...(value.runId ? { deliveryRunId: value.runId } : value.action === 'reopen' && request.delivery ? { deliveryRunId: request.delivery.id } : {}),

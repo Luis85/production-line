@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "kind": "storybook-responsive-qualification",
+  "provenance": {
+    "sourceReport": "werk-main-checkout-confirmation/report.json",
+    "sourceReportSha256": "160575f1d76ea50f9146a7232805a53f1976377fcb337b13cc4466dfd0a13c50",
+    "sourceCommit": null,
+    "sourceIdentityNote": "Source reports do not record an exact commit; these captures belong to the implementation worktree qualification, not a release-source attestation.",
+    "data": "Explicit synthetic Storybook project, provider, request and Git state. No live provider, Git mutation, build or release is performed by these stories.",
+    "normalization": "Full DOM text and temporary absolute screenshot paths omitted; observation fields retained. PNG bytes are unmodified."
+  },
+  "summary": {
+    "cases": 9,
+    "ready": 9,
+    "errors": 0,
+    "overflow": 0,
+    "widths": [
+      390,
+      768,
+      1440
+    ]
+  },
+  "retainedScreenshots": [
+    {
+      "file": "worker-main-checkout-workflow--first-worker-home-1440.png",
+      "sourceReport": "werk-main-checkout-confirmation/report.json",
+      "bytes": 146175,
+      "sha256": "31d764613c8bdcf38b13c7138e2c2cd83cae806c08e276c93c3f2b8d06884529",
+      "width": 1440,
+      "height": 1100,
+      "modified": false
+    },
+    {
+      "file": "worker-main-checkout-workflow--notify-request-progress-1440.png",
+      "sourceReport": "werk-main-checkout-confirmation/report.json",
+      "bytes": 186754,
+      "sha256": "9261576b31c4f5fea6aee236206e102370eabb74c2967ab4eef6e40c32ea2483",
+      "width": 1440,
+      "height": 1370,
+      "modified": false
+    },
+    {
+      "file": "worker-main-checkout-workflow--resume-retained-setup-390.png",
+      "sourceReport": "werk-main-checkout-confirmation/report.json",
+      "bytes": 88061,
+      "sha256": "f76ed51ee592513b0ee15a6b0f7eada0560ab22bb00b6bb95de978019e276dd8",
+      "width": 390,
+      "height": 1250,
+      "modified": false
+    }
+  ],
+  "cases": [
+    {
+      "story": "worker-main-checkout-workflow--notify-request-progress",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--notify-request-progress-1440.png",
+      "retainedScreenshot": "worker-main-checkout-workflow--notify-request-progress-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--first-worker-home",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--first-worker-home-1440.png",
+      "retainedScreenshot": "worker-main-checkout-workflow--first-worker-home-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--resume-retained-setup",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--resume-retained-setup-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--notify-request-progress",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--notify-request-progress-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--first-worker-home",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--first-worker-home-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--resume-retained-setup",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--resume-retained-setup-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--notify-request-progress",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--notify-request-progress-390.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--first-worker-home",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--first-worker-home-390.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--resume-retained-setup",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--resume-retained-setup-390.png",
+      "retainedScreenshot": "worker-main-checkout-workflow--resume-retained-setup-390.png"
+    }
+  ]
+}

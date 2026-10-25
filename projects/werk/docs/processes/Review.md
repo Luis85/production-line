@@ -47,10 +47,10 @@ iteration: ""
 
 # Review
 
-The worker presents the request's accepted outcome, current candidate diff, automated and manual criteria, quality reports, limitations and GitHub PR identity. A person can record acceptance or request changes against the exact current request revision, delivery run, candidate commit and digest.
+The worker presents the accepted outcome, current candidate diff, automated/manual criteria, quality reports, limitations and PullRequest Markdown handoff. A person records acceptance or requests changes against the exact current request revision, delivery run and candidate identity.
 
-Requested changes return the same request to implementation/reverification and update its owned PR. Changed scope outside the accepted contract needs an explicit revised or successor request. Acceptance does not itself merge, build or publish.
+The default handoff identifies source/review Git branches. After review and required current-candidate human outcomes, the user explicitly allows the worker to merge into the displayed assigned main checkout. It requires no hosting-service PR or GitHub CLI. Requested changes retain the same Feature Request and produce fresh verification/handoff evidence; changed scope needs an explicit revised or successor request. Candidate acceptance alone does not grant that checkout mutation or claim a merge, build or release.
 
-## Exit and recovery
+## Optional GitHub review
 
-Merge is available only when required checks and human decisions still match the published head and the approved project policy permits the action. An approval for another head is stale. A closed/unmerged PR or missing manual criterion remains actionable rather than successful.
+An explicitly committed and locally approved GitHub integration can add a hosting-service PR. Verified rework updates that same owned open PR under an expected-head guard. Managed merge is available only when required checks and human decisions match its current published head and the approved policy permits the action. A closed/unmerged PR or stale decision remains actionable.

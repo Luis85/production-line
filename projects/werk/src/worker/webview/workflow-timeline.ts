@@ -19,9 +19,14 @@ export function workflowTimeline(request: WorkerRequest): WorkflowStage[] {
     { id: 'publish', label: 'Publish', state: 'pending', detail: 'The build has no confirmed published release.' },
   ];
   const run = request.delivery;
-  if (!run) return stages;
+  const configuration = acceptedDeliveryPolicy(request.input.context)?.configuration;
+  const releaseVisible = !!configuration?.release || !!run?.release;
+  const localVisible = configuration?.localMerge === true || !!run?.localMerge;
+  if (!releaseVisible && localVisible) stages[5].detail = 'The reviewed candidate awaits explicit approval to merge into the assigned project’s main checkout.';
+  const visible = () => releaseVisible ? stages : stages.slice(0, localVisible ? 6 : 5);
+  if (!run) return visible();
   const current = run.inputRevision === request.inputRevision && run.inputHash === request.inputHash && run.policyDigest === request.policyDigest;
-  if (!current) return stages.map(stage => ({ ...stage, state: 'unknown', detail: 'The retained delivery run belongs to earlier input or policy evidence.' }));
+  if (!current) return visible().map(stage => ({ ...stage, state: 'unknown', detail: 'The retained delivery run belongs to earlier input or policy evidence.' }));
   const ready = request.evaluations.findLast(item => item.stage === 'ready' && item.inputRevision === request.inputRevision && item.inputHash === request.inputHash && item.policyDigest === request.policyDigest);
   if (ready && !ready.passed) Object.assign(stages[0], { state: 'blocked', detail: 'Readiness findings must be resolved before implementation.' });
   const phaseStage = { assessing: 0, planning: 1, preparing: 1, implementing: 2, repairing: 2, verifying: 3, packaging: 3 };
@@ -40,16 +45,30 @@ export function workflowTimeline(request: WorkerRequest): WorkflowStage[] {
       if (release.published?.commit === release.build.commit && release.published.assets.length) Object.assign(stages[7], { state: 'complete', detail: 'GitHub Release ' + release.published.tag + ' and its build assets are confirmed.' });
     }
   }
+  if (!releaseVisible && localVisible) {
+    const merged = run.localMerge?.merged;
+    if (merged && merged.candidateCommit === candidate?.candidateCommit) Object.assign(stages[5], { state: 'complete', detail: 'Main checkout merge confirmed on ' + merged.branch + ' at ' + merged.mergeCommit + '.' });
+    else for (const operation of run.localMerge?.operations ?? []) {
+      if (operation.candidate.candidateCommit === candidate?.candidateCommit && operation.status !== 'confirmed') Object.assign(stages[5], { state: operation.status === 'pending' ? 'active' : operation.status === 'unknown' ? 'unknown' : 'blocked', detail: operation.detail });
+    }
+  }
   for (const operation of release?.operations ?? []) {
     const stage = stages[operation.action === 'merge' ? 5 : operation.action === 'build' ? 6 : 7];
     if (stage.state === 'complete' || operation.candidate.candidateCommit !== candidate?.candidateCommit || operation.status === 'confirmed') continue;
     Object.assign(stage, { state: operation.status === 'pending' ? 'active' : operation.status === 'unknown' ? 'unknown' : 'blocked', detail: operation.detail });
   }
-  return stages;
+  return visible();
 }
 export function workflowReleaseNextStep(request: WorkerRequest) {
   if (!request.delivery || !acceptedDeliveryPolicy(request.input.context)?.configuration.release || !currentWorkflowAcceptance(request)) return null;
   const stages = workflowTimeline(request), stage = stages.slice(5).find(item => item.state !== 'complete');
   return { actor: 'operator' as const, title: stage ? stage.state === 'unknown' ? 'Reconcile the saved ' + stage.label.toLowerCase() + ' outcome' : stage.state === 'blocked' ? 'Inspect the ' + stage.label.toLowerCase() + ' failure' : stage.label === 'Merge' ? 'Merge the reviewed candidate' : stage.label === 'Build' ? 'Build the merged commit' : 'Publish the verified release' : 'Release published',
     description: stage?.detail ?? stages[7].detail, action: { kind: 'review_request' as const, label: stage ? 'Inspect release controls' : 'Inspect release evidence' } };
+}
+
+export function workflowLocalMergeNextStep(request: WorkerRequest) {
+  const configuration = acceptedDeliveryPolicy(request.input.context)?.configuration;
+  if (!request.delivery || configuration?.localMerge !== true || configuration.release || !currentWorkflowAcceptance(request)) return null;
+  const stage = workflowTimeline(request).find(item => item.id === 'merge')!;
+  return { actor: 'operator' as const, title: stage.state === 'complete' ? 'Main checkout merge confirmed' : stage.state === 'unknown' ? 'Reconcile the saved main checkout merge' : stage.state === 'blocked' ? 'Inspect the main checkout merge failure' : 'Approve merge into main checkout', description: stage.detail, action: { kind: 'review_request' as const, label: stage.state === 'complete' ? 'Inspect main checkout evidence' : 'Inspect main checkout merge controls' } };
 }

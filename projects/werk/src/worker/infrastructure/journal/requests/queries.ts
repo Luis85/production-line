@@ -1,3 +1,4 @@
+import { localMergeUnsettled, localMergeRetentionReason } from '../../../application/delivery-completion.js';
 import { releasePending } from '../../../application/release-contracts.js';
 import type { ReservedExecutionPermit } from '../../../application/serial-executor.js';
 import {
@@ -28,7 +29,7 @@ export function requestHasActiveReview(store: RequestStore, sessionId: string): 
     .all(sessionId)
     .some((row) => {
       const request = JSON.parse(String(row.payload)) as WorkerRequest;
-      return releasePending(request.delivery?.release) || !!request.delivery?.release?.merge && !request.delivery.release.published
+      return localMergeUnsettled(request) || releasePending(request.delivery?.release) || !!request.delivery?.release?.merge && !request.delivery.release.published
         || request.reviews.some(review => ["queued", "running"].includes(review.status));
     });
 }
@@ -166,4 +167,14 @@ export function requestUnresolvedExecutions(store: RequestStore): ReservedExecut
     return { sessionId: request.owner.sessionId, projectId: typeof project === 'string' && !!project.trim() && project.length <= 4096 ? project : null,
       projectLimit: Number.isSafeInteger(limit) && Number(limit) >= 1 && Number(limit) <= 8 ? Number(limit) : 1 };
   });
+}
+
+/** Completed integration evidence outlives execution and remains visible even after archival. */
+export function requestRetainedHistoryReason(store: RequestStore, sessionId: string): string | null {
+  identifier(sessionId, 'session ID');
+  for (const row of store.database().prepare('SELECT payload FROM worker_requests WHERE session_id=?').all(sessionId)) {
+    const reason = localMergeRetentionReason(JSON.parse(String(row.payload)) as WorkerRequest);
+    if (reason) return reason;
+  }
+  return null;
 }

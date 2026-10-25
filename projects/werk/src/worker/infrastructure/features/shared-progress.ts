@@ -1,3 +1,4 @@
+import { localMergeMarkdown, validLocalMergeProjection, type LocalMergeProjection } from '../../application/local-merge-markdown.js';
 import { releaseMarkdown, type ReleaseProjection } from '../../application/release-markdown.js';
 import { readyReviewParts } from '../../application/ready-review-notes.js';
 import { createHash } from 'node:crypto';
@@ -5,13 +6,17 @@ import type { FeatureDocument } from './document.js';
 
 /** Reserved presentation fields never change the accepted author-owned request. */
 export const sharedSourceProjectionKeys = ['werkOwner', 'werkTask', 'werkPullRequest'] as const;
-interface Progress { releaseJson?: string; schemaVersion: 1; summary: string; sourceBodyHash: string; task: string | null; review: string | null; reviewFeedback?: { operationId: string; inputRevision: number; candidateCommit: string; note: string }; }
+interface Progress { localMergeJson?: string; releaseJson?: string; schemaVersion: 1; summary: string; sourceBodyHash: string; task: string | null; review: string | null; reviewFeedback?: { operationId: string; inputRevision: number; candidateCommit: string; note: string }; }
 function progress(value: unknown): Progress | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return;
   const p = value as Partial<Progress>;
   if (typeof p.sourceBodyHash !== 'string' || !/^[a-f0-9]{64}$/.test(p.sourceBodyHash) || p.schemaVersion !== 1 || typeof p.summary !== 'string' || p.summary.length > 2000 || ![p.task, p.review].every(path => path === null || typeof path === 'string' && /^[^\\\r\n\x00-\x1f\[\]]{1,500}\.md$/.test(path) && !path.split('/').some(part => !part || part === '.' || part === '..'))) return;
   const feedback = p.reviewFeedback;
   if (feedback !== undefined && (!feedback || typeof feedback.operationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(feedback.operationId) || !Number.isSafeInteger(feedback.inputRevision) || feedback.inputRevision < 1 || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(feedback.candidateCommit) || typeof feedback.note !== 'string' || !feedback.note.trim() || feedback.note.length > 4000)) return;
+  if (p.localMergeJson !== undefined) {
+    if (typeof p.localMergeJson !== 'string' || p.localMergeJson.length > 65536) return;
+    try { if (!validLocalMergeProjection(JSON.parse(p.localMergeJson))) return; } catch { return; }
+  }
   if (p.releaseJson !== undefined) {
     if (typeof p.releaseJson !== 'string' || p.releaseJson.length > 65536) return;
     try { const release = JSON.parse(p.releaseJson) as ReleaseProjection; if (!release || !Array.isArray(release.operations) || release.operations.length > 32) return; } catch { return; }
@@ -23,7 +28,7 @@ export function sharedProgressSection(value: unknown): string {
   if (!p) return '';
   const links = [p.task ? `- Action needed: [[${p.task.replace(/\.md$/, '')}]]` : '', p.review ? `- Pull request: [[${p.review.replace(/\.md$/, '')}]]` : ''].filter(Boolean);
   const feedback = p.reviewFeedback ? '\n### Review feedback\n\n' + p.reviewFeedback.note.replace(/\r\n?/g, '\n').split('\n').map(line => '> ' + line).join('\n') + `\n\nFeedback operation: ${p.reviewFeedback.operationId} · request revision ${p.reviewFeedback.inputRevision} · candidate ${p.reviewFeedback.candidateCommit}\n` : '';
-  return '\n\n<!-- werk:progress:v1 -->\n## Worker progress\n\n' + p.summary.replace(/[\r\n]+/g, ' ') + '\n' + (links.length ? '\n' + links.join('\n') + '\n' : '') + feedback + (p.releaseJson ? '\n' + releaseMarkdown(JSON.parse(p.releaseJson) as ReleaseProjection) + '\n' : '') + '\n<!-- /werk:progress:v1 -->\n';
+  return '\n\n<!-- werk:progress:v1 -->\n## Worker progress\n\n' + p.summary.replace(/[\r\n]+/g, ' ') + '\n' + (links.length ? '\n' + links.join('\n') + '\n' : '') + feedback + (p.localMergeJson ? '\n' + localMergeMarkdown(JSON.parse(p.localMergeJson) as LocalMergeProjection) + '\n' : '') + (p.releaseJson ? '\n' + releaseMarkdown(JSON.parse(p.releaseJson) as ReleaseProjection) + '\n' : '') + '\n<!-- /werk:progress:v1 -->\n';
 }
 export function sharedReadyReviewParts(parsed: FeatureDocument) {
   const metadata = parsed.data.werk as { shared?: { progress?: unknown; readyReview?: unknown } } | undefined;

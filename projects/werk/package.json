@@ -33,7 +33,7 @@
     "mutation": "node scripts/mutation/run.mjs",
     "mutation:release": "node scripts/mutation/run.mjs --advisory",
     "mutation:contracts": "node scripts/mutation/build.mjs && node --test \"scripts/mutation/suites/*.test.mjs\" \".mutation-build/tests/*.test.mjs\"",
-    "lint:oxlint": "oxlint --deny-warnings src scripts storybook .storybook tests werk.mjs stryker.config.mjs",
+    "lint:oxlint": "oxlint --deny-warnings src scripts storybook .storybook tests werk.mjs worker.mjs stryker.config.mjs",
     "analyze:fallow": "node scripts/quality/fallow.mjs",
     "check:architecture": "node --test tests/architecture/architecture-boundaries.test.mjs tests/architecture/dependency-graph.test.mjs",
     "check:fast": "npm run readme:check && npm run check:loc && npm run lint:oxlint && npm run analyze:fallow && npm run check:architecture && npm run typecheck && npm run typecheck:tests",
@@ -44,7 +44,8 @@
     "release:readme": "node scripts/release/readme-package.mjs",
     "diagnostics:provider": "node scripts/runtime/provider-diagnostics.mjs",
     "benchmark:intake": "node scripts/quality/local-intake-benchmark.mjs",
-    "pilot:provider": "node scripts/runtime/provider-pilot.mjs"
+    "pilot:provider": "node scripts/runtime/provider-pilot.mjs",
+    "acceptance:worker-home": "node tests/worker/worker-home-browser.mjs"
   },
   "devDependencies": {
     "@iconify-json/lucide": "1.2.143",

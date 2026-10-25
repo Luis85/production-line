@@ -45,6 +45,8 @@ test('generated build mappings preserve app ownership and reject traversal, abso
     '../../src/worker/dist/shared/public/value.js', '../../src/worker/dist/shared/dist/value.js',
     '../../src/worker/dist/shared/node_modules/value.js', '../../src/worker/dist/shared/.build-42/value.js',
   ]) assert.throws(() => generatedImportSource(root, importer, specifier), undefined, specifier);
+  assert.equal(generatedImportSource(root, join(root, 'worker.mjs'), './bin/apps/worker/scripts/runtime/portable/home.mjs'), 'scripts/runtime/portable/home.mjs');
+  assert.throws(() => generatedImportSource(root, join(root, 'worker.mjs'), './bin/apps/worker/scripts/runtime/portable/missing.mjs'), /cannot traverse|does not match/);
   const mutationImporter = join(root, 'scripts/mutation/suites/fixture.test.mjs');
   assert.equal(generatedImportSource(root, mutationImporter, '../../../.mutation-build/shared/request-gate.js'), 'src/shared/request-gate.ts');
   assert.throws(() => generatedImportSource(root, mutationImporter, '../../../.mutation-build/worker/runner.js'), /configured mutation target/);
@@ -96,7 +98,7 @@ test('ordinary missing source imports are never covered by generated import allo
 });
 
 test('generated-import validation covers JSX, TSX and root entrypoints', async t => {
-  for (const path of ['tests/worker/component.tsx', 'tests/worker/component.jsx', 'werk.mjs', 'stryker.config.mjs']) {
+  for (const path of ['tests/worker/component.tsx', 'tests/worker/component.jsx', 'werk.mjs', 'worker.mjs', 'stryker.config.mjs']) {
     const root = await fixture(t);
     const prefix = path.includes('/') ? '../../' : './';
     await put(root, path, 'import "' + prefix + 'src/worker/dist/shared/missing.js";\n');

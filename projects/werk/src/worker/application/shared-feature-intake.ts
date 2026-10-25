@@ -1,3 +1,4 @@
+import { sharedFeaturePolicy } from './shared-feature-policy.js';
 import { reserveSharedReviewRework } from './shared-review-rework.js';
 import type { RequestCommand } from './request-gates.js';
 import { appendFeatureIntake, observeFeatureIntake, featureIntakeBlocker, featureIntakeReadiness, featureIntakeHold, type FeatureIntakeMeasurement } from './feature-intake-measurement.js';
@@ -10,7 +11,7 @@ import { publishSharedFeatureResponse } from './shared-feature-response.js';
 import type { InteractionCommand } from './interactions.js';
 import { SerializedOperations } from '../../shared/serialized-operations.js';
 import { DomainError } from '../../shared/errors.js';
-import { featureTaskDirectory, type FeatureWorkflowSnapshot } from './feature-workflow.js';
+import { featureTaskDirectory, featureWorkflowSources, type FeatureWorkflowSnapshot } from './feature-workflow.js';
 import { publishIntakeDiagnostic } from './intake-diagnostics.js';
 import type { SharedFeatureView, SharedIntakeView, SharedIntakeNote } from './shared-intake-contract.js';
 import { bindingKey, defaultSharedIntakeConfig, sharedTerminal, sharedTaskActive, validateSharedIntakeConfig, type SharedAdmissionHold, type SharedFeatureRecord, type SharedFeatureState, type SharedIntakePorts } from './shared-feature-state.js';
@@ -43,6 +44,13 @@ export class SharedFeatureIntake {
   sourceForTask(taskId: string): { repositoryId: string; path: string } | undefined {
     const record = this.state.records.find(record => record.taskId === taskId);
     return record ? { repositoryId: record.binding.repositoryId, path: record.sourcePath } : undefined;
+  }
+  /** Frozen workflow output locations, used only to retain queue progress during an approved main merge. */
+  localMergeMetadata(taskId: string): { metadataPaths: string[]; protectedPaths: string[] } | undefined {
+    const record = this.state.records.find(value => value.taskId === taskId);
+    if (!record) return undefined;
+    const config = record.workflow.configuration;
+    return { metadataPaths: [config.requestsDirectory, config.reviewDirectory, featureTaskDirectory(config)].map(path => path + '/'), protectedPaths: featureWorkflowSources(record.workflow).map(file => file.path) };
   }
   referenceForTask(taskId: string, existingKey?: string) {
     const record = this.state.records.find(record => record.taskId === taskId);
@@ -233,6 +241,7 @@ export class SharedFeatureIntake {
         binding: config, sourcePath: file.path, sourceMarkdown: file.content, remoteRevision: file.revision,
         accepted: structuredClone(ready.input), ...preparation, ...(selection ? { selection: structuredClone(selection) } : {}), inputHash: '', workflow: structuredClone(snapshot), claimed: false, submitted: false,
       };
+      if (record.deliveryPolicy) record.executionPolicy = sharedFeaturePolicy(record).policy;
       record.inputHash = sharedFeatureInputHash(record);
       if (snapshot.readyReview) { record.readyReviewState = sharedReviewCheckpoint(record); record.progress = 'Feature Request Ready Check is queued before Definition of Ready.'; }
       if (metric) appendFeatureIntake(metric, { inputRevision: record.inputHash, phase: 'readiness', blockers: [], ...(!snapshot.readyReview ? { feedback: true as const, observations: featureIntakeReadiness(metric, record.inputHash) } : {}) });

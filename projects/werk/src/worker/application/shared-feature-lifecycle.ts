@@ -1,3 +1,4 @@
+import { localMergeConfigured, localMergeProjection, sameLocalMerge, sharedLocalMergePhase } from './shared-local-merge-projection.js';
 import { sharedReleaseConfigured, sharedReleasePhase, sharedReleaseProjection, sameSharedRelease } from './shared-release-projection.js';
 import { advanceSharedReviewRework } from './shared-review-rework.js';
 import { featureIntakeBlocker, featureIntakeHold } from './feature-intake-measurement.js';
@@ -90,16 +91,25 @@ export class SharedFeatureLifecycle {
   private change(record: SharedFeatureRecord, status: string, error: string | null = null) {
     if (record.status !== status || record.error !== error) { record.status = status; record.error = error; record.updatedAt = new Date().toISOString(); }
   }
+  private handoffPublished(record: SharedFeatureRecord, execution: SharedExecution): boolean {
+    return !!record.featureCommit && !!record.reviewNote && !!record.reviewMarkdown && record.outputDigest === execution.request?.execution?.outputDigest
+      && record.publishedReview === record.reviewNote + ':' + sharedHash(record.reviewMarkdown);
+  }
   private settled(record: SharedFeatureRecord) {
     if (record.reviewReworks?.some(item => item.status !== 'dispatched') || sharedTaskActive(record) || !sharedTerminal(record.status) || this.publication(record) !== 'synced') return false;
     const execution = this.ports.inspect(record.taskId!);
     // Confirmed terminal publications survive removed assignments or archived local
     // history. A resumed task still has to publish its new lifecycle and evidence.
     if (!execution) return true;
+    if (localMergeConfigured(execution.request)) {
+      if (!sameLocalMerge(record.localMerge, localMergeProjection(execution.request?.delivery?.localMerge))) return false;
+      const phase = sharedLocalMergePhase(execution.request);
+      if (phase) return this.handoffPublished(record, execution) && phase === record.status;
+    }
     if (sharedReleaseConfigured(execution.request)) {
       if (!sameSharedRelease(record.release, sharedReleaseProjection(execution.request?.delivery?.release))) return false;
       const phase = sharedReleasePhase(execution.request);
-      if (phase) return phase === record.status;
+      if (phase) return this.handoffPublished(record, execution) && phase === record.status;
     }
     const actionable = execution.interaction && createTaskNoteIdentity(record.id, record.owner!, execution.interaction, sharedFeatureRequestReference(record).key, record.task?.identity);
     if (actionable && actionable.id !== record.task?.identity.id) return false;
@@ -109,7 +119,7 @@ export class SharedFeatureLifecycle {
   async reconcile(record: SharedFeatureRecord, signal: AbortSignal) {
     try {
       const retained = this.ports.inspect(record.taskId!);
-      if (sharedReleaseConfigured(retained?.request) && !retained?.request?.delivery?.release?.published) await this.verifyReleaseSource(record, signal);
+      if ((localMergeConfigured(retained?.request) && !retained?.request?.delivery?.localMerge?.merged) || (sharedReleaseConfigured(retained?.request) && !retained?.request?.delivery?.release?.published)) await this.verifyReleaseSource(record, signal);
       if (this.settled(record)) return;
       const repository = this.ports.repository(record.binding, record.workflow);
       await this.flush(record, repository, signal);
@@ -196,9 +206,16 @@ export class SharedFeatureLifecycle {
     const feedback = await this.feedback.synchronize(record, repository, execution, signal);
     execution = this.ports.inspect(record.taskId!) ?? execution;
     const request = execution.request;
+    const mergePhase = sharedLocalMergePhase(request);
+    if (localMergeConfigured(request)) record.localMerge = localMergeProjection(request?.delivery?.localMerge);
+    if (mergePhase && this.handoffPublished(record, execution)) {
+      this.change(record, mergePhase, mergePhase.startsWith('merge_') ? request?.delivery?.localMerge?.operations.at(-1)?.detail ?? 'Main checkout merge needs attention.' : null);
+      record.progress = mergePhase === 'done' ? 'The reviewed increment is confirmed in the approved main checkout.' : 'Main checkout integration: ' + mergePhase.replaceAll('_', ' ') + '. Review the exact candidate and approve its displayed checkout before merging.';
+      await this.save(); await this.publish(record, repository, signal, feedback.artifacts); return;
+    }
     const releasePhase = sharedReleasePhase(request);
     if (sharedReleaseConfigured(request)) record.release = sharedReleaseProjection(request?.delivery?.release);
-    if (releasePhase) {
+    if (releasePhase && this.handoffPublished(record, execution)) {
       const latest = request?.delivery?.release?.operations.at(-1);
       this.change(record, releasePhase, ['release_failed', 'release_outcome_unknown', 'release_blocked'].includes(releasePhase) ? latest?.detail ?? request?.deliveryHolds?.[0]?.reason ?? 'Release needs attention.' : null);
       record.progress = releasePhase === 'done' ? 'The exact merged commit is built and its checksummed assets are confirmed on the published release.' : `Release stage: ${releasePhase.replaceAll('_', ' ')}. Merge, build and publication each require their own confirmed receipt.`;

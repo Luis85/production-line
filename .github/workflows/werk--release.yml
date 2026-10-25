@@ -224,6 +224,37 @@ jobs:
         run: node scripts/release/project-worker-smoke.mjs --native
       - name: Verify YAML hierarchy, isolated lines and persistent workers
         run: node scripts/release/system-smoke.mjs --root "$RUNNER_TEMP/werk release/werk-${{ needs.build.outputs.version }}" --update-archives release
+  worker-home:
+    name: Downloaded worker browser journey (protocol fixture)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: werk-release-candidate
+          path: ${{ env.FORGE_PROJECT_PATH }}/release
+      - run: npm ci --ignore-scripts
+      - name: Install the locked browser and system libraries
+        run: npm exec -- playwright install --with-deps chromium
+      - name: Extract, start, submit, review and approve the plain Git main checkout merge
+        env:
+          WERK_WORKER_HOME_ARCHIVES: release
+          WERK_BROWSER_EVIDENCE: ${{ runner.temp }}/worker-home-evidence
+        run: npm run acceptance:worker-home
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: werk-worker-home-browser-evidence
+          path: ${{ runner.temp }}/worker-home-evidence/
+          if-no-files-found: warn
+          retention-days: 7
   docker:
     needs: build
     runs-on: ubuntu-latest
@@ -348,7 +379,7 @@ jobs:
           retention-days: 7
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ build, native, docker, cloud-init, storybook ]
+    needs: [ build, native, worker-home, docker, cloud-init, storybook ]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -380,8 +411,10 @@ jobs:
 
           ## Installation
 
-          Download a prebuilt archive below, extract it, and run \`node werk.mjs up\` with Node.js 24.
-          Or download and start the latest stable release in Bash:
+          With Node.js 24 installed, create a dedicated worker home, download a prebuilt archive below and extract it inside that home, preserving its \`werk-$RELEASE_VERSION\` folder.
+          From the outer worker home run \`node ./werk-$RELEASE_VERSION/worker.mjs\` (PowerShell: \`node .\\werk-$RELEASE_VERSION\\worker.mjs\`). The standalone worker opens its local webview; unlock it using the private token file path printed in the terminal, then connect your provider and register a project. No source checkout, npm install or project init is required.
+
+          The optional Factory demo below starts simulated production lines. To download and start that separate demo in Bash:
 
           \`curl -fsSL https://github.com/$GH_REPO/releases/latest/download/install.mjs -o werk-install.mjs && node werk-install.mjs\`
 

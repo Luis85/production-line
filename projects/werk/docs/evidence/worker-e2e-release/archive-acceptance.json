@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "kind": "extracted-worker-home-acceptance",
+  "command": "npm run acceptance:worker-home",
+  "status": "passed",
+  "platform": "Linux Chromium",
+  "provenance": {
+    "sourceResultSha256": "46fd1d731e573106e7e770763de52a8cc75ade3de549ed765e538948ccbd3ee6",
+    "candidateArchive": "Checksum-verified local candidate, not a public release publication.",
+    "inference": "Deterministic Claude CLI protocol/auth/version fixture; no real provider login, model inference or Windows qualification.",
+    "realBoundaries": [
+      "archive checksum verification and extraction",
+      "standalone worker processes and local authentication",
+      "browser request prepare/edit/readiness/publish/review/approval",
+      "provider CLI protocol and real MCP candidate tools",
+      "native committed project checks",
+      "Git commits/pushes and PullRequest Markdown publication",
+      "exact approved main checkout merge with a clean resulting checkout"
+    ],
+    "normalization": "Retained original result fields; screenshot names mapped to selected unmodified captures. The two all-details captures exceed 14,000 pixels in height and are not retained."
+  },
+  "result": {
+    "fixture": "Deterministic Claude CLI protocol; no real provider login or inference",
+    "liveProvider": false,
+    "checks": [
+      "Verified archive starts in an empty dedicated home and unlocks through the real browser without source/npm/init.",
+      "Browser prepares, completes, checks and commits/pushes a ready Feature Request before any inference.",
+      "Real candidate tools, committed verification, feature commit/push and Markdown pull request appear before browser acceptance; explicit exact-main consent merges into checkout."
+    ],
+    "pageErrors": [],
+    "version": "0.15.0",
+    "sourceCommit": null,
+    "archiveSha256": "f7a8bc107059b5a1b93cec06b67fd93c7eed36d72b66eaf02b021af01773f057",
+    "manifestSha256": "e95dbde078096bd1fc192329e9f6537894a4a380dac45fb3fce003dacdbd94ca",
+    "candidateCommit": "06a6bae1b22f64c4dedd7dc04109e0056bc0cb39",
+    "publishedFeatureCommit": "f4c2c45eab523718c88829e47d43eb71c2ee920e",
+    "mergedCommit": "06a6bae1b22f64c4dedd7dc04109e0056bc0cb39",
+    "reviewNote": "feature-reviews/fr-7e040c50ee67193ed3e3f2d0-ca7392d1819c.md",
+    "providerInvocations": [
+      {
+        "fixture": true,
+        "mode": "ready-review"
+      },
+      {
+        "fixture": true,
+        "mode": "candidate-tools"
+      }
+    ]
+  },
+  "retainedScreenshots": [
+    {
+      "file": "archive-01-first-worker-home.png",
+      "originalCapture": "01-first-worker-home.png",
+      "bytes": 172701,
+      "sha256": "99b25481f5bfd925ed789bdc46461b32f6243ebbe1fa10d2be87eec72e3f8b51",
+      "width": 1440,
+      "height": 1268,
+      "modified": false
+    },
+    {
+      "file": "archive-03-taskboard-in-progress.png",
+      "originalCapture": "03-taskboard-in-progress.png",
+      "bytes": 198884,
+      "sha256": "7c65cee3645ef153e25ddb6b02fac299d9e3dd90c8f0ec1d3c8810332aab6265",
+      "width": 1440,
+      "height": 1380,
+      "modified": false
+    },
+    {
+      "file": "archive-04-taskboard-review-ready.png",
+      "originalCapture": "04-taskboard-review-ready.png",
+      "bytes": 223802,
+      "sha256": "b96374930419c8f6ebe9dd671a2b40e20613c8fb3eedb9033fe1d5a54cb54a2d",
+      "width": 1440,
+      "height": 1471,
+      "modified": false
+    }
+  ],
+  "captures": [
+    {
+      "originalCapture": "01-first-worker-home.png",
+      "retained": true,
+      "file": "archive-01-first-worker-home.png"
+    },
+    {
+      "originalCapture": "02-published-feature-request.png",
+      "retained": false
+    },
+    {
+      "originalCapture": "03-taskboard-in-progress.png",
+      "retained": true,
+      "file": "archive-03-taskboard-in-progress.png"
+    },
+    {
+      "originalCapture": "04-taskboard-review-ready.png",
+      "retained": true,
+      "file": "archive-04-taskboard-review-ready.png"
+    },
+    {
+      "originalCapture": "05-markdown-candidate-review.png",
+      "retained": false
+    },
+    {
+      "originalCapture": "06-main-checkout-merge-confirmed.png",
+      "retained": false
+    }
+  ]
+}

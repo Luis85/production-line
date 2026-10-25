@@ -1,3 +1,5 @@
+import { deliveryAccepted } from './delivery-acceptance.js';
+export { deliveryAccepted as releaseAccepted } from './delivery-acceptance.js';
 import { DomainError } from '../../shared/errors.js';
 import { validateDeliveryPolicySnapshot } from './delivery-policy.js';
 import { releasePending, type ReleaseView } from './release-contracts.js';
@@ -18,20 +20,11 @@ export function releaseSubject(request: WorkerRequest) {
   if (!publication || !pullRequest || publication.target.repository.toLowerCase() !== target.repository.toLowerCase() || publication.target.base !== target.base) throw new DomainError('conflict', 'Confirm the current candidate pull request before starting release operations.');
   return { snapshot, target, repositoryId: context.repositoryId, candidate, pullRequest: { number: pullRequest.number, url: pullRequest.url, branch: publication.observation!.branch } };
 }
-export function releaseAccepted(request: WorkerRequest): boolean {
-  const run = request.delivery, execution = request.execution, candidate = run?.review?.candidate;
-  const evaluation = request.evaluations.findLast(item => item.stage === 'done' && item.inputRevision === request.inputRevision && item.inputHash === request.inputHash && item.policyDigest === request.policyDigest && item.outputDigest === execution?.outputDigest);
-  return !!request.attestation && request.attestation.inputHash === request.inputHash && request.attestation.outputDigest === execution?.outputDigest
-    && !!candidate && candidate.inputRevision === request.inputRevision && candidate.inputHash === request.inputHash && candidate.policyDigest === request.policyDigest
-    && execution?.inputRevision === request.inputRevision && execution.status === 'completed' && execution.result?.type === 'completed' && !!evaluation?.passed
-    && !request.recoveryHold && !request.deliveryHolds?.length && !run?.holds.length && !run?.control
-    && request.phase === 'done' && run?.status === 'completed';
-}
 export function releaseView(request: WorkerRequest, authorized: boolean, reason: string | null = null, busy = false): ReleaseView {
   let subject: ReturnType<typeof releaseSubject> | undefined;
   try { subject = releaseSubject(request); } catch (error) { reason = error instanceof DomainError ? error.message : 'Release configuration is unavailable.'; }
   const state = structuredClone(request.delivery?.release ?? { operations: [] });
-  const pending = releasePending(state), accepted = releaseAccepted(request), ready = !!subject && authorized && !reason && !busy && !pending && accepted;
+  const pending = releasePending(state), accepted = deliveryAccepted(request), ready = !!subject && authorized && !reason && !busy && !pending && accepted;
   const configured = !!(request.input.context as { deliveryPolicy?: { configuration?: { release?: unknown } } } | undefined)?.deliveryPolicy?.configuration?.release;
   return { configured, authorized: configured && authorized, reason: reason ?? (busy ? 'A release operation is active.' : pending ? 'Reconcile the saved release outcome before continuing.' : !accepted ? 'Record human acceptance of the exact current candidate before release.' : null),
     target: subject?.target ?? null, candidate: subject?.candidate ?? null, state,

@@ -81,3 +81,11 @@ test('accepted but unpublished local work still receives canonical-source holds'
   current.lifecycle = 'done'; await featureSourceHold(workspace, record, { code: 'missing_source', reason: 'Post-release author edit.' });
   assert.equal(updates.length, 1, 'A completed published request remains historical');
 });
+
+
+test('early release acceptance still publishes its verified branch and Markdown review first', async t => {
+  const h = await fixture(t); await h.intake.sync(); await h.complete(); observe(h, { operations: [] });
+  await h.intake.sync();
+  const row = h.intake.view().requests[0]; assert.ok(['ready_for_review', 'accepted'].includes(row.status)); assert.ok(row.reviewNote); assert.equal(h.featureCommits, 1);
+  await h.intake.sync(); assert.equal(h.intake.view().requests[0].status, 'accepted'); assert.equal(h.featureCommits, 1);
+});

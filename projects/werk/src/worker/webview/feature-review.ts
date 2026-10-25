@@ -6,7 +6,7 @@ import { sharedReadyReviewView } from './shared-ready-review-view';
 import { candidateEvidenceView } from './candidate-evidence';
 import { deliveryNextStep } from './delivery-view';
 import { deliveryReviewStages } from './delivery-review-stages';
-import { currentWorkflowAcceptance, workflowReleaseNextStep } from './workflow-timeline';
+import { currentWorkflowAcceptance, workflowReleaseNextStep, workflowLocalMergeNextStep } from './workflow-timeline';
 
 export interface FeatureReviewInput {
   session?: SessionView['records'][number] | null;
@@ -125,7 +125,7 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
   const deliveryStep = request?.delivery ? deliveryNextStep(request.delivery) ?? (deliveryView?.review
     ? next('operator', request.lifecycle === 'done' ? 'Inspect the accepted candidate' : 'Review the current delivery candidate', 'Inspect this run’s candidate, required checks and human criteria. Acceptance does not publish or merge changes.', request.lifecycle === 'done' ? 'inspect_history' : 'attest', request.lifecycle === 'done' ? 'Inspect delivery evidence' : 'Review acceptance requirement')
     : next('operator', 'Inspect the current delivery evidence', 'This run has no matching current review package. Earlier patches and completed interactions cannot establish its handoff.', 'inspect_history', 'Inspect delivery evidence')) : null;
-  const releaseStep = request?.delivery ? workflowReleaseNextStep(request) : null;
+  const releaseStep = request?.delivery ? workflowLocalMergeNextStep(request) ?? workflowReleaseNextStep(request) : null;
   let nextStep: FeatureReviewNextStep;
   if (stale) nextStep = next('operator', 'Refresh the request evidence', conflict ? 'These snapshots identify different requests or executions. Refresh before making a decision.' : input.freshness?.error || 'Current request evidence is unavailable or may be stale. Retained results do not authorize an action.', 'refresh', 'Refresh evidence');
   else if (otherOwner) nextStep = next('owning_worker', 'Follow the owning worker', 'This worker can inspect the shared record. Continue through its Task note or the owning worker.', shared?.taskNote || shared?.reviewNote ? 'review_shared' : 'open_source', 'Read shared notes');

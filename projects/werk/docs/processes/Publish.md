@@ -42,12 +42,12 @@ iteration: ""
 
 # Publish
 
-The worker publishes the retained build assets to the project's configured GitHub repository and release tag. It records intent before remote mutation, verifies source/tag identity, and confirms expected asset names, sizes and SHA-256 digests before recording publication success.
+Default worker delivery publishes the review handoff through Git: shared intake confirms its implementation/source and review branches and PullRequest Markdown evidence; local intake retains the candidate/review package for the team's chosen push workflow. Later application publication is the team's normal project workflow. No hosting-service PR, GitHub Release or deployment is implied by the handoff.
 
-The release policy defines destination, tag prefix and prerelease behavior. Credentials stay in the worker account's host authentication, outside request Markdown, prompts and release assets. A human decision or approved explicit release action controls publication independently of candidate acceptance.
+## Optional GitHub Release publication
 
-## Exit and recovery
+Explicit committed and locally approved GitHub release policy can authorize publication of a retained managed build to the configured repository/tag. The worker records intent before mutation and confirms source/tag, release visibility and expected asset names, sizes and SHA-256 digests before reporting success.
 
-The full workflow completes only after a confirmed published release receipt links the request, reviewed candidate, merged commit, build manifest and release URL. A draft or partial upload remains incomplete. Existing unrelated tags, releases or differing assets are conflicts; an already published release is not overwritten to make a retry pass.
+Its release-enabled lifecycle completes only after the confirmed receipt links request, reviewed candidate, actual merged commit, build manifest and release URL. Draft/partial uploads remain incomplete; unrelated tags/releases or differing assets are conflicts. A published release is not destructively replaced to make a retry pass. Lost acknowledgements use read-only reconciliation before another authorized mutation.
 
-After a lost acknowledgement, reconcile the saved operation read-only. Reuse matching remote results; request another explicit mutation only after absence is established. Failed publication preserves the verified build and last successful milestone.
+A GitHub repository URL, installed/authenticated `gh` or provider login alone does not opt into this extension. Credentials remain outside request Markdown, prompts and assets.

@@ -5,9 +5,9 @@ import { parse as parseVue } from '@vue/compiler-sfc';
 import { mutationTargets } from '../mutation/scope.mjs';
 
 const sourceRoots = ['src', 'scripts', 'tests', 'storybook', '.storybook'];
-const sourceEntries = ['werk.mjs', 'stryker.config.mjs'];
+const sourceEntries = ['werk.mjs', 'worker.mjs', 'stryker.config.mjs'];
 const excluded = new Set(['dist', 'node_modules', 'public', '.nuxt-ui']);
-const generated = /(?:^|\/)src\/(factory|orchestrator|worker)\/dist\/|(?:^|\/)\.mutation-build\//;
+const generated = /(?:^|\/)src\/(factory|orchestrator|worker)\/dist\/|(?:^|\/)\.mutation-build\/|(?:^|\/)bin\/apps\//;
 
 async function files(directory) {
   const entries = await readdir(directory, { withFileTypes: true }).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
@@ -43,6 +43,7 @@ function references(path, source) {
 export function generatedImportSource(root, importer, specifier) {
   const target = relative(root, resolve(dirname(importer), specifier)).split(sep).join('/');
   if (!specifier.startsWith('./') && !specifier.startsWith('../')) throw Error('Generated imports must be relative to their importing module.');
+  if (target === 'bin/apps/worker/scripts/runtime/portable/home.mjs' && !specifier.split('/').includes('..')) return 'scripts/runtime/portable/home.mjs';
   const suffix = specifier.includes('/dist/') ? specifier.split('/dist/')[1] : specifier.split('.mutation-build/')[1];
   if (!suffix || suffix.split('/').some(part => !part || part === '.' || part === '..')) throw Error('Generated import paths cannot traverse their build output.');
   // The build writes each app manifest from the root release package metadata.

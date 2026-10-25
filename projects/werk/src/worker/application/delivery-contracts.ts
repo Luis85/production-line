@@ -1,3 +1,4 @@
+import type { LocalMergeState, LocalMergeUpdate } from './local-merge-contracts.js';
 import type { DeliveryRelease, ReleaseUpdate } from './release-contracts.js';
 import type { DeliveryCandidateAssessment, DeliveryProviderHandoff } from './delivery-provider-contracts.js';
 import type { DeliveryPlan, DeliveryEffectiveLimits } from './delivery-plan.js';
@@ -51,7 +52,7 @@ export interface DeliveryRun {
   startedAt: string; finishedAt: string | null;
   review?: DeliveryReviewPackage;
   plan?: DeliveryPlan; effectiveLimits?: DeliveryEffectiveLimits;
-  criterionDecisions?: DeliveryCriterionDecision[]; publications?: RemotePublication[]; release?: DeliveryRelease;
+  criterionDecisions?: DeliveryCriterionDecision[]; publications?: RemotePublication[]; release?: DeliveryRelease; localMerge?: LocalMergeState;
   assessments?: DeliveryCandidateAssessment[]; handoffs?: DeliveryProviderHandoff[];
   humanOutcomes?: DeliveryHumanOutcome[];
   recoveries?: DeliveryRecoveryReceipt[];
@@ -63,6 +64,7 @@ export interface DeliveryRun {
 export type DeliveryUpdate =
   | RemotePublicationUpdate
   | ReleaseUpdate
+  | LocalMergeUpdate
   | { action: 'plan'; deliveryRunId: string; plan: DeliveryPlan; effectiveLimits: DeliveryEffectiveLimits }
   | { action: 'assessment'; deliveryRunId: string; assessment: DeliveryCandidateAssessment }
   | { action: 'handoff'; deliveryRunId: string; handoff: DeliveryProviderHandoff }

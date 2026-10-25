@@ -1,28 +1,56 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import type { ReleasePolicy } from '../../application/release-policy';
-const props = defineProps<{ modelValue?: ReleasePolicy; repository?: string; base?: string }>();
-const emit = defineEmits<{ 'update:modelValue': [ReleasePolicy | undefined] }>();
-const defaults = (): ReleasePolicy => ({ repository: props.repository ?? '', base: props.base ?? 'main', mergeMethod: 'squash', tagPrefix: 'v', prerelease: false, build: { executable: 'node', args: ['scripts/build.mjs'], timeoutMs: 600000, artifacts: [] } });
+import type { RemoteDeliveryPolicy } from '../../application/remote-delivery-policy';
+const props = defineProps<{ modelValue?: ReleasePolicy; remoteDelivery?: RemoteDeliveryPolicy }>();
+const emit = defineEmits<{ change: [{ remoteDelivery?: RemoteDeliveryPolicy; release?: ReleasePolicy }] }>();
+const enabled = computed(() => !!props.remoteDelivery || !!props.modelValue);
+const defaultsRemote = (): RemoteDeliveryPolicy => ({ remote: 'origin', repository: props.modelValue?.repository ?? '', base: props.modelValue?.base ?? 'main', push: true, pullRequest: true, draft: true, automatic: false });
+const remote = computed(() => props.remoteDelivery ?? defaultsRemote());
+const defaults = (): ReleasePolicy => ({ repository: remote.value.repository, base: remote.value.base, mergeMethod: 'squash', tagPrefix: 'v', prerelease: false, build: { executable: 'node', args: ['scripts/build.mjs'], timeoutMs: 600000, artifacts: [] } });
 const value = computed(() => props.modelValue ?? defaults());
-const retained = ref<ReleasePolicy>();
-watch([() => props.repository, () => props.base], () => { retained.value = undefined; });
-function toggle(enabled: boolean) {
-  if (!enabled && props.modelValue) retained.value = JSON.parse(JSON.stringify(props.modelValue)) as ReleasePolicy;
-  emit('update:modelValue', enabled ? retained.value ?? defaults() : undefined);
+const retained = ref<ReleasePolicy>(), retainedRemote = ref<RemoteDeliveryPolicy>(), restoreRelease = ref(false);
+const copy = <T,>(input: T): T => JSON.parse(JSON.stringify(input)) as T;
+function integration(on: boolean) {
+  if (!on) {
+    retainedRemote.value = copy(remote.value); restoreRelease.value = !!props.modelValue;
+    if (props.modelValue) retained.value = copy(props.modelValue);
+    emit('change', {});
+  } else emit('change', { remoteDelivery: retainedRemote.value ?? defaultsRemote(), release: restoreRelease.value ? retained.value : undefined });
 }
-function edit(key: 'repository' | 'base' | 'mergeMethod' | 'tagPrefix' | 'prerelease', input: string | boolean) { emit('update:modelValue', { ...value.value, [key]: input } as ReleasePolicy); }
+function toggle(on: boolean) {
+  if (!on && props.modelValue) retained.value = copy(props.modelValue);
+  emit('change', { remoteDelivery: remote.value, release: on ? { ...(retained.value ?? defaults()), repository: remote.value.repository, base: remote.value.base } : undefined });
+}
+function editRemote(key: keyof RemoteDeliveryPolicy, input: string | boolean) {
+  const target = { ...remote.value, [key]: input };
+  if (key === 'push' && !input) { target.pullRequest = false; target.automatic = false; }
+  if (key === 'pullRequest' && !input) target.automatic = false;
+  if (props.modelValue && (!target.push || !target.pullRequest)) retained.value = copy(props.modelValue);
+  emit('change', { remoteDelivery: target, release: props.modelValue && target.push && target.pullRequest ? { ...props.modelValue, repository: target.repository, base: target.base } : undefined });
+}
+function edit(key: 'mergeMethod' | 'tagPrefix' | 'prerelease', input: string | boolean) { emit('change', { remoteDelivery: remote.value, release: { ...value.value, [key]: input } as ReleasePolicy }); }
 function build(key: keyof ReleasePolicy['build'], input: string) {
-  emit('update:modelValue', { ...value.value, build: { ...value.value.build, [key]: key === 'args' || key === 'artifacts' ? input.split('\n').filter(line => line.trim()) : key === 'timeoutMs' ? Number(input) * 1000 : input } });
+  emit('change', { remoteDelivery: remote.value, release: { ...value.value, build: { ...value.value.build, [key]: key === 'args' || key === 'artifacts' ? input.split('\n').filter(line => line.trim()) : key === 'timeoutMs' ? Number(input) * 1000 : input } } });
 }
 </script>
 <template>
-  <details class="release-policy-fields"><summary>Merge, build and publish configuration</summary>
-    <label class="check-label"><input type="checkbox" :checked="!!modelValue" @change="toggle(($event.target as HTMLInputElement).checked)" /> Enable the project release workflow</label>
-    <p>Commit this configuration and approve its exact digest on the worker. Each request retains the approved version it was accepted with.</p>
-    <template v-if="modelValue">
-      <label for="release-policy-repository">GitHub release repository · owner/name</label><input id="release-policy-repository" :value="value.repository" maxlength="140" @input="edit('repository', ($event.target as HTMLInputElement).value)" />
-      <label for="release-policy-base">Merge base branch</label><input id="release-policy-base" :value="value.base" maxlength="200" @input="edit('base', ($event.target as HTMLInputElement).value)" />
+  <details class="release-policy-fields"><summary>GitHub integration · optional</summary>
+    <p>Plain Git creates a Markdown pull request in the project’s review directory. A Git repository URL does not enable GitHub actions.</p>
+    <label class="check-label"><input type="checkbox" :checked="enabled" @change="integration(($event.target as HTMLInputElement).checked)" /> Enable GitHub integration</label>
+    <p>Commit this configuration and approve its exact digest on the worker before GitHub actions become available. Each request retains its accepted policy.</p>
+    <template v-if="enabled">
+      <label for="github-policy-repository">GitHub repository · owner/name</label><input id="github-policy-repository" :value="remote.repository" maxlength="140" placeholder="your-organization/your-project" @input="editRemote('repository', ($event.target as HTMLInputElement).value)" />
+      <label for="github-policy-remote">Owned Git remote</label><input id="github-policy-remote" :value="remote.remote" maxlength="80" @input="editRemote('remote', ($event.target as HTMLInputElement).value)" />
+      <label for="github-policy-base">Pull request base branch</label><input id="github-policy-base" :value="remote.base" maxlength="200" @input="editRemote('base', ($event.target as HTMLInputElement).value)" />
+      <label class="check-label"><input type="checkbox" :checked="remote.push" @change="editRemote('push', ($event.target as HTMLInputElement).checked)" /> Permit candidate branch pushes</label>
+      <label class="check-label"><input type="checkbox" :checked="remote.pullRequest" :disabled="!remote.push" @change="editRemote('pullRequest', ($event.target as HTMLInputElement).checked)" /> Permit GitHub pull request creation</label>
+      <label v-if="remote.pullRequest" class="check-label"><input type="checkbox" :checked="remote.draft" @change="editRemote('draft', ($event.target as HTMLInputElement).checked)" /> Create pull requests as drafts</label>
+      <label v-if="remote.pullRequest" class="check-label"><input type="checkbox" :checked="remote.automatic" @change="editRemote('automatic', ($event.target as HTMLInputElement).checked)" /> Automatically push and create the pull request after verification</label>
+      <label class="check-label"><input type="checkbox" :checked="!!modelValue" :disabled="!remote.pullRequest" @change="toggle(($event.target as HTMLInputElement).checked)" /> Enable build and publish to GitHub Releases</label>
+      <p v-if="!remote.pullRequest" class="caption">GitHub Releases requires branch push and pull request creation. Keep both permitted before enabling releases.</p>
+    </template>
+    <template v-if="enabled && modelValue">
       <label for="release-policy-method">Merge method</label><select id="release-policy-method" :value="value.mergeMethod" @change="edit('mergeMethod', ($event.target as HTMLSelectElement).value)"><option value="squash">Squash</option><option value="merge">Merge commit</option><option value="rebase">Rebase</option></select>
       <label for="release-policy-executable">Build executable</label><input id="release-policy-executable" :value="value.build.executable" maxlength="4096" @input="build('executable', ($event.target as HTMLInputElement).value)" />
       <label for="release-policy-args">Build arguments · one per line</label><textarea id="release-policy-args" aria-describedby="release-policy-args-help" :value="value.build.args.join('\n')" rows="4" spellcheck="false" @change="build('args', ($event.target as HTMLTextAreaElement).value)" /><p id="release-policy-args-help" class="caption">Arguments are passed directly to the executable. Choose a command available on the worker machine, including Windows.</p>

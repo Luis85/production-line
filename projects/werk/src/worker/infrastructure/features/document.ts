@@ -1,3 +1,4 @@
+import { localMergeMarkdown } from '../../application/local-merge-markdown.js';
 import { releaseMarkdown } from '../../application/release-markdown.js';
 import { remotePublicationMarkdown } from '../../application/remote-publication-markdown.js';
 import { parseModelEffort, validateModelEffort, validateModelName } from '../../application/model-effort.js';
@@ -71,7 +72,7 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
 }
 /** Additional template fields are author data; rendering never promotes them into policy. */
 export function featureRequestContext(data: Record<string, unknown>, base: FeatureInput) {
-  const standard = ['schema', 'intent', 'execution_profile', 'quality_profile', 'depends_on', 'readiness_decision', 'criterion_decision', 'review', 'control', 'publication', 'release', 'werk', 'schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'priority', 'priority_scale', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'];
+  const standard = ['schema', 'intent', 'execution_profile', 'quality_profile', 'depends_on', 'readiness_decision', 'criterion_decision', 'review', 'control', 'publication', 'release', 'local_merge', 'werk', 'schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'priority', 'priority_scale', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'];
   const metadata = Object.fromEntries(Object.entries(data).filter(([key]) => !standard.includes(key)));
   function finite(value: unknown): boolean { return typeof value === 'number' ? Number.isFinite(value) : Array.isArray(value) ? value.every(finite) : value && typeof value === 'object' ? Object.values(value).every(finite) : true; }
   if (!finite(metadata)) throw Error('Feature metadata must contain finite JSON values.');
@@ -89,6 +90,7 @@ export function renderFeature(parsed: FeatureDocument, id: string, status: strin
       lines.push(`Run ID: ${run.runId}`, `Execution: ${run.status} · ${run.phase}`, `Reason: ${run.reason.replaceAll('<!--', '&lt;!--')}`, `Waiting for: ${(run.waitingFor ?? 'No external event').replaceAll('<!--', '&lt;!--')}`, `Available controls: ${run.controls.join(', ') || 'None'}`);
       if (run.checkpoint) lines.push(`Inspectable checkpoint (not a verification pass): ${run.checkpoint.candidateCommit} on ${run.checkpoint.branch}`);
     }
+    if (gates?.localMerge) lines.push(localMergeMarkdown(gates.localMerge));
     if (gates?.release) lines.push(releaseMarkdown(gates.release));
     if (gates?.publications?.length) lines.push(remotePublicationMarkdown(gates.publications));
     if (metadata.error) lines.push(`Attention: ${String(metadata.error).replaceAll('<!--', '&lt;!--')}`);

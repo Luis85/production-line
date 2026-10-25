@@ -1,10 +1,11 @@
 import type { WorkerRequest } from '../application/request-gates';
 import { remotePublicationBranch, type RemotePublication, type RemotePublicationCommand, type RemotePublicationView } from '../application/remote-delivery-contracts';
+import { deliveryCandidateMatches } from './delivery-candidate-view';
 import { deliveryReviewStages } from './delivery-review-stages';
 export const publicationStatusLabels = { pending: 'Publication pending', unknown: 'Outcome unknown · reconcile first', confirmed: 'Confirmed remotely', not_observed: 'Not found remotely', failed: 'Publication failed' };
 export function publicationCandidateMatches(request: WorkerRequest, view: RemotePublicationView): boolean {
   const candidate = request.delivery ? deliveryReviewStages(request).review?.candidate : null;
-  return !!candidate && !!view.candidate && ['requestId', 'runId', 'inputRevision', 'inputHash', 'policyDigest', 'candidateCommit', 'candidateDigest', 'baseline', 'branch', 'tree', 'patchDigest', 'checkDefinitionDigest'].every(key => candidate[key as keyof typeof candidate] === view.candidate![key as keyof typeof candidate]);
+  return !!candidate && deliveryCandidateMatches(request, view);
 }
 /** Commands carry the inspected immutable subject; the application rechecks every grant. */
 export function publicationCommand(request: WorkerRequest, view: RemotePublicationView, action: RemotePublicationCommand, receipt?: RemotePublication) {

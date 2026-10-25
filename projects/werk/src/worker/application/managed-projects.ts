@@ -1,3 +1,4 @@
+import type { ManagedSetupResult } from './managed-project-setup.js';
 import { DomainError } from '../../shared/errors.js';
 import { identifier, object, text } from '../../shared/contracts.js';
 import { featureWorkflowPath } from './feature-workflow.js';
@@ -16,8 +17,8 @@ export interface ManagedProject extends ManagedProjectDefinition {
 export interface ManagedProjectState { schemaVersion: 1; projects: ManagedProject[]; }
 export interface ManagedProjectsView {
   schemaVersion: 1; home: string;
-  projects: (Omit<ManagedProject, 'operations'> & { intakeEnabled: boolean; policyApproved?: boolean; intakeBlockedReason?: string | null; workflow: { configured: boolean; templates: { id: string; path: string; label: string }[] } })[];
-  diagnostics: { id: 'git' | 'claude' | 'github'; available: boolean; detail: string }[];
+  projects: (Omit<ManagedProject, 'operations'> & { setup?: ManagedSetupResult; intakeEnabled: boolean; policyApproved?: boolean; intakeBlockedReason?: string | null; workflow: { configured: boolean; templates: { id: string; path: string; label: string }[] } })[];
+  diagnostics: { id: 'git' | 'claude' | 'github'; available: boolean; detail: string; required?: boolean; applicable?: boolean }[];
 }
 export interface ManagedProjectPorts {
   load(): Promise<ManagedProjectState>;

@@ -42,10 +42,10 @@ iteration: ""
 
 # Build
 
-The worker prepares an isolated build workspace at the confirmed merged commit and runs the project-configured build executable and arguments within the approved timeout. The build definition is retained with the accepted delivery policy; feature text cannot replace it.
+After the explicit plain-Git main-checkout merge, the team uses its normal project build workflow and retains the resulting evidence. The default Markdown handoff does not claim that this later build happened and does not enable GitHub integration.
 
-The successful result retains source commit, build operation identity, environment, artifact relative paths, byte counts and SHA-256 digests. Artifacts must exist as bounded regular files within the owned build workspace. Missing files, unsafe paths, nonzero exit and timeout fail this step.
+## Optional managed release build
 
-## Exit and recovery
+When the project explicitly enables and approves the GitHub release extension, the worker builds the exact confirmed merged commit in an owned isolated workspace. It runs the pinned build executable/arguments within the approved timeout and retains source, operation identity and safe artifact paths, sizes and SHA-256 digests.
 
-Publish is available only for a successful retained build and matching source/artifacts. A failed post-merge build preserves the merge receipt and reports a release blocker; it does not claim the source was unmerged or silently rerun implementation. Interruption preserves an uncertain build outcome for reconciliation; a retry uses a new guarded action after the previous result is known.
+Missing or unsafe files, nonzero exit and timeout fail the managed build. Its failure preserves the earlier merge receipt and remains a release blocker. An interrupted unknown process is reconciled or explicitly inspected/stopped before another build. Feature text cannot replace the approved build definition.

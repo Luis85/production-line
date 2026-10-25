@@ -1,3 +1,5 @@
+import { localMergeCommands } from '../application/local-merge-contracts.js';
+import { requestLocalMergeView, mergeLocalRequest } from './workspace-local-merge.js';
 import { continueReviewRework } from './workspace-review-rework.js';
 import { releaseCommands } from '../application/release-contracts.js';
 import { requestReleaseView, releaseRequest } from './workspace-release.js';
@@ -35,6 +37,7 @@ export function capabilities(workspace: WorkspaceContext){
       events: "polling",
       scope: "this_worker_accepted_requests",
       mergeAuthority: "approved_project_policy_and_exact_human_acceptance",
+      localMerge: { supported: true, target: "assigned_main_checkout", authority: "exact_human_acceptance_and_checkout_approval" },
       release: { supported: true, target: "github_releases", completion: "confirmed_assets_for_merged_commit" },
     },
     events: { transport: "polling", streaming: false },
@@ -101,7 +104,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     "inputHash",
     "outputDigest",
     "deliveryRunId", "inputRevision", "candidateCommit", "candidateDigest", "humanOutcomes",
-    "assessmentId", "proposalId", "decision", "criterionDecision", "reviewDurationMinutes", "publicationOperationId", "releaseOperationId", "releaseTag",
+    "assessmentId", "proposalId", "decision", "criterionDecision", "reviewDurationMinutes", "publicationOperationId", "releaseOperationId", "releaseTag", "localMergeOperationId", "mainCheckout", "mainBranch", "mainHead",
   ]);
   const action = String(initial.action);
   const reads: Record<string, string[]> = {
@@ -112,6 +115,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     policy: ["action"],
     publication: ["action", "requestId"],
     release: ["action", "requestId"],
+    local_merge: ["action", "requestId"],
     set_policy: ["action", "policy", "expectedRevision", "operationId"],
     execute: ["action", "requestId", "expectedRevision", "operationId"],
   };
@@ -137,6 +141,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
         "explicit_operator_decision_not_proof_of_human_identity",
     };
   if (action === "policy") return gates.policy();
+  if (action === "local_merge") return requestLocalMergeView(workspace, identifier(initial.requestId, "requestId"));
   if (action === "release") return requestReleaseView(workspace, identifier(initial.requestId, "requestId"));
   if (action === "publication") return publicationView(workspace, identifier(initial.requestId, "requestId"));
   if (action === "list")
@@ -173,6 +178,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     });
   const requestId = identifier(initial.requestId, "requestId");
   const before = gates.get(requestId);
+  if (localMergeCommands.includes(action as typeof localMergeCommands[number])) return mergeLocalRequest(workspace, initial as unknown as RequestCommand);
   if (releaseCommands.includes(action as typeof releaseCommands[number]) || action === 'confirm_release_stopped') return releaseRequest(workspace, initial as unknown as RequestCommand);
   if (remotePublicationCommands.includes(action as typeof remotePublicationCommands[number])) return publishRequest(workspace, initial as unknown as RequestCommand);
   if (isSharedFeatureSession(workspace, before.owner.sessionId) && ['propose', 'accept_candidate', 'rework', 'execute'].includes(action))

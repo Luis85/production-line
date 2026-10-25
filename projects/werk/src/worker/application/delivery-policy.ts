@@ -20,7 +20,7 @@ export interface DeliveryQualityProfile {
 }
 export interface DeliveryProjectPolicy {
   schemaVersion: 1; version: number; defaultProfile: string;
-  startPromptDirectory?: string;
+  startPromptDirectory?: string; localMerge?: boolean;
   reviewDirectory: string; profiles: DeliveryQualityProfile[]; checkPacks?: DeliveryCheckPack[];
   execution?: DeliveryExecutionPolicy; remoteDelivery?: RemoteDeliveryPolicy; release?: ReleasePolicy;
   coordination?: DeliveryCoordinationPolicy; behaviors?: DeliveryBehaviorLibrary; retention?: DeliveryRetentionPolicy;
@@ -49,7 +49,7 @@ export function defaultDeliveryProjectPolicy(): DeliveryProjectPolicy {
   ] };
 }
 export function validateDeliveryProjectPolicy(value: unknown): DeliveryProjectPolicy {
-  const raw = object(value, 'Delivery project policy', ['schemaVersion', 'version', 'defaultProfile', 'reviewDirectory', 'profiles', 'execution', 'remoteDelivery', 'coordination', 'behaviors', 'retention', 'startPromptDirectory', 'checkPacks', 'release']);
+  const raw = object(value, 'Delivery project policy', ['schemaVersion', 'version', 'defaultProfile', 'reviewDirectory', 'profiles', 'execution', 'remoteDelivery', 'coordination', 'behaviors', 'retention', 'startPromptDirectory', 'checkPacks', 'release', 'localMerge']);
   if (raw.schemaVersion !== 1 || !Number.isSafeInteger(raw.version) || Number(raw.version) < 1 || !Array.isArray(raw.profiles) || raw.profiles.length < 2 || raw.profiles.length > 16) invalid('Delivery policy requires schemaVersion 1, a positive version and 2–16 named profiles.');
   const profiles = raw.profiles.map(item => {
     const profile = object(item, 'Quality profile', ['id', 'minimumCriteria', 'minimumMessageLength', 'maxRepairAttempts', 'verificationInputs', 'readiness', 'exceptions', 'checkPacks']);
@@ -71,6 +71,7 @@ export function validateDeliveryProjectPolicy(value: unknown): DeliveryProjectPo
   const checkPacks = raw.checkPacks === undefined ? undefined : validateDeliveryCheckPacks(raw.checkPacks);
   for (const profile of profiles) selectedDeliveryCheckPacks({ checkPacks }, profile);
   const execution = raw.execution === undefined ? undefined : validateDeliveryExecutionPolicy(raw.execution);
+  if (raw.localMerge !== undefined && typeof raw.localMerge !== 'boolean') invalid('Local main-checkout merge requires an explicit boolean choice.');
   const remoteDelivery = raw.remoteDelivery === undefined ? undefined : validateRemoteDeliveryPolicy(raw.remoteDelivery);
   const release = raw.release === undefined ? undefined : validateReleasePolicy(raw.release);
   if (release && (!remoteDelivery || release.repository.toLowerCase() !== remoteDelivery.repository.toLowerCase() || release.base !== remoteDelivery.base || !remoteDelivery.push || !remoteDelivery.pullRequest)) invalid('Release requires PR publication to the same approved repository and base.');
@@ -84,6 +85,7 @@ export function validateDeliveryProjectPolicy(value: unknown): DeliveryProjectPo
     ...(execution === undefined ? {} : { execution }),
     ...(remoteDelivery === undefined ? {} : { remoteDelivery }),
     ...(release === undefined ? {} : { release }),
+    ...(raw.localMerge === undefined ? {} : { localMerge: raw.localMerge as boolean }),
     ...(raw.coordination === undefined ? {} : { coordination: validateDeliveryCoordinationPolicy(raw.coordination) }),
     ...(raw.retention === undefined ? {} : { retention: validateDeliveryRetention(raw.retention) }),
     ...(raw.behaviors === undefined ? {} : { behaviors: validateDeliveryBehaviorLibrary(raw.behaviors) }),

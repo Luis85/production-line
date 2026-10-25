@@ -45,10 +45,12 @@ iteration: ""
 
 # Merge
 
-The worker uses the configured GitHub repository, base and merge method. Before mutation it persists an operation intent and verifies the intended owned PR and expected candidate head, required acceptance and policy approval. Repository branch protection and host review rules remain authoritative.
+The primary Git/Markdown workflow asks a person to review the exact increment, then explicitly allow the worker to merge into the displayed assigned main checkout. The decision binds candidate revision/digest and destination path, branch and prior head. The worker requires a clean target checkout/index, rejects conflicts or stale state, and retains its prepared intent before guarded Git ref/worktree mutation. It does not force-reset or discard user work.
 
-## Exit and recovery
+A confirmed local-merge receipt records the resulting main-checkout state. A handoff or candidate acceptance alone does not establish that result. Unknown acknowledgements use read-only reconciliation before another mutation. New `localMerge: true` workflow policies require this confirmation before delivery completes; older review-only policies retain their established semantics. This needs Git, not GitHub APIs or GitHub CLI.
 
-A confirmed merge receipt contains the PR number and actual merged commit. Squash/rebase results are identified from the hosting service rather than assuming the candidate SHA is the integrated SHA. That exact receipt becomes Build's source.
+## Optional managed GitHub merge
 
-Conflicts, changed heads, closed-without-merge and unavailable host checks block this step. A lost acknowledgement retains an unknown outcome; read-only reconciliation confirms the matching merge or its absence before a new explicit mutation. Merge does not mark the release published.
+Explicit committed and locally approved GitHub release policy can enable worker-managed merge. Before mutation the worker persists intent and verifies its owned PR, configured repository/base, expected candidate head, required acceptance and current approval. For an owned draft PR, the explicit merge action can mark it ready, then reobserve the head and authorization before expected-head merge. Repository branch protection and host review rules remain authoritative.
+
+A confirmed receipt records the actual merged commit, including the host's squash/rebase result, for the optional managed Build step. Conflicts, changed heads, closed-without-merge or unavailable host checks block the action. Lost acknowledgement retains an unknown outcome for read-only reconciliation before another mutation.

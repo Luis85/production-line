@@ -9,7 +9,7 @@ function fixture() {
   const request = { id: 'request-one', revision: 3, owner: { sessionId: 'local-one', taskId: 'one' }, input: { message: 'Accepted goal' } };
   const detail = { session, chat: { messages: [] } };
   const board = { tasks: [task] };
-  const shared = { requests: [] };
+  const shared = { requests: [] }, projectIntakes = new Map();
   const calls = [];
   async function read(path, method = 'GET', body) {
     calls.push({ path, method, body });
@@ -18,9 +18,10 @@ function fixture() {
     if (path === '/api/taskboard') return board;
     if (path === '/api/requests') return request;
     if (path === '/api/shared-intake') return shared;
+    if (path.startsWith('/api/shared-intake?projectId=')) { const id = new URL(path, 'http://worker.test').searchParams.get('projectId'); if (projectIntakes.has(id)) return projectIntakes.get(id); }
     throw Error('Unexpected read ' + path);
   }
-  return { session, task, request, detail, board, shared, read, calls };
+  return { session, task, request, detail, board, shared, projectIntakes, read, calls };
 }
 test('review query preserves exact scalar identity and rejects ambiguous arrays', () => {
   assert.deepEqual(reviewIdentity({ session: 'local-one', fileId: 'one' }), { sessionId: 'local-one', fileId: 'one' });
@@ -104,4 +105,41 @@ test('next-step links preserve canonical context and lead to the existing contin
   assert.equal(reviewActionHref('review_patch', 'one'), '#review-changes');
   assert.equal(reviewActionHref('review_shared', 'one'), '#review-handoff');
   assert.equal(reviewActionHref('inspect_history', 'one'), '/history?view=runs&runSession=one');
+});
+
+
+test('managed shared reviews join the retained project when primary intake is empty, including refresh', async () => {
+  const f = fixture(), feature = { key: 'company:feature-one', id: 'FR-1', source: 'shared_git', scope: 'company/main', repositoryId: 'company' };
+  Object.assign(f.session, { feature }); Object.assign(f.task, { feature }); Object.assign(f.request.owner, { featureId: feature.key });
+  const record = { feature, taskId: 'one', isLocal: true, publication: 'synced' };
+  f.projectIntakes.set('company', { config: { repositoryId: 'company' }, requests: [record] });
+  f.projectIntakes.set('other', { config: { repositoryId: 'other' }, requests: [{ ...record, feature: { ...feature, repositoryId: 'other' } }] });
+  for (let refresh = 0; refresh < 2; refresh++) assert.equal((await readFeatureReview({ sessionId: 'local-one', fileId: 'one' }, f.read)).shared, record);
+  assert.deepEqual(f.calls.filter(call => call.path.startsWith('/api/shared-intake')).map(call => call.path), ['/api/shared-intake?projectId=company', '/api/shared-intake?projectId=company']);
+  assert.equal(f.shared.requests.length, 0, 'an empty primary intake does not affect the assigned project join');
+});
+
+test('managed shared review never falls back to another project or accepts a mismatched returned project', async () => {
+  const f = fixture(), feature = { key: 'company:feature-one', id: 'FR-1', source: 'shared_git', scope: 'company/main', repositoryId: 'company' };
+  Object.assign(f.session, { feature }); Object.assign(f.task, { feature });
+  const record = { feature, taskId: 'one', isLocal: true };
+  f.shared.requests.push(record);
+  f.projectIntakes.set('company', { config: { repositoryId: 'company' }, requests: [] });
+  await assert.rejects(readFeatureReview({ sessionId: 'local-one', fileId: 'one' }, f.read), /ownership is unavailable/);
+  assert.equal(f.calls.some(call => call.path === '/api/shared-intake'), false, 'matching primary records do not authorize fallback');
+  f.projectIntakes.set('company', { config: { repositoryId: 'other' }, requests: [record] });
+  await assert.rejects(readFeatureReview({ sessionId: 'local-one', fileId: 'one' }, f.read), /project identity changed/);
+  f.projectIntakes.set('company', { config: { repositoryId: 'company' }, requests: [{ ...record, feature: { ...feature, repositoryId: 'other' } }] });
+  await assert.rejects(readFeatureReview({ sessionId: 'local-one', fileId: 'one' }, f.read), /ownership changed/);
+});
+
+test('project contradictions and malformed retained project IDs are rejected before reading shared ownership', async () => {
+  const f = fixture(), feature = { key: 'company:feature-one', source: 'shared_git', repositoryId: 'company' };
+  Object.assign(f.session, { feature }); Object.assign(f.task, { feature: { ...feature, repositoryId: 'other' } });
+  await assert.rejects(readFeatureReview({ sessionId: 'local-one', fileId: 'one' }, f.read), /identities do not agree/);
+  for (const repositoryId of ['', 'company/other', 'company?projectId=other', ' company', 'a'.repeat(101)]) {
+    Object.assign(f.session, { feature: { ...feature, repositoryId } }); Object.assign(f.task, { feature: { ...feature, repositoryId } });
+    await assert.rejects(readFeatureReview({ sessionId: 'local-one', fileId: 'one' }, f.read), /project identity is invalid/);
+  }
+  assert.equal(f.calls.some(call => call.path.startsWith('/api/shared-intake')), false);
 });
