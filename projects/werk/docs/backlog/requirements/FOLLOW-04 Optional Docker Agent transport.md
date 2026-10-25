@@ -1,12 +1,22 @@
 ---
 pbl-id: 13
 type: PBI
-order: 13000
+order: 43499.75586
 status: Open
 tags:
   - implementation-plan
   - planned
   - follow-on
+parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 # Optional Docker Agent transport

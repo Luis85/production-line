@@ -1,9 +1,18 @@
 ---
 pbl-id: 25
 type: Improvement
-order: 25000
+order: 43996.09375
 status: Done
 finished: 2026-10-12
+parent: "[[The Worker]]"
+started: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 ## Acceptance and verification

@@ -1,0 +1,44 @@
+---
+type: Process
+actors:
+  - "[[Worker]]"
+interfaces:
+  - "[[Webview Kanban Board]]"
+  - "[[Command Line]]"
+order: 6
+inputs:
+  - "[[Feature Request]]"
+  - "[[Pull Request]]"
+  - "[[Increment]]"
+outputs:
+  - "[[Feature Request]]"
+  - "[[Pull Request]]"
+  - "[[Increment]]"
+emits:
+  - "[[Feature Request Updated]]"
+  - "[[Pull Request Updated]]"
+  - "[[Increment Updated]]"
+  - "[[Process Updated]]"
+supplier:
+  - "[[Git Repository]]"
+  - "[[System User]]"
+customers:
+  - "[[Worker]]"
+  - "[[System User]]"
+  - "[[projects/werk/docs/entities/systems/Factory|Factory]]"
+  - "[[projects/werk/docs/entities/systems/Orchestrator|Orchestrator]]"
+prev_step: "[[Review]]"
+next_step: "[[Build]]"
+status: Open
+owner: "[[System]]"
+parent: "[[Direct Feature Request to a Worker through the Webview Worker Intake]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
+---

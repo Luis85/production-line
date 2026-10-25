@@ -1,7 +1,7 @@
 ---
 pbl-id: 1
 type: PBI
-order: 1000
+order: 43250
 status: Active
 tags:
   - implementation-plan
@@ -9,6 +9,14 @@ tags:
   - p0
 priority: P0
 started: 2026-10-12
+parent: "[[The Worker]]"
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-01 Project binding and pinned requirement context

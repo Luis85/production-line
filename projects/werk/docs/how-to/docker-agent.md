@@ -2,7 +2,7 @@
 
 Werk provides two integration paths: external coding-CLI **harness templates**
 and native Docker Agent **operations agents** using Werk's stdio MCP bridges.
-These are distinct from the Compose deployment described in [factory.md](factory.md).
+These are distinct from the Compose deployment described in [factory.md](projects/werk/docs/how-to/factory.md).
 
 | Config in `integrations/docker-agent` | Execution/authentication | Werk integration |
 | --- | --- | --- |

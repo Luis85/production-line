@@ -1,13 +1,22 @@
 ---
 pbl-id: 14
 type: PBI
-order: 14000
+order: 44375
 status: Active
 tags:
   - implementation-plan
   - planned
   - follow-on
 started: 2026-10-12
+parent: "[[Cross-Cutting Concerns]]"
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 # Later scaling decisions

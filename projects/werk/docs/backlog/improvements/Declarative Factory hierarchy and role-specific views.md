@@ -1,12 +1,21 @@
 ---
 pbl-id: 38
 type: PBI
-order: 38000
+order: 41500
 status: Done
 finished: 2026-10-12
 tags:
   - runtime
   - journey
+parent: "[[Factories and Production Lines]]"
+started: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 ## Scope and evidence

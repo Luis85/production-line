@@ -1,0 +1,179 @@
+filters:
+  and:
+    - file.ext == "md"
+    - file.inFolder("projects/werk/docs")
+properties:
+  file.name:
+    displayName: file name
+views:
+  - type: product-backlog
+    name: Backlog
+    homeFolder: projects/werk/docs/backlog
+    stateProperty: note.status
+    stateValues: Open, Active, Blocked, Done
+    doneValues: Done
+    startedStates: Active
+    startedDateProperty: note.started
+    finishedDateProperty: note.finished
+    dependsOnProperty: note.dependsOn
+    priorityProperty: note.priority
+    priorityValues: P0, P1
+    typeFolder.epic: projects/werk/docs/backlog/requirements
+    typeFolder.feature: projects/werk/docs/backlog/requirements
+    typeFolder.pbi: projects/werk/docs/backlog/requirements
+    typeFolder.task: projects/werk/docs/backlog/tasks
+    typeFolder.bug: projects/werk/docs/backlog/bugs
+    typeFolder.deliverable: projects/werk/docs/backlog/deliverables
+    typeFolder.idea: projects/werk/docs/backlog/ideas
+    typeFolder.improvement: projects/werk/docs/backlog/improvements
+    typeFolder.milestone: projects/werk/docs/backlog/milestones
+    typeFolder.test suite: projects/werk/docs/backlog/tests/suites
+    typeFolder.iteration: projects/werk/docs/backlog/iterations
+    typeFolder.test case: projects/werk/docs/backlog/tests/cases
+    typeFolder.absence: projects/werk/docs/backlog/absences
+    openIn: split
+    hierarchyOnly: true
+    horizonProperty: note.horizon
+    startProperty: note.start
+    targetProperty: note.due
+    riskProperty: note.risk
+    assigneeProperty: note.assignee
+    iterationProperty: note.iteration
+    iterationGoalProperty: note.goal
+    releaseProperty: note.release
+  - type: table
+    name: Entities
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/entities")
+    groupBy:
+      property: type
+      direction: ASC
+    order:
+      - type
+      - file.name
+      - extends
+      - parent
+      - emits
+      - subscribes
+      - color
+      - tags
+      - aliases
+      - category
+      - description
+      - status
+      - relations
+    columnSize:
+      note.type: 125
+      file.name: 249
+      note.extends: 115
+      note.parent: 196
+      note.emits: 324
+      note.subscribes: 466
+      note.color: 140
+      note.tags: 186
+      note.aliases: 184
+      note.category: 162
+      note.description: 121
+      note.status: 121
+      note.relations: 189
+  - type: table
+    name: Events
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/events")
+    order:
+      - type
+      - file.name
+      - description
+      - parent
+    columnSize:
+      note.type: 88
+      file.name: 227
+      note.description: 176
+      note.parent: 196
+  - type: table
+    name: Relations
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/relations")
+    order:
+      - file.name
+      - description
+      - relation_type
+      - status
+      - color
+      - from_node
+      - to_node
+      - category
+      - aliases
+      - tags
+    columnSize:
+      file.name: 139
+      note.description: 161
+      note.relation_type: 153
+      note.status: 135
+      note.color: 140
+  - type: table
+    name: Processes
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/processes")
+        - type == "Process"
+    order:
+      - order
+      - file.name
+      - supplier
+      - inputs
+      - outputs
+      - customers
+      - owner
+      - emits
+      - rules
+      - next_step
+      - prev_step
+      - actors
+      - interfaces
+      - type
+      - parent
+      - status
+    sort:
+      - property: order
+        direction: ASC
+    columnSize:
+      note.supplier: 335
+      note.inputs: 339
+      file.name: 357
+      note.outputs: 311
+      note.customers: 353
+      note.owner: 89
+      note.emits: 478
+      note.rules: 150
+      note.next_step: 147
+      note.prev_step: 151
+      note.type: 72
+      note.parent: 91
+  - type: table
+    name: Rules
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/rules")
+        - type == "Rule"
+    order:
+      - type
+      - file.name
+      - validates
+    columnSize:
+      file.name: 229
+  - type: table
+    name: Data Quality
+    groupBy:
+      property: type
+      direction: ASC
+    order:
+      - type
+      - file.name
+      - status
+      - tags
+    columnSize:
+      file.name: 579

@@ -1,7 +1,7 @@
 ---
 pbl-id: 8
 type: PBI
-order: 8000
+order: 43498.046875
 status: Open
 tags:
   - implementation-plan
@@ -11,6 +11,15 @@ priority: P0
 dependsOn:
   - "[[P0-03 Worker workspace and provider process runner]]"
   - "[[P0-07 Durable Git event ingestion, feedback attempts and verified merge]]"
+parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-08 Second native provider adapter, mixed profiles and shared quota policy

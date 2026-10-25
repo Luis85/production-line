@@ -1,7 +1,7 @@
 ---
 pbl-id: 9
 type: PBI
-order: 9000
+order: 44500
 status: Active
 tags:
   - implementation-plan
@@ -12,9 +12,16 @@ dependsOn:
   - "[[P0-05 First real Claude or Codex adapter integrated end to end]]"
   - "[[P0-06 Head-bound quality gates and human review request]]"
   - "[[P0-07 Durable Git event ingestion, feedback attempts and verified merge]]"
-  - "[[P0-08 Second native provider adapter, mixed profiles and shared quota
-    policy]]"
+  - "[[P0-08 Second native provider adapter, mixed profiles and shared quota policy]]"
 started: 2026-10-12
+parent: "[[Cross-Cutting Concerns]]"
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-09 Live telemetry and UI completion across line, worker and Factory

@@ -1,7 +1,7 @@
 ---
 pbl-id: 7
 type: PBI
-order: 7000
+order: 43496.09375
 status: Open
 tags:
   - implementation-plan
@@ -10,6 +10,15 @@ tags:
 priority: P0
 dependsOn:
   - "[[P0-06 Head-bound quality gates and human review request]]"
+parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-07 Durable Git event ingestion, feedback attempts and verified merge

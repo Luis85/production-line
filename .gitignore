@@ -15,3 +15,5 @@ backups/
 
 # Local Forge selection is not portable project configuration.
 /bin/data/context.json
+
+/.obsidian

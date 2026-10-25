@@ -1,12 +1,21 @@
 ---
 pbl-id: 39
 type: PBI
-order: 39000
+order: 43500
 status: Done
 finished: 2026-10-12
 tags:
   - runtime
   - journey
+parent: "[[The Worker]]"
+started: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 ## Scope and evidence

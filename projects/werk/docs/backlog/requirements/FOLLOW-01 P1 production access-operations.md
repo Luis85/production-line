@@ -1,13 +1,22 @@
 ---
 pbl-id: 10
 type: PBI
-order: 10000
+order: 44250
 status: Open
 tags:
   - implementation-plan
   - planned
   - follow-on
 priority: P1
+parent: "[[Cross-Cutting Concerns]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P1 production access/operations

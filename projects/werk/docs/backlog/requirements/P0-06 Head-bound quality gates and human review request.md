@@ -1,7 +1,7 @@
 ---
 pbl-id: 6
 type: PBI
-order: 6000
+order: 43492.1875
 status: Open
 tags:
   - implementation-plan
@@ -10,6 +10,15 @@ tags:
 priority: P0
 dependsOn:
   - "[[P0-05 First real Claude or Codex adapter integrated end to end]]"
+parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-06 Head-bound quality gates and human review request

@@ -1,0 +1,34 @@
+---
+type: System
+extends: "[[Base Entity]]"
+description:
+status:
+color:
+category:
+parent: "[[System]]"
+aliases:
+tags:
+emits:
+  - "[[New Feature Request]]"
+subscribes:
+  - "[[New Pull Request]]"
+  - "[[Feature Request Updated]]"
+  - "[[Pull Request Updated]]"
+  - "[[New Increment Created]]"
+  - "[[Increment Updated]]"
+order: -1999
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
+templates:
+---
+
+## Properties
+
+- git_repository: string

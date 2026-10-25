@@ -1,13 +1,22 @@
 ---
 pbl-id: 11
 type: PBI
-order: 11000
+order: 43499.023438
 status: Open
 tags:
   - implementation-plan
   - planned
   - follow-on
 priority: P1
+parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P1 planning fidelity
