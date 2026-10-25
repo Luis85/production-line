@@ -10,6 +10,8 @@ import DeliveryCriterionDecisions from './DeliveryCriterionDecisions.vue';
 import { reportedReviewMinutes } from '../delivery-readiness-view';
 import DeliveryControls from './DeliveryControls.vue';
 import DeliveryPublicationPanel from './DeliveryPublicationPanel.vue';
+import DeliveryReleasePanel from './DeliveryReleasePanel.vue';
+import WorkflowTimeline from './WorkflowTimeline.vue';
 import DeliveryHumanReview from './DeliveryHumanReview.vue';
 import MessageContent from './MessageContent.vue';
 import type { WorkerRequest } from '../../application/request-gates';
@@ -60,6 +62,7 @@ const {
         <p>The worker's acknowledgement is uncertain. Your original action is retained. Retry it to confirm the result without submitting duplicate work.</p>
         <UButton variant="outline" :loading="isPending('retry')" :disabled="busy" @click="send(operation)">Retry saved action</UButton>
       </div>
+      <WorkflowTimeline v-if="view.delivery && props.summary !== false" :subject="view" />
       <DeliveryControls v-if="view.delivery" :run="view.delivery" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="deliveryCommand" />
       <DeliveryReadinessPanel :subject="view" :evaluation="currentEvaluation('ready')" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
       <DeliveryCriterionDecisions :subject="view" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
@@ -88,6 +91,7 @@ const {
         <details><summary>Read acceptance note</summary><MessageContent :text="view.attestation!.note" /></details>
       </div>
       <DeliveryPublicationPanel v-if="view.delivery" :subject="view" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="command" />
+      <DeliveryReleasePanel v-if="view.delivery" :subject="view" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="command" />
       <p v-if="pendingModel">The model is waiting for input. Answer its checkpoint in the interaction or the linked Task note.</p>
       <p v-if="activeExecution && !view.delivery">The worker is {{ view.execution?.status === 'prepared' ? 'queued' : 'running' }} with its accepted scope. Its task controls can stop the invocation.</p>
       <p v-if="activeReview && !view.delivery" role="status">An instruction review or proposal is queued or running. It cannot accept its own proposal or satisfy verified checks.</p>

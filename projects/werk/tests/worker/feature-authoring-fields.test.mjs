@@ -91,9 +91,11 @@ test('named execution profiles remove conflicting legacy overrides and preserve 
   updated = writeFeatureDetail(updated, 'model', 'legacy');
   updated = writeFeatureDetail(updated, 'execution_profile', 'implementation');
   updated = writeFeatureDetail(updated, 'depends_on', 'FR-1\nshared:FR-2');
-  updated = writeFeatureDetail(updated, 'priority', '0');
+  assert.throws(() => writeFeatureDetail(updated, 'priority', '0'), /Choose High, Medium or Low/);
+  updated = writeFeatureDetail(updated, 'priority', '1');
+  assert.match(updated, /priority_scale: three-level\/v1/);
   const value = readFeatureDetails(updated);
   assert.equal(value.executionProfile, 'implementation'); assert.equal(value.selection.provider, undefined); assert.equal(value.selection.model, '');
-  assert.equal(value.dependsOn, 'FR-1\nshared:FR-2'); assert.equal(value.priority, 0);
+  assert.equal(value.dependsOn, 'FR-1\nshared:FR-2'); assert.equal(value.priority, 1);
   assert.equal(readFeatureDetails(writeFeatureDetail(updated, 'execution_profile', '')).executionProfile, '');
 });

@@ -93,9 +93,9 @@ const labels: Record<string, string> = {
   readiness: 'Readiness check', ready: 'Ready for intake', waiting: 'Waiting for admission',
   simulated: 'Simulated · not implemented', incomplete: 'Incomplete evidence',
   unconfirmed: 'Execution state needs refresh', gate_blocked: 'Gate blocked',
-  source_blocked: 'Request source needs attention',
+  source_blocked: 'Request source needs attention', release_pending: 'Awaiting release',
 };
-const attention = new Set(['waiting_input', 'escalated', 'needs_rework', 'readiness', 'review', 'failed', 'interrupted', 'incomplete', 'unconfirmed', 'gate_blocked', 'source_blocked']);
+const attention = new Set(['waiting_input', 'escalated', 'needs_rework', 'readiness', 'review', 'failed', 'interrupted', 'incomplete', 'unconfirmed', 'gate_blocked', 'source_blocked', 'release_pending']);
 const timestamp = (value?: string | null) => value && Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0;
 function latest(...values: (string | null | undefined)[]): string | null {
   return values.filter((value): value is string => !!value && !!timestamp(value)).sort((a, b) => timestamp(b) - timestamp(a))[0] ?? null;
@@ -118,10 +118,12 @@ function stateFor(evidence: Evidence, currentSessionId: string | null): string {
   // Original assignments keep taskState even if an earlier follow-up left interaction history.
   if (session?.kind === 'orchestrator' && ['queued', 'running'].includes(session.taskState ?? '')) status = session.taskState!;
   const phase = session?.requestPhase ?? file?.requestPhase ?? feature?.gates?.phase;
+  const lifecycle = session?.requestLifecycle ?? file?.requestLifecycle ?? feature?.gates?.lifecycle;
   // Existing request phases describe outstanding human work independently of a completed model turn.
   if (!['queued', 'running', 'waiting_input', 'escalated', 'failed', 'interrupted', 'cancelled'].includes(status)) {
     // A passed request gate does not apply the retained file patch or clear its review work.
-    if (phase === 'done') status = file?.status === 'review' ? 'review' : 'done';
+    if (phase === 'done' && lifecycle === 'in_progress') status = 'release_pending';
+    else if (phase === 'done') status = file?.status === 'review' ? 'review' : 'done';
     else if (phase === 'readiness') status = 'needs_rework';
     else if (phase && ['needs_rework', 'review'].includes(phase)) status = phase;
     else if (file?.status === 'review') status = 'review';
@@ -146,6 +148,7 @@ function summarize(evidence: Evidence, status: string): string {
   if (file?.error || feature?.error || featureFile?.error || history?.error) return file?.error || feature?.error || featureFile?.error || history?.error || '';
   if (file?.summary) return file.summary;
   if (status === 'review') return file ? 'A proposed patch is ready for review. It has not been applied automatically.' : 'Review the recorded output and request evidence.';
+  if (status === 'release_pending') return 'Implementation is accepted. Merge, build and release publication still need confirmation.';
   if (status === 'needs_rework') return 'Review the request findings before starting another attempt.';
   if (status === 'draft') return featureFile ? 'This project request has not been admitted to the queue.' : 'Add an instruction to start this task.';
   if (status === 'completed' || status === 'done') return 'Inspect the saved result and evidence before accepting the work.';
@@ -154,11 +157,11 @@ function summarize(evidence: Evidence, status: string): string {
   return labels[status] ?? status.replaceAll('_', ' ');
 }
 function primaryAction(item: Pick<TaskOverviewItem, 'sessionId' | 'localTaskId' | 'featureName' | 'status'>): TaskOverviewAction {
-  if ((item.sessionId || item.localTaskId) && ['review', 'needs_rework', 'readiness', 'gate_blocked', 'completed', 'done', 'failed', 'interrupted', 'incomplete'].includes(item.status)) {
+  if ((item.sessionId || item.localTaskId) && ['review', 'needs_rework', 'readiness', 'gate_blocked', 'completed', 'done', 'failed', 'interrupted', 'incomplete', 'release_pending'].includes(item.status)) {
     const query = new URLSearchParams();
     if (item.sessionId) query.set('session', item.sessionId);
     if (item.localTaskId) query.set('fileId', item.localTaskId);
-    return { kind: 'review', label: item.localTaskId ? 'Review changes' : 'Review result', sessionId: item.sessionId, href: '/review?' + query };
+    return { kind: 'review', label: item.status === 'release_pending' ? 'Inspect release' : item.localTaskId ? 'Review changes' : 'Review result', sessionId: item.sessionId, href: '/review?' + query };
   }
   if (item.sessionId) return { kind: 'session', label: ['waiting_input', 'escalated'].includes(item.status) ? 'Answer task' : 'Open task', sessionId: item.sessionId, href: '/taskboard?session=' + encodeURIComponent(item.sessionId) };
   if (item.localTaskId) return { kind: 'file', label: 'Inspect file task', href: '/history' + (['review', 'failed'].includes(item.status) ? '?fileState=' + item.status : '') };
@@ -229,13 +232,14 @@ function withDelivery(item: TaskOverviewItem, requests: readonly RequestSummary[
   const group: TaskOverviewGroup = lifecycle === 'done' || lifecycle === 'cancelled' ? 'completed'
     : lifecycle === 'in_review' ? 'attention' : run.status === 'queued' ? 'queued'
       : working && item.sessionId === currentSessionId ? 'running' : 'attention';
+  const releasePending = lifecycle === 'in_progress' && run.status === 'completed';
   const needsAnswer = ['waiting_input', 'escalated'].includes(item.status);
-  const status = lifecycle === 'done' ? 'done' : lifecycle === 'in_review' ? 'review' : needsAnswer ? item.status : run.status;
+  const status = releasePending ? 'release_pending' : lifecycle === 'done' ? 'done' : lifecycle === 'in_review' ? 'review' : needsAnswer ? item.status : run.status;
   const query = new URLSearchParams({ session: item.sessionId ?? request.owner.sessionId });
   if (item.localTaskId) query.set('fileId', item.localTaskId);
   return { ...item, status, group, updatedAt: request.updatedAt,
-    statusLabel: lifecycle === 'in_review' || lifecycle === 'done' ? deliveryLifecycleLabels[lifecycle] : needsAnswer ? item.statusLabel : deliveryStatusLabels[run.status],
-    summary: needsAnswer ? item.summary : run.decision.reason,
+    statusLabel: releasePending ? 'Awaiting release' : lifecycle === 'in_review' || lifecycle === 'done' ? deliveryLifecycleLabels[lifecycle] : needsAnswer ? item.statusLabel : deliveryStatusLabels[run.status],
+    summary: needsAnswer ? item.summary : releasePending ? 'Implementation is accepted. Inspect the current merge, build and publication evidence.' : run.decision.reason,
     lifecycleLabel: lifecycle ? deliveryLifecycleLabels[lifecycle] : undefined,
     deliveryRunId: run.id, deliveryPhaseLabel: deliveryPhaseLabels[run.phase], nextEvent: run.decision.waitingFor,
     primaryAction: needsAnswer ? item.primaryAction : { kind: 'review', label: lifecycle === 'in_review' ? 'Review candidate' : 'Inspect request', sessionId: item.sessionId, href: '/review?' + query },

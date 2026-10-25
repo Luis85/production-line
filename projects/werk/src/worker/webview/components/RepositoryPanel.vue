@@ -5,6 +5,7 @@ import UInput from '@nuxt/ui/components/Input.vue';
 import { state, date, workspaceAction } from '../store';
 import { nativeWorkReadiness } from '../native-work-readiness';
 import RepositoryDiscovery from './RepositoryDiscovery.vue';
+import ManagedProjectsPanel from './ManagedProjectsPanel.vue';
 
 interface RepositoryDraft { id: string; path: string; remote: string; branch: string; watch: boolean; featureDirectory: string; featurePollSeconds: number; }
 const entries = ref<RepositoryDraft[]>([]), seconds = ref(30), worktreeDirectory = ref(''), baseline = ref('');
@@ -65,6 +66,7 @@ const statusLabel = (value?: string) => ({ pending: 'Waiting for first check', s
     <p class="page-note">Assign existing checkouts on the worker machine. Watched repositories are fetched and pulled when a fast-forward is safe. Shared intake preserves its developer checkout. File tasks run in isolated Git worktrees.</p>
     <p v-if="nativeReadiness" role="status" aria-live="polite" aria-atomic="true" class="page-note">{{ nativeReadiness.message }} You can edit assignments now; saving and repository checks wait until native work is ready.</p>
     <RepositoryDiscovery reconsider />
+    <ManagedProjectsPanel />
     <ul v-if="assigned.length" class="repository-list">
       <li v-for="item in assigned" :key="item.id">
         <div class="section-heading"><h3 class="break-anywhere">{{ item.id }}</h3><UButton type="button" color="neutral" variant="outline" :loading="syncing === item.id" :disabled="!!syncing || busy || !state.unlocked || !!nativeReadiness" @click="sync(item.id)">{{ observed.find(row => row.id === item.id)?.checkoutPreserved ? 'Check remote' : 'Check & pull' }}</UButton></div>

@@ -17,12 +17,13 @@ export function publication(action = 'push') {
     configurationDigest: '8'.repeat(64), status: 'pending', detail: 'Saved intent.', createdAt: '2026-10-20T00:00:00.000Z', updatedAt: '2026-10-20T00:00:00.000Z' };
 }
 /** Trusted package fixture tests journal authority, not Git or provider execution.
- * @param {import('../../src/worker/application/journal-ports.ts').RequestJournal} journal */
-export function readyPublication(journal) {
+ * @param {import('../../src/worker/application/journal-ports.ts').RequestJournal} journal
+ * @param {import('../../src/worker/application/request-gates.ts').RequestOwner} [owner] */
+export function readyPublication(journal, owner, automatic = false) {
   const policy = defaultGatePolicy(); policy.reviewer.enabled = false;
-  const config = defaultDeliveryProjectPolicy(); config.remoteDelivery = structuredClone(target);
+  const config = defaultDeliveryProjectPolicy(); config.remoteDelivery = { ...structuredClone(target), ...(automatic ? { automatic } : {}) };
   const snapshot = deliveryPolicySnapshot(config, '1'.repeat(40));
-  const request = journal.ensure({ owner: { sessionId: 'session-remote', rootTurnId: 'turn-remote', taskId: 'task-remote' }, provider, policy,
+  const request = journal.ensure({ owner: owner ?? { sessionId: 'session-remote', rootTurnId: 'turn-remote', taskId: 'task-remote' }, provider, policy,
     input: { kind: 'patch', title: 'Publish a bounded candidate', message: 'Implement the accepted value change with separate publication and human review.',
       criteria: ['The visible value is two.'], context: { implementation: { schemaVersion: 1, mode: 'worktree', baseCommit: '1'.repeat(40), approvedPaths: ['value.txt'], checks: [{ id: 'unit', name: 'Unit tests', fingerprint: '9'.repeat(64) }] }, repositoryId: 'repo-one', deliveryPolicy: snapshot }, files: [{ path: 'value.txt', bytes: 2 }] } });
   assert.equal(journal.evaluate(request.id, 'ready').passed, true);

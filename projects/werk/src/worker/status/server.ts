@@ -61,6 +61,10 @@ export async function statusServer(
             return json(res, 200, await workspace.updateToolAccess(await readJson(req)));
           if (req.method === "POST" && req.url === "/api/tool-access/discover")
             return json(res, 200, await workspace.discoverToolAccess(await readJson(req)));
+          if (req.method === "GET" && req.url === "/api/managed-projects")
+            return json(res, 200, await workspace.managedProjectsView());
+          if (req.method === "POST" && req.url === "/api/managed-projects")
+            return json(res, 200, await workspace.managedProjectCommand(await readJson(req)));
           if (req.method === "GET" && req.url === "/api/repositories")
             return json(res, 200, workspace.repositoryStatus());
           if (req.method === "POST" && req.url === "/api/repositories")
@@ -81,6 +85,8 @@ export async function statusServer(
             return json(res, 200, await workspace.featureTracking.sync());
           if (req.method === 'POST' && req.url === '/api/feature-tracking')
             return json(res, 200, await workspace.featureTrackingCommand(await readJson(req)));
+          if (req.method === "GET" && (req.url === "/api/features/templates" || req.url?.startsWith("/api/features/templates?")))
+            return json(res, 200, await workspace.featureTemplateView(new URL(req.url!, "http://worker.invalid").searchParams.get("projectId") ?? undefined));
           if (req.method === "GET" && (req.url === "/api/features" || req.url?.startsWith("/api/features?")))
             return json(
               res,

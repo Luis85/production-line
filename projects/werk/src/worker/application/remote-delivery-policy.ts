@@ -9,6 +9,7 @@ export interface RemoteDeliveryPolicy {
   push: boolean;
   pullRequest: boolean;
   draft: boolean;
+  automatic?: boolean;
 }
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 export function remoteDeliveryBranch(value: unknown): string {
@@ -19,13 +20,15 @@ export function remoteDeliveryBranch(value: unknown): string {
   return value;
 }
 export function validateRemoteDeliveryPolicy(value: unknown): RemoteDeliveryPolicy {
-  const raw = object(value, 'Remote delivery policy', ['remote', 'repository', 'base', 'push', 'pullRequest', 'draft']);
+  const raw = object(value, 'Remote delivery policy', ['remote', 'repository', 'base', 'push', 'pullRequest', 'draft', 'automatic']);
   if (typeof raw.remote !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/.test(raw.remote) || raw.remote.endsWith('.lock'))
     invalid('Remote delivery requires a named Git remote.');
   if (typeof raw.repository !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(raw.repository) || raw.repository.endsWith('.git'))
     invalid('Use the exact GitHub owner/repository without a URL or .git suffix.');
   if (typeof raw.push !== 'boolean' || typeof raw.pullRequest !== 'boolean' || typeof raw.draft !== 'boolean')
     invalid('Remote push, pull request creation and draft mode require explicit boolean choices.');
+  if (raw.automatic !== undefined && typeof raw.automatic !== 'boolean') invalid('Automatic publication requires an explicit boolean choice.');
+  if (raw.automatic === true && (!raw.push || !raw.pullRequest)) invalid('Automatic publication requires both push and pull request permission.');
   if (raw.pullRequest && !raw.push) invalid('Pull request creation also requires permission to publish its candidate branch.');
-  return { remote: raw.remote, repository: raw.repository, base: remoteDeliveryBranch(raw.base), push: raw.push, pullRequest: raw.pullRequest, draft: raw.draft };
+  return { remote: raw.remote, repository: raw.repository, base: remoteDeliveryBranch(raw.base), push: raw.push, pullRequest: raw.pullRequest, draft: raw.draft, ...(raw.automatic === undefined ? {} : { automatic: raw.automatic }) };
 }

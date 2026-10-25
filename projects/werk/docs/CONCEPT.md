@@ -6,7 +6,7 @@ mock foundation. The current product keeps simulation as its default and adds an
 opt-in native Linux Codex assignment adapter that produces a patch for review.
 Local workers also support configured API providers and Codex/Claude CLIs.
 See execution modes for the different platform and authority boundaries.
-Shared feature intake publishes scoped feature branches and Obsidian review notes after its configured checks. Human approval and merge remain separate; automated merge tracking remains planned work.
+Shared feature intake publishes scoped feature branches and Obsidian review notes after its configured checks. Human acceptance, candidate publication and downstream release actions have separate receipts. The optional [standalone release workflow](reference/worker-release-workflow.md) adds verified merge, exact-source build and GitHub Release publication; the separate leased line publisher retains its own unfinished qualification scope.
 Use [execution modes](explanation/modes.md) for the current capability and
 qualification limits; the imported documents below record the original baseline.
 

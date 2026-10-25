@@ -15,7 +15,7 @@ function githubRemoteRepository(value: string): string | null {
     return /^\/([A-Za-z0-9-]+\/[A-Za-z0-9._-]+?)(?:\.git)?\/?$/.exec(url.pathname)?.[1] ?? null;
   } catch { return null; }
 }
-/** The remote name resolves immediately before each operation; push uses a create-only lease. */
+/** The remote name resolves immediately before each operation; push uses an absent-ref or exact predecessor lease. */
 export function createRemoteDeliveryGit(options: { repository: string; stateDirectory: string; authorize?: (mutation: boolean) => void | Promise<void> }, io = new FeatureGitIo({ ...options, remote: 'origin' })) {
   async function destination(target: RemoteDeliveryPolicy, signal: AbortSignal) {
     validateRemoteDeliveryPolicy(target);
@@ -36,13 +36,15 @@ export function createRemoteDeliveryGit(options: { repository: string; stateDire
       if (lines.length !== 1 || actual !== ref || !commitId(commit ?? '')) conflict('The remote branch response could not establish its exact commit.');
       return commit!;
     },
-    async push(target: RemoteDeliveryPolicy, candidate: DeliveryCandidate, signal: AbortSignal): Promise<void> {
+    async push(target: RemoteDeliveryPolicy, candidate: DeliveryCandidate, signal: AbortSignal, previous?: { branch: string; commit: string }): Promise<void> {
       if (!target.push || !commitId(candidate.candidateCommit) || !candidate.branch.startsWith('werk/delivery/')) conflict('Only an explicitly authorized worker delivery candidate may be pushed.');
-      remoteDeliveryBranch(candidate.branch);
-      const { root, url } = await destination(target, signal), ref = `refs/heads/${candidate.branch}`;
+      const branch = previous?.branch ?? candidate.branch;
+      remoteDeliveryBranch(branch);
+      if (!branch.startsWith('werk/delivery/') || previous && !commitId(previous.commit)) conflict('A branch update requires an exact retained worker predecessor.');
+      const { root, url } = await destination(target, signal), ref = `refs/heads/${branch}`;
       await options.authorize?.(true); signal.throwIfAborted();
-      // Empty expected value requires an absent destination even if a race creates an ancestor ref.
-      await io.output(root.path, ['push', '--porcelain', '--no-verify', '--no-follow-tags', `--force-with-lease=${ref}:`, '--', url, `${candidate.candidateCommit}:${ref}`], signal);
+      // Initial publication is create-only; rework replaces only its exact retained prior head.
+      await io.output(root.path, ['push', '--porcelain', '--no-verify', '--no-follow-tags', `--force-with-lease=${ref}:${previous?.commit ?? ''}`, '--', url, `${candidate.candidateCommit}:${ref}`], signal);
     },
   };
 }

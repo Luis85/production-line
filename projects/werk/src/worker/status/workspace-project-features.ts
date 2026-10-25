@@ -1,3 +1,4 @@
+import { dispatchSharedReviewRework } from './workspace-review-rework.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { resolve } from 'node:path';
 import { DomainError } from '../../shared/errors.js';
@@ -9,7 +10,7 @@ import { MarkdownFeatureFolder } from '../infrastructure/features/folder.js';
 import { SharedIntakeRuntime } from '../infrastructure/features/shared-intake-runtime.js';
 import { sharedFeatureAdmissionHold } from './workspace-feature-admission.js';
 import { submitSharedFeature, submitFeature, inspectSharedFeature, inspectFeature, continueFeatureInteraction, reprioritizeFeature } from './workspace-features.js';
-import { featureSourceHold, reviseFeatureSource } from './workspace-delivery.js';
+import { featureSourceHold, reviseFeatureSource, sharedFeatureSourceHold } from './workspace-delivery.js';
 import { requestCommand } from './workspace-requests.js';
 import { taskboardAction } from './workspace-task-views.js';
 import { task } from './workspace-tasks.js';
@@ -36,6 +37,8 @@ export function createProjectFeatureRuntime(workspace: WorkspaceContext, config:
     canAdmit: () => !sharedFeatureAdmissionHold(workspace),
     admissionHold: () => sharedFeatureAdmissionHold(workspace),
     submit: record => submitSharedFeature(workspace, record),
+    reviewRework: (record, command) => dispatchSharedReviewRework(workspace, record, command),
+    sourceHold: (record, reason) => sharedFeatureSourceHold(workspace, record, reason),
     readyReview: workspace.readyReviews,
     defaultProvider: () => workspace.settings.value.defaultProvider,
     prepare: (input, binding, baseline) => prepareFeatureExecution(workspace, input, workspace.repositories.resolve(binding.repositoryId).path, binding.repositoryId, baseline),
@@ -59,7 +62,7 @@ export function attachProjectFeatureFolder(workspace: WorkspaceContext, project:
       reprioritize: (record, priority) => reprioritizeFeature(workspace, record, priority),
       source: (record, issue) => featureSourceHold(workspace, record, issue),
       revise: (record, input) => reviseFeatureSource(workspace, record, input),
-      request: (_record, command) => requestCommand(workspace, command),
+      request: (_record, command) => requestCommand(workspace, command, { canonicalSource: true }),
       admissionIssue: input => definitionIssue(workspace, input),
       inspect: record => inspectFeature(workspace, record),
       reference: id => workspace.sessions.view().records.find(record => record.id === id)?.feature,

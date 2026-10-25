@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import type { WorkerRequest } from '../../application/request-gates';
-import type { RemotePublication, RemotePublicationCommand, RemotePublicationView } from '../../application/remote-delivery-contracts';
+import { remotePublicationBranch, type RemotePublication, type RemotePublicationCommand, type RemotePublicationView } from '../../application/remote-delivery-contracts';
 import type { GateCommandFields } from '../request-gate-controller';
 import { request, state, date } from '../store';
 import { useWorkerSnapshot } from '../useWorkerSnapshot';
@@ -12,6 +12,7 @@ const emit = defineEmits<{ command: [GateCommandFields] }>();
 const snapshot = useWorkerSnapshot(() => request<RemotePublicationView>('/api/requests', 'POST', { action: 'publication', requestId: props.subject.id }), [() => props.subject.id], [() => props.subject.revision]);
 const { data, error, loading, refreshing, readAt, now, refresh } = snapshot;
 const stale = computed(() => props.disabled || state.paused || !!error.value || !data.value || !readAt.value || now.value - Date.parse(readAt.value) > 15000);
+const updatingPullRequest = computed(() => data.value?.publications.some(item => !!item.predecessor) || props.subject.deliveryHistory?.some(run => run.publications?.some(item => item.status === 'confirmed' && item.action === 'pull_request')) || false);
 const matches = computed(() => !!data.value && publicationCandidateMatches(props.subject, data.value));
 function command(action: RemotePublicationCommand, receipt?: RemotePublication) {
   if (stale.value || !data.value) return;
@@ -29,19 +30,19 @@ function command(action: RemotePublicationCommand, receipt?: RemotePublication) 
       <p v-if="!data.configured">This project uses local delivery. No remote publication is configured.</p>
       <p v-if="data.reason" role="status">{{ data.reason }}</p>
       <template v-if="data.target">
-        <dl><div><dt>Destination</dt><dd>{{ data.target.repository }} · {{ data.target.remote }}</dd></div><div><dt>PR base branch</dt><dd>{{ data.target.base }}</dd></div><div v-if="data.candidate"><dt>Candidate branch</dt><dd>{{ data.candidate.branch }}</dd></div><div v-if="data.candidate"><dt>Candidate commit</dt><dd><code>{{ data.candidate.candidateCommit }}</code></dd></div></dl>
+        <dl><div><dt>Destination</dt><dd>{{ data.target.repository }} · {{ data.target.remote }}</dd></div><div><dt>PR base branch</dt><dd>{{ data.target.base }}</dd></div><div v-if="data.candidate"><dt>Local candidate branch</dt><dd>{{ data.candidate.branch }}</dd></div><div v-if="data.candidate"><dt>Candidate commit</dt><dd><code>{{ data.candidate.candidateCommit }}</code></dd></div></dl>
         <p v-if="!data.authorized"><RouterLink to="/settings#delivery-policy">Review and approve this project policy</RouterLink> before publishing.</p>
         <p v-else-if="!matches" class="caption">No current matching review candidate is available to publish. Retained publication receipts remain historical facts.</p>
         <div class="publication-actions">
           <UButton v-if="data.target.push" type="button" color="neutral" variant="outline" :disabled="stale || !matches || !data.canPush" :loading="pending('push_candidate')" @click="command('push_candidate')">Push candidate branch</UButton>
-          <UButton v-if="data.target.pullRequest" type="button" color="neutral" variant="outline" :disabled="stale || !matches || !data.canCreatePullRequest" :loading="pending('create_pull_request')" @click="command('create_pull_request')">{{ data.target.draft ? 'Create draft pull request' : 'Create pull request' }}</UButton>
+          <UButton v-if="data.target.pullRequest" type="button" color="neutral" variant="outline" :disabled="stale || !matches || !data.canCreatePullRequest" :loading="pending('create_pull_request')" @click="command('create_pull_request')">{{ updatingPullRequest ? 'Update pull request evidence' : data.target.draft ? 'Create draft pull request' : 'Create pull request' }}</UButton>
         </div>
       </template>
       <ol v-if="data.publications.length" class="publication-history" aria-label="Recorded remote delivery actions">
         <li v-for="receipt in data.publications" :key="receipt.operationId">
-          <h4>{{ receipt.action === 'push' ? 'Candidate branch push' : 'Pull request creation' }} · {{ publicationStatusLabels[receipt.status] }}</h4>
+          <h4>{{ receipt.action === 'push' ? 'Candidate branch push' : receipt.predecessor ? 'Pull request evidence update' : 'Pull request creation' }} · {{ publicationStatusLabels[receipt.status] }}</h4>
           <p>{{ receipt.detail }}</p><p class="caption">{{ date(receipt.updatedAt) }} · {{ receipt.target.repository }} / {{ receipt.target.base }} · Request revision {{ receipt.candidate.inputRevision }}</p>
-          <p class="caption">{{ receipt.candidate.branch }} · <code>{{ receipt.candidate.candidateCommit }}</code></p>
+          <p class="caption">{{ remotePublicationBranch(receipt) }} · <code>{{ receipt.candidate.candidateCommit }}</code></p>
           <a v-if="publicationLink(receipt)" :href="publicationLink(receipt)!" target="_blank" rel="noopener noreferrer">Open confirmed pull request #{{ receipt.observation!.pullRequest!.number }} · {{ receipt.observation!.pullRequest!.state }}</a>
           <UButton v-if="['pending', 'unknown'].includes(receipt.status)" type="button" color="neutral" variant="outline" :disabled="stale || !data.canReconcile || !data.authorized" :loading="pending('reconcile_publication')" @click="command('reconcile_publication', receipt)">Reconcile this publication</UButton>
           <details><summary>Publication identity</summary><code>{{ receipt.operationId }}</code><p>Approved policy: <code>{{ receipt.configurationDigest }}</code></p></details>

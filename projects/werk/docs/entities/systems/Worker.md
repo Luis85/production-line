@@ -5,7 +5,7 @@ description:
 status:
 color:
 category:
-parent: "[[projects/werk/docs/entities/systems/Orchestrator|Orchestrator]]"
+parent: "[Orchestrator](Orchestrator.md)"
 aliases:
 tags:
 emits:
@@ -28,17 +28,15 @@ priority: ""
 assignee: ""
 iteration: ""
 ---
-The Werk Worker ingestes and processes incoming feature-requests.
 
-The Werk Worker lives in a configurable folder. In this folder he manages and maintains his projects. 
-A project needs to get registered before the worker can execute on it. 
-Once a project gets registered, he prepares the project folder by git cloning the projects repository and checking out the shared branch (default main, configurable).
-In his folder he manages all projects in their own sub-folder, all worktrees he creates are subfolders inside the corresponding project.
+# Worker
 
-He ingests feature-requests, adds them to his queue and makes them visible on the kanban board and also as saved markdown file in the corresponding project folder. 
-He manages and maintains his own git branches for his projects and dispatches ai-agents into prepared project-environments to let them implement a feature-request in isolation.
-His goal is to automate the software-development process as much as possible and to make the whole process transparent, traceable, and verifiable.
+The Worker owns Feature Request intake, approved model execution, isolated candidate workspaces, verification and traceable delivery. It runs independently; enrollment in an Orchestrator adds assignments without becoming a prerequisite for the standalone workflow.
 
-In order to achieve his goals, the worker has access to git, his file-system, and ai-agents through their cli. 
+A configured worker home/state directory holds its durable private state and managed projects. Registering a remote repository clones its configured shared branch into a project-specific checkout. Explicit adoption can register an existing checkout without relocating it or overwriting user changes. Retained requests keep their project/repository identity.
 
-The worker provides a webview or a cli for interaction. He is also able to pick-up feature-request markdown-files from the shared git branch.
+Managed projects live beneath `projects/<project-id>/checkout` inside the worker state directory; candidate worktrees live inside their corresponding project by default. Existing explicitly configured external worktree locations retain their documented restrictions. Project templates, readiness/completion rules, checks and release policy are versioned; local operator approval authorizes the exact committed policy.
+
+Webview, CLI and Markdown expose the same request lifecycle and durable operation receipts. The primary flow advances through Intake, Pre-Production, Production, Post-Production, Review, Merge, Build and Publish. It presents missing, stale, failed and unknown evidence as actionable state and never substitutes simulation for live provider or release qualification.
+
+See [workflow contracts](../../reference/worker-release-workflow.md), [operating guide](../../how-to/deliver-worker-release.md) and [execution modes](../../explanation/modes.md).

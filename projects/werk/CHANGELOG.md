@@ -7,6 +7,21 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+Qualification: native Windows with a real Claude Code CLI account and worker-managed live GitHub Release publication remain pending; source, provider-protocol and host-API fixtures qualify only their observed boundaries. See the [workflow acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md).
+
+### Added
+
+- Managed worker projects can clone a configured remote branch beneath private worker state or explicitly adopt an existing checkout, with durable registration/reconciliation/retry identities and prerequisite diagnostics.
+- The standalone request workflow retains its start prompt and exposes Intake through Publish milestones, owned-PR feedback/rework, exact-candidate human acceptance, verified merge, an exact-merged-source build and GitHub Release publication.
+- Optional committed release policy pins the GitHub destination, merge method, direct build executable/arguments, timeout, exact artifact paths, tag prefix and prerelease choice. Build receipts retain artifact digests; publication adds `SHA256SUMS` and `werk-release-manifest.json`.
+- Authenticated webview, CLI and canonical request commands expose current release evidence and guarded merge, build, publish, read-only reconciliation and inspected-build-stop controls.
+
+### Changed
+
+- Candidate publication can opt into approved automatic publication after verification. Initial branch creation remains create-only; later verified candidates use the retained expected remote head and same owned open PR, preserving immutable candidate/operation history.
+- Release-enabled delivery remains in progress after local acceptance until the exact release source and expected published assets are confirmed. Existing local-only requests retain their established completion semantics.
+- The process landscape, ready/done rules, domain notes, operating guides and scoped backlog now describe the complete standalone workflow while retaining separate leased orchestrator publication and native/live qualification requirements.
+
 ### Fixed
 
 - Provider checks wait up to 15 s per probe, and the status check and the execution gate retry a failed login probe once, so the first `provider check` or task after a cold Claude Code CLI start no longer reports `authentication: unknown` or holds with `authentication_required`.

@@ -25,7 +25,7 @@ This document records the implementation direction for [PRD-LDW-001](https://git
 6. Follow the request in Markdown or the webview. Request lifecycle, run status and execution phase answer different questions: whether the feature is accepted, whether execution can proceed, and what the worker is currently doing.
 7. Inspect checks and any bounded repair attempts. A model's completion statement does not establish a passing build or test. Missing or stale evidence remains visible and blocks the relevant gate.
 8. Review the local candidate and its Markdown package. Check the linked branch/commit, criterion results, failed or unavailable checks, limitations and required manual work. Record acceptance or request changes against that exact candidate.
-9. Publish or merge through the team's configured delivery workflow. Local acceptance does not imply that a remote branch, PR, merge or release exists.
+9. Publish through the team's configured delivery workflow. The optional [release workflow](../reference/worker-release-workflow.md) records the current-candidate merge, exact-source build and GitHub Release assets separately. Local acceptance does not imply that any of those remote results exists.
 
 ## Request authority and communication
 
@@ -93,7 +93,7 @@ Historical submission times that were never observed remain unknown: **All time*
 
 Temporary service logs have a bounded retention setting. Accepted delivery evidence and unaccepted work use an explicit preserve policy; an expired temporary log must not erase the candidate, its decisions or its review package. The run inspector shows the selected behavior path, conditions, wait reason and accepted runtime/repair limits. Bounded policy authoring edits declarative configuration; it does not execute arbitrary behavior code or silently approve the resulting policy.
 
-Optional [remote candidate publication](../how-to/publish-worker-candidates.md) records push and PR creation separately and reconciles an unknown acknowledgement before another mutation. Existing orchestrator and factory views remain the fleet surfaces; they do not manufacture integrated success from independent worker branches.
+Optional [remote candidate publication](../how-to/publish-worker-candidates.md) records push and PR creation separately and reconciles an unknown acknowledgement before another mutation. The optional [worker release workflow](../how-to/deliver-worker-release.md) extends that durable pattern through verified merge, exact-source build and GitHub Releases. Its configured downstream gates retain the delivery lifecycle in progress until publication is confirmed. Existing orchestrator and factory views remain the fleet surfaces; they do not manufacture integrated success from independent worker branches.
 
 ## Qualification and further reading
 

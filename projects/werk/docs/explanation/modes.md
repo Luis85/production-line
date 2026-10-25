@@ -83,6 +83,16 @@ a future lease-fenced orchestrator PR publisher. Follow
 [shared feature intake](../how-to/shared-feature-intake.md) and its
 [reference](../reference/shared-feature-intake.md).
 
+## Standalone worker release workflow
+
+A registered/adopted project can opt into the committed, locally approved release policy. After independent candidate verification and current-candidate human review, its explicit actions confirm the owned PR merge, build the actual merged commit, and publish the retained assets to the configured GitHub Release. Each action persists its identity and reconciles an unknown acknowledgement before another mutation.
+
+Review feedback retains the same owned PR and updates its branch only against a known prior head. Changed candidates require fresh checks and acceptance. A closed PR, local acceptance, successful build or draft/partial upload does not prove a published release. The worker exposes merge, build and publication receipts separately.
+
+This uses the standalone worker's delivery journal and provider path. The native leased orchestrator adapter above still returns its change-set for review and does not gain remote publisher authority from a worker's local policy. Native Windows with real Claude Code CLI and GitHub Release assets is the acceptance target; consult the [source qualification ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md) for completed evidence and pending live work.
+
+Follow [deliver a worker release](../how-to/deliver-worker-release.md) and the [workflow contract](../reference/worker-release-workflow.md).
+
 ## Deployment and qualification
 
 Native deployment runs packaged Node applications. Docker runs them in

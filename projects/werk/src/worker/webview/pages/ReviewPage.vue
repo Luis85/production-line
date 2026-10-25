@@ -67,7 +67,7 @@ function requestChanged(value: WorkerRequest | null) {
         <UButton v-if="action?.kind === 'refresh'" :loading="refreshing" :disabled="!state.unlocked" @click="refresh">{{ action.label }}</UButton>
         <UButton v-else-if="action" :to="nextHref">{{ action.label }}<UIcon name="i-lucide-arrow-down-right" /></UButton>
       </section>
-      <ol class="review-stages" aria-label="Feature request progress">
+      <ol v-if="!data.request?.delivery" class="review-stages" aria-label="Feature request progress">
         <li v-for="(stage, index) in review.stages" :key="stage.id" :class="'stage-' + stage.state"><span class="stage-number" aria-hidden="true"><UIcon v-if="stage.state === 'complete'" name="i-lucide-check" /><template v-else>{{ index + 1 }}</template></span><div><strong>{{ stage.label }}</strong><span class="stage-state">{{ stageLabels[stage.state] }}</span><p>{{ stage.detail }}</p></div></li>
       </ol>
       <nav class="review-sections" aria-label="Review sections"><a href="#review-goal">Accepted request</a><a v-if="data.request?.delivery" href="#review-progress">Delivery progress</a><a href="#review-changes">{{ data.task ? 'Changes' : 'Result' }}</a><a href="#review-checks">Checks</a><a href="#review-decision">Decision</a><a v-if="data.request?.delivery" href="#review-activity">Activity</a><a v-if="data.shared" href="#review-handoff">Team handoff</a></nav>

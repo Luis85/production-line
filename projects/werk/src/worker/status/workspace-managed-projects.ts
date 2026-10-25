@@ -1,0 +1,97 @@
+import { access } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { resolve } from 'node:path';
+import { DomainError } from '../../shared/errors.js';
+import { ManagedProjects, type ManagedProject, type ManagedProjectsView } from '../application/managed-projects.js';
+import { featureWorkflowConfigPath, validateFeatureWorkflow } from '../application/feature-workflow.js';
+import { deliveryPolicyPath } from '../application/delivery-policy.js';
+import { managedProjectStorage } from '../infrastructure/managed-project-storage.js';
+import { managedProjectGit } from '../infrastructure/managed-project-git.js';
+import { parseFeature } from '../infrastructure/features/document.js';
+import { findExecutable } from '../infrastructure/providers.js';
+import { repositoryGit } from '../infrastructure/repositories-git.js';
+import { readDeliveryPolicy } from '../infrastructure/delivery-policy.js';
+import { projectFeatureTemplate } from './workspace-feature-templates.js';
+import { assertRepositoryChangeAllowed } from './workspace-repositories.js';
+import type { WorkspaceContext } from './workspace-context.js';
+
+const signalFor = (workspace: WorkspaceContext) => AbortSignal.any([workspace.repositoryStop.signal, AbortSignal.timeout(150000)]);
+async function executable(path: string) { try { await access(path, constants.X_OK); return !!path; } catch { return false; } }
+async function diagnostics(workspace: WorkspaceContext): Promise<ManagedProjectsView['diagnostics']> {
+  const claude = workspace.settings.value.providers.find(item => item.id === 'claude-cli')?.executable;
+  return Promise.all(([
+    { id: 'git', name: 'git', configured: undefined, detail: 'Git is required for managed clones. Transport authentication uses the worker host account.' },
+    { id: 'claude', name: 'claude', configured: claude, detail: 'Claude Code uses the configured executable. Check its account in Settings → Providers; executable availability does not establish authentication.' },
+    { id: 'github', name: 'gh', configured: undefined, detail: 'GitHub CLI is required for pull requests and releases. Authenticate it in the worker host account.' },
+  ] as const).map(async item => {
+    const path = item.configured || await findExecutable(item.name);
+    return { id: item.id, available: await executable(path), detail: item.detail };
+  }));
+}
+async function workflow(project: ManagedProject, signal: AbortSignal): Promise<ManagedProjectsView['projects'][number]['workflow']> {
+  if (project.status !== 'ready' || !project.head) return { configured: false, templates: [] };
+  try {
+    const config = validateFeatureWorkflow(JSON.parse(await repositoryGit(project.path, ['show', `${project.head}:${featureWorkflowConfigPath}`], signal, 30000, 65536)));
+    const listing = await repositoryGit(project.path, ['ls-tree', '-z', project.head, '--', config.template], signal, 30000, 65536);
+    if (!/^100(?:644|755) blob /.test(listing)) return { configured: false, templates: [] };
+    const template = parseFeature(await repositoryGit(project.path, ['show', `${project.head}:${config.template}`], signal, 30000, 65536));
+    if (typeof template.data.templateId !== 'string') return { configured: false, templates: [] };
+    return { configured: true, templates: [{ id: template.data.templateId, path: config.template, label: 'Project Feature Request' }, ...(config.templates ?? [])] };
+  } catch { signal.throwIfAborted(); return { configured: false, templates: [] }; }
+}
+export async function managedProjectsView(workspace: WorkspaceContext): Promise<ManagedProjectsView> {
+  const state = await managedProjectStorage(workspace.config.stateDir).load(), git = managedProjectGit(workspace.config.stateDir);
+  const signal = signalFor(workspace);
+  const projects = await Promise.all(state.projects.map(async project => {
+    const { operations: _operations, ...item } = project;
+    const assignment = workspace.settings.value.repositories.items.find(value => value.id === project.id && resolve(value.path) === resolve(project.path));
+    const binding = assignment ? workspace.featureProjects.resolve(project.id).sharedRuntime.intake.binding : undefined;
+    return { ...item, intakeEnabled: project.intake === 'shared' ? !!binding?.enabled && binding.repositoryId === project.id : assignment?.features?.directory === project.featuresDirectory, workflow: await workflow(project, signal) };
+  }));
+  return { schemaVersion: 1, home: git.home, projects, diagnostics: await diagnostics(workspace) };
+}
+async function intakeApproved(workspace: WorkspaceContext, project: ManagedProject, signal: AbortSignal) {
+  const listing = await repositoryGit(project.path, ['ls-tree', '-z', 'HEAD', '--', deliveryPolicyPath], signal, 30000, 65536);
+  if (!/^100(?:644|755) blob /.test(listing)) return false;
+  const policy = await readDeliveryPolicy(project.path, signal);
+  return workspace.deliveryApprovals.view().approvals.some(item => item.repositoryId === project.id && item.configurationDigest === policy.configurationDigest);
+}
+async function attach(workspace: WorkspaceContext, project: ManagedProject, signal: AbortSignal) {
+  const current = workspace.settings.value.repositories;
+  const existing = current.items.find(item => item.id === project.id);
+  if (existing && (resolve(existing.path) !== resolve(project.path) || existing.branch && existing.branch !== project.branch || existing.features && existing.features.directory !== project.featuresDirectory))
+    throw new DomainError('conflict', 'This project ID already belongs to another checkout or intake. Existing requests retain their assignment.');
+  if (current.items.some(item => item.id !== project.id && resolve(item.path) === resolve(project.path)))
+    throw new DomainError('conflict', 'The selected checkout already has another repository identity. Keep that assignment instead of importing its requests twice.');
+  if (existing?.features && project.intake === 'shared') throw new DomainError('conflict', 'This repository already has local intake. Preserve its requests by adopting it with intake: local.');
+  const approved = await intakeApproved(workspace, project, signal);
+  const enableIntake = project.intake === 'local' && (!!existing?.features || approved);
+  const assignment = { id: project.id, path: project.path, remote: 'origin', branch: project.branch, watch: existing?.watch ?? false,
+    ...(enableIntake ? { features: { directory: project.featuresDirectory, pollMs: existing?.features?.pollMs ?? 1000 } } : {}) };
+  const items = existing ? current.items.map(item => item.id === project.id ? assignment : item) : [...current.items, assignment];
+  workspace.featureProjects.assertAssignments(items);
+  if (JSON.stringify(items) !== JSON.stringify(current.items)) await workspace.settings.update({ repositories: { ...current, items } });
+  await workspace.repositoryDiscovery.assignmentsChanged(workspace.settings.value.repositories.items);
+  await workspace.repositories.configure(workspace.settings.value.repositories);
+  await workspace.featureProjects.configure();
+  if (project.intake === 'shared' && approved) {
+    const selected = await projectFeatureTemplate(workspace, project.id);
+    if (selected.snapshot.configuration.requestsDirectory !== project.featuresDirectory) throw new DomainError('conflict', 'The committed request directory differs from project registration. Use its configured featuresDirectory when registering the project.');
+    const intake = workspace.featureProjects.resolve(project.id).sharedRuntime.intake, current = intake.view();
+    const config = { enabled: true, repositoryId: project.id, remote: 'origin', branch: project.branch, workflowPath: featureWorkflowConfigPath, pollMs: current.config.pollMs };
+    if (JSON.stringify(current.config) !== JSON.stringify(config)) await intake.configure(config, current.revision);
+    await workspace.featureProjects.configure();
+  }
+}
+/** The same admission gate protects CLI and HTTP setup; state stays private and no policy is approved here. */
+export async function managedProjectCommand(workspace: WorkspaceContext, input: unknown): Promise<ManagedProjectsView> {
+  assertRepositoryChangeAllowed(workspace);
+  if (workspace.featureProjects.busy) throw new DomainError('conflict', 'Wait for shared intake synchronization before changing project registration.');
+  workspace.repositoriesUpdating = true;
+  const signal = signalFor(workspace), git = managedProjectGit(workspace.config.stateDir);
+  try {
+    const manager = new ManagedProjects({ ...managedProjectStorage(workspace.config.stateDir), ...git, attach: project => attach(workspace, project, signal) });
+    await manager.command(input, signal);
+    return await managedProjectsView(workspace);
+  } finally { workspace.repositoriesUpdating = false; }
+}

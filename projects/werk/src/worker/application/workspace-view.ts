@@ -37,7 +37,7 @@ export interface SessionView {
   capacity?: WorkerCapacitySnapshot;
   selected: string;
   execution: { currentSessionId: string | null; queued: number; maxParallel: number; activeSessions?: import('./serial-executor.js').ActiveExecutionPermit[] };
-  records: Array<SessionRecord & { featureRequest?: FeatureTrackingRecord; requestId?: string; requestPhase?: RequestPhase; requestRevision?: number; status: string; interaction: InteractionView; busy: boolean; messages: number }>;
+  records: Array<SessionRecord & { featureRequest?: FeatureTrackingRecord; requestId?: string; requestLifecycle?: import('./delivery-contracts.js').DeliveryLifecycle; requestPhase?: RequestPhase; requestRevision?: number; status: string; interaction: InteractionView; busy: boolean; messages: number }>;
 }
 /** Shared public task fields are an allowlist, independent of the private execution aggregate. */
 export interface LocalTaskView {
@@ -81,7 +81,7 @@ export interface LocalTaskSummaryView extends LocalTaskView {
   files: Array<{ path: string; sha256: string }>;
   hasPatch: boolean;
   interaction: InteractionView;
-  requestPhase?: RequestPhase;
+  requestLifecycle?: import('./delivery-contracts.js').DeliveryLifecycle; requestPhase?: RequestPhase;
   requestRevision?: number;
 }
 /** Authenticated inspection deliberately includes approved inputs and reviewable output. */

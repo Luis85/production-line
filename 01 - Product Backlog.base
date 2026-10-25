@@ -8,6 +8,9 @@ properties:
 views:
   - type: product-backlog
     name: Backlog
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/backlog")
     homeFolder: projects/werk/docs/backlog
     stateProperty: note.status
     stateValues: Open, Active, Blocked, Done

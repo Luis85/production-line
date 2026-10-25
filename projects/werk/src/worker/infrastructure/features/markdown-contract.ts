@@ -1,3 +1,5 @@
+import { releaseCommands } from '../../application/release-contracts.js';
+import { releaseTag } from '../../application/release-policy.js';
 import { remotePublicationCommands } from '../../application/remote-delivery-contracts.js';
 import type { FeatureMarkdownCommand } from '../../application/feature-markdown.js';
 import type { FeatureDocument } from './document.js';
@@ -71,6 +73,21 @@ export function markdownCommands(parsed: FeatureDocument): FeatureMarkdownComman
       runId: id(publication.run_id, 'run_id'), requestRevision: Number(publication.request_revision), candidateCommit: publication.candidate_commit };
     if (publication.action === 'reconcile_publication') command.publicationOperationId = id(publication.operation_id, 'operation_id');
     else if (publication.operation_id !== undefined) throw Error('operation_id is only used to identify the saved publication being reconciled.');
+    result.push(command);
+  }
+  if (data.release !== undefined) {
+    const release = fields(data.release, ['command_id', 'action', 'run_id', 'request_revision', 'candidate_commit', 'operation_id', 'tag', 'note']);
+    if (!releaseCommands.includes(release.action as typeof releaseCommands[number])) throw Error('Unknown release action.');
+    if (!Number.isSafeInteger(release.request_revision) || Number(release.request_revision) < 1) throw Error('Release request_revision must be positive.');
+    if (typeof release.candidate_commit !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(release.candidate_commit)) throw Error('Release candidate_commit must identify the complete Git commit.');
+    const command: FeatureMarkdownCommand = { commandId: id(release.command_id, 'command_id'), action: release.action as FeatureMarkdownCommand['action'],
+      runId: id(release.run_id, 'run_id'), requestRevision: Number(release.request_revision), candidateCommit: release.candidate_commit };
+    if (release.action === 'publish_release') command.releaseTag = releaseTag(release.tag);
+    else if (release.tag !== undefined) throw Error('tag is only used for publish_release.');
+    if (release.action === 'reconcile_release' || release.action === 'confirm_release_stopped') command.releaseOperationId = id(release.operation_id, 'operation_id');
+    else if (release.operation_id !== undefined) throw Error('operation_id identifies the release operation being reconciled or inspected.');
+    if (release.note !== undefined) { if (typeof release.note !== 'string' || !release.note.trim() || release.note.length > 4000) throw Error('Release note must be bounded text.'); command.feedback = release.note.trim(); }
+    if (release.action === 'confirm_release_stopped' && !command.feedback) throw Error('Confirm the stopped build with an inspection note.');
     result.push(command);
   }
   if (data.review !== undefined) {

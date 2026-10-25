@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "qualification": "Storybook UI with controlled synthetic fixtures; no live provider or GitHub mutation",
+  "checks": [
+    {
+      "story": "worker-local-delivery--human-criterion-review",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-project-delivery--exact-policy-approval",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-project-intake--direct-project-request",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-project-intake--shared-project-automatic-routing",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--merge-reviewed-candidate",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--publish-verified-build",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--unknown-build-recovery",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--published-release",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--register-managed-project",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--select-project-template",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--configure-project-release",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-local-delivery--human-criterion-review",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-project-delivery--exact-policy-approval",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-project-intake--direct-project-request",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-project-intake--shared-project-automatic-routing",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--merge-reviewed-candidate",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--publish-verified-build",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--unknown-build-recovery",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--published-release",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--register-managed-project",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--select-project-template",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--configure-project-release",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    }
+  ],
+  "screenshots": [
+    {
+      "story": "worker-end-to-end-delivery--merge-reviewed-candidate",
+      "width": 1440,
+      "committedScreenshot": "worker-end-to-end-delivery--merge-reviewed-candidate-1440.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--published-release",
+      "width": 1440,
+      "committedScreenshot": "worker-end-to-end-delivery--published-release-1440.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--publish-verified-build",
+      "width": 390,
+      "committedScreenshot": "worker-end-to-end-delivery--publish-verified-build-390.png"
+    }
+  ]
+}

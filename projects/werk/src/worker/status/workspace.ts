@@ -1,3 +1,6 @@
+import { featureTemplateView } from './workspace-feature-templates.js';
+import { tickAutomaticPublication } from './workspace-automatic-publication.js';
+import { managedProjectsView, managedProjectCommand } from './workspace-managed-projects.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { processStatus, processCommand } from './workspace-processes.js';
 import type { FeatureAuthoringCommand, FeatureAuthoringResult } from '../application/feature-authoring-contracts.js';
@@ -53,7 +56,7 @@ export class WorkerWorkspace {
   private observed<T>(operation: () => T): T { return this.context.processObservations.run({}, operation); }
   get nativeWorkReady() { return this.context.nativeWorkState === 'ready'; }
   get executionProfiles() { return this.context.executionProfiles; }
-  tickFeatures(force = false) { return this.context.featureProjects.tick(force); }
+  async tickFeatures(force = false) { await this.context.featureProjects.tick(force); await tickAutomaticPublication(this.context); }
   get featureTracking() { return this.context.featureTracking; }
   get sharedRuntime() { return this.context.sharedRuntime; }
   get repositories() { return this.context.repositories; }
@@ -92,6 +95,7 @@ export class WorkerWorkspace {
   providerAccount(input: unknown) { return providerAccount(this.context, input); }
   sharedIntakeView(projectId?: string) { return sharedIntakeView(this.context, projectId); }
   sharedIntakeCommand(input: unknown) { return this.observed(() => sharedIntakeCommand(this.context, input)); }
+  featureTemplateView(projectId?: string) { return featureTemplateView(this.context, projectId); }
   featureView(projectId?: string) { return featureView(this.context, projectId); }
   featureList(projectId?: string) { return featureList(this.context, projectId); }
   featureCommand(input: FeatureAuthoringCommand): Promise<FeatureAuthoringResult>;
@@ -99,6 +103,7 @@ export class WorkerWorkspace {
   featureCommand(input: unknown): Promise<FeatureActionResult>;
   featureCommand(input: unknown) {
     const action = (input as { action?: unknown } | null)?.action;
+    if (action === 'templates') return featureTemplateView(this.context, (input as { projectId?: string }).projectId);
     return this.observed(() => action === 'prepare' || action === 'publish' ? authorFeature(this.context, input) : featureCommand(this.context, input));
   }
   createTaskboard(input: unknown) {
@@ -115,6 +120,8 @@ export class WorkerWorkspace {
     await this.context.processes?.reconcileGrants();
     return result;
   }
+  managedProjectsView() { return managedProjectsView(this.context); }
+  managedProjectCommand(input: unknown) { return this.observed(() => managedProjectCommand(this.context, input)); }
   repositoryStatus() { return repositoryStatus(this.context); }
   repositoryCommand(input: unknown) { return this.observed(() => repositoryCommand(this.context, input)); }
   toolAccess(): ToolAccessView { return toolAccess(this.context); }

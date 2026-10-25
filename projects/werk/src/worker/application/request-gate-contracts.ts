@@ -259,11 +259,18 @@ export interface RequestCommand {
     | "criterion_decision"
     | "push_candidate"
     | "create_pull_request"
-    | "reconcile_publication";
+    | "reconcile_publication"
+    | "merge_candidate"
+    | "build_release"
+    | "publish_release"
+    | "reconcile_release"
+    | "confirm_release_stopped";
   requestId: string;
   expectedRevision: number;
   operationId: string;
   publicationOperationId?: string;
+  releaseOperationId?: string;
+  releaseTag?: string;
   assessmentId?: string;
   proposalId?: string;
   decision?: 'accepted' | 'rejected';

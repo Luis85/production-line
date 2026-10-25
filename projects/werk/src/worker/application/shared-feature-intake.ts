@@ -1,3 +1,5 @@
+import { reserveSharedReviewRework } from './shared-review-rework.js';
+import type { RequestCommand } from './request-gates.js';
 import { appendFeatureIntake, observeFeatureIntake, featureIntakeBlocker, featureIntakeReadiness, featureIntakeHold, type FeatureIntakeMeasurement } from './feature-intake-measurement.js';
 import { observeSharedIntake } from './shared-intake-measurement.js';
 import { validateFeaturePreparation, type FeaturePreparation } from './feature-preparation.js';
@@ -143,6 +145,22 @@ export class SharedFeatureIntake {
         const interaction = this.ports.inspect(taskId)?.interaction;
         if (!interaction) throw new DomainError('unavailable', 'The response was published. Refresh the Feature Request to inspect its saved interaction.');
         return interaction;
+      });
+    } finally { this.responses--; }
+  }
+  /** Review feedback shares the confirmed Git outbox and resumes the existing task, never another claim. */
+  async reviewFeedback(taskId: string, input: RequestCommand) {
+    if (this.stopping.signal.aborted || this.configuring) throw new DomainError('unavailable', 'Worker configuration is changing or the worker is stopping.');
+    this.responses++;
+    try {
+      await this.configureWork.run(async () => {
+        const record = this.state.records.find(item => item.taskId === taskId);
+        if (!record) throw new DomainError('not_found', 'The owned shared Feature Request is unavailable.');
+        reserveSharedReviewRework(record, input, this.ports);
+        await this.save();
+        await this.lifecycle.reconcile(record, this.stopping.signal);
+        if (record.reviewReworks?.find(item => item.command.operationId === input.operationId)?.status !== 'dispatched')
+          throw new DomainError('unavailable', record.error ?? 'Shared review feedback is saved and awaiting confirmed publication or dispatch.');
       });
     } finally { this.responses--; }
   }

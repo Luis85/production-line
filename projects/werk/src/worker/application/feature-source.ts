@@ -18,7 +18,7 @@ export async function reconcileFeatureSource(record: FeatureRecord, file: Featur
   }
   if (stable) await consumeCommands(record, file, queue, persist);
   const request = queue.inspect(record)?.request;
-  const terminal = request ? ['done', 'cancelled'].includes(request.phase) : ['completed', 'cancelled'].includes(record.status);
+  const terminal = request ? request.phase === 'cancelled' || request.lifecycle === 'done' || request.phase === 'done' && request.lifecycle === undefined : ['completed', 'cancelled'].includes(record.status);
   if (stable && changed && !terminal && queue.revise && await queue.revise(record, file.input!, record.pendingInputHash!)) {
     record.input = structuredClone(file.input!); record.inputHash = record.pendingInputHash!;
     record.semanticRevision = (record.semanticRevision ?? 1) + 1;
@@ -45,6 +45,8 @@ async function consumeCommands(record: FeatureRecord, file: FeatureFile, queue: 
         action: value.action === 'accept' ? 'attest' : value.action,
         requestId: request.id, expectedRevision: request.revision, operationId: value.commandId,
         inputRevision: value.requestRevision ?? request.inputRevision,
+        ...(value.releaseOperationId ? { releaseOperationId: value.releaseOperationId } : {}),
+        ...(value.releaseTag ? { releaseTag: value.releaseTag } : {}),
         ...(value.publicationOperationId ? { publicationOperationId: value.publicationOperationId } : {}),
         ...(value.runId ? { deliveryRunId: value.runId } : value.action === 'reopen' && request.delivery ? { deliveryRunId: request.delivery.id } : {}),
         ...(value.feedback ? { note: value.feedback } : value.action === 'accept' ? { note: 'Accepted through the canonical Feature Request.' } : {}),

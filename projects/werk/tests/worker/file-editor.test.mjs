@@ -10,6 +10,7 @@ import { frontend, deferred } from '../ui/helpers/frontend-loader.mjs';
 const { providerSupportsDefinition } = await frontend('src/worker/application/provider-contract.ts');
 const { validateApprovedPaths } = await frontend('src/worker/application/approved-paths.ts');
 const { buildWorkerCapacityView } = await frontend('src/worker/webview/worker-capacity.ts');
+const { featurePriorityOptions } = await frontend('src/worker/webview/feature-priority.ts');
 // Compile the actual unified composer; keep its production validation and worker port under test.
 async function editorFixture(action, sourceTransform = source => source) {
   const source = normalizeSource(sourceTransform(await readFile(new URL('../../src/worker/webview/components/TaskIntake.vue', import.meta.url), 'utf8')));
@@ -18,11 +19,15 @@ async function editorFixture(action, sourceTransform = source => source) {
   const state = reactive({ draftEpoch: 0, unlocked: true, workspaceBusy: false, environment: {}, draft: 'Existing follow-up draft', actionError: '', settings: { repositories: { items: [] }, providers: [{ id: 'codex-cli', configured: true }, { id: 'claude-cli', configured: true }] }, sessions: { selected: 'one', records: [{ id: 'one', provider: 'codex-cli' }, { id: 'two', provider: 'claude-cli' }] }, definitions: [], toolAccess: null });
   const javascript = ts.transpile(scripts, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
   const focused = [], events = [];
-  const ports = { _defineComponent: defineComponent, reactive, ref, computed, watch, watchPrivateDraft: watch, nextTick, state, workerState: state, createFeatureRequest: action, providerSupportsDefinition, validateApprovedPaths, buildWorkerCapacityView, getCapacityFreshness: () => 'fresh', document: { getElementById: id => ({ focus: () => focused.push(id) }) }, UButton: null, UInput: null, USelect: null, UTextarea: null, RunTask: null, SharedFeatureComposer: null, ModelSelectionFields: null, ProjectExecutionSelection: null };
+  // This setup-only harness injects a known local project snapshot; routing and stale-state
+  // tests below drive the same refs that the live polling hook supplies to the component.
+  const projectResponse = { value: undefined };
+  const projectSnapshot = { data: ref({ config: { repositoryId: '' } }), error: ref(''), loading: ref(false) };
+  const ports = { useWorkerSnapshot: () => projectSnapshot, request: async () => projectResponse.value ?? projectSnapshot.data.value, featurePriorityOptions, FeatureTemplateSelection: null, _defineComponent: defineComponent, reactive, ref, computed, watch, watchPrivateDraft: watch, nextTick, state, workerState: state, createFeatureRequest: action, providerSupportsDefinition, validateApprovedPaths, buildWorkerCapacityView, getCapacityFreshness: () => 'fresh', document: { getElementById: id => ({ focus: () => focused.push(id) }) }, UButton: null, UInput: null, USelect: null, UTextarea: null, RunTask: null, SharedFeatureComposer: null, ModelSelectionFields: null, ProjectExecutionSelection: null };
   // The emit closure is deliberately injected as part of the component's real setup context.
   const result = new Function(...Object.keys(ports), 'events', `${javascript}\nreturn EditorComponent.setup({}, { expose() {}, emit(...args) { events.push(args); } });`)(...Object.values(ports), events);
   Object.assign(result.intake, { message: 'Clarify the navigation.', title: 'Change', repository: '/project', paths: 'src/a.ts' });
-  return { ...result, state, focused, events };
+  return { ...result, state, focused, events, projectResponse };
 }
 test('one instructions/provider draft survives task switching and expiry; explicit Lock clears file approval too', async () => {
   const f = await editorFixture(async () => undefined); f.intake.fileChanges = true;
@@ -200,4 +205,22 @@ test('project profile admission omits inherited raw settings and retains the exa
   f.intake.repository = 'secondary'; f.intake.executionProfile = 'project-profile'; f.intake.model = 'old-worker-model'; f.intake.effort = 'low';
   await f.create(); assert.equal(commands[0].projectId, 'secondary'); assert.equal(commands[0].executionProfile, 'project-profile'); for (const key of ['provider', 'model', 'effort', 'definitionId', 'agent']) assert.equal(key in commands[0], false, key);
   f.intake.repository = 'other'; f.intake.executionProfile = 'later-profile'; fail = false; await f.create(); assert.deepEqual(commands[1], commands[0]); assert.equal(f.intake.pending, null);
+});
+
+test('project intake uncertainty blocks new creation without discarding the request draft', async () => {
+  const commands = [], f = await editorFixture(async command => { commands.push(command); return { session: { id: command.id } }; });
+  f.selectedProject.data.value = null; f.selectedProject.error.value = 'The selected project could not be confirmed.';
+  assert.equal(f.projectLoading.value, true); assert.equal(f.canCreate.value, false);
+  await f.create(); assert.equal(commands.length, 0); assert.equal(f.intake.message, 'Clarify the navigation.');
+  f.selectedProject.data.value = { config: { repositoryId: '' } }; f.selectedProject.error.value = '';
+  assert.equal(f.canCreate.value, true);
+});
+
+test('selected project bindings switch the composer to shared intake and malformed responses stay rejected', async () => {
+  const f = await editorFixture(async () => undefined);
+  assert.equal(f.sharedBinding.value, false);
+  f.selectedProject.data.value = { config: { repositoryId: 'secondary-shared' } };
+  assert.equal(f.sharedBinding.value, true);
+  f.projectResponse.value = { requests: [] };
+  await assert.rejects(f.readProjectIntake(), /selected project intake could not be confirmed/);
 });

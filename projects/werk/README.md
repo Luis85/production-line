@@ -24,6 +24,7 @@ merging.
 | --- | --- |
 | Install a worker in your project | [Project-worker quick start](#install-a-project-worker) |
 | Work locally from Markdown with review before merge | [Local delivery worker](docs/explanation/local-delivery-worker.md) |
+| Deliver a reviewed request through GitHub Releases | [Complete worker release workflow](docs/how-to/deliver-worker-release.md) |
 | Let a team submit requests through Git and Obsidian | [Shared Markdown queue](docs/how-to/shared-feature-intake.md) |
 | Design features by day and implement them overnight | [Evening handoff and morning review](docs/how-to/shared-feature-intake.md#work-during-the-day-implement-overnight) |
 | Create and follow requests in the browser | [Worker webview](docs/how-to/use-worker-webview.md) |
@@ -152,6 +153,10 @@ review note. Accept the exact candidate through Markdown or the webview before
 merging it yourself. Local intake does not automatically push branches or notes.
 A project can separately authorize [candidate publication](docs/how-to/publish-worker-candidates.md);
 each push or remote PR remains an explicit action with its own recorded outcome.
+The optional [release workflow](docs/how-to/deliver-worker-release.md) continues through
+current-candidate acceptance, verified merge, a build of the actual merged commit
+and confirmed GitHub Release assets. It retains the request identity and records
+each milestone separately; release-enabled delivery completes after publication.
 
 The [local delivery guide](docs/explanation/local-delivery-worker.md) explains quality
 profiles, dependencies, pause and interruption recovery. Both intake modes retain

@@ -3,11 +3,13 @@ import type { FeatureInput } from './feature-requests.js';
 
 export interface FeatureMarkdownCommand {
   commandId: string;
-  action: import('./remote-delivery-contracts.js').RemotePublicationCommand | 'readiness_decision' | 'criterion_decision' | 'accept' | 'request_changes' | 'reopen' | 'pause_after_step' | 'interrupt' | 'cancel' | 'resume' | 'retry' | 'confirm_stopped';
+  action: typeof import('./release-contracts.js').releaseCommands[number] | import('./remote-delivery-contracts.js').RemotePublicationCommand | 'readiness_decision' | 'criterion_decision' | 'accept' | 'request_changes' | 'reopen' | 'pause_after_step' | 'interrupt' | 'cancel' | 'resume' | 'retry' | 'confirm_stopped';
   requestRevision?: number;
   candidateCommit?: string;
   runId?: string;
   publicationOperationId?: string;
+  releaseOperationId?: string;
+  releaseTag?: string;
   feedback?: string;
   inputHash?: string;
   assessmentId?: string;

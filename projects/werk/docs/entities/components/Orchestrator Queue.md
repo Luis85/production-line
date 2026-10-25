@@ -1,7 +1,7 @@
 ---
 type: Queue
 extends: "[[Queue]]"
-parent: "[[projects/werk/docs/entities/systems/Orchestrator|Orchestrator]]"
+parent: "[Orchestrator](../systems/Orchestrator.md)"
 emits:
 subscribes:
 color:

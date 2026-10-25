@@ -5,7 +5,7 @@ import type { ProviderId } from '../../application/provider-contract';
 import type { ModelEffort } from '../../application/model-effort';
 import { emptyFeatureAuthoringEditor } from '../feature-authoring-editor';
 const editorState = reactive(emptyFeatureAuthoringEditor());
-const emptySeed = () => ({ title: '', message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', paths: '', selectionEdited: false, executionProfile: '' });
+const emptySeed = () => ({ title: '', message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', paths: '', selectionEdited: false, executionProfile: '', priority: 3, templateId: '' });
 const seed = reactive(emptySeed());
 watchPrivateDraft(() => workerState.draftEpoch, () => {
   Object.assign(editorState, emptyFeatureAuthoringEditor());
@@ -22,13 +22,18 @@ import ModelSelectionFields from './ModelSelectionFields.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import MessageContent from './MessageContent.vue';
 import FeatureRequestDetails from './FeatureRequestDetails.vue';
+import FeatureTemplateSelection from './FeatureTemplateSelection.vue';
 import { state, request, refresh } from '../store';
 import { createFeatureAuthoringEditor } from '../feature-authoring-editor';
 import { sharedReadyReviewView } from '../shared-ready-review-view';
 import { splitFeatureRequestMarkdown } from '../feature-request-note';
 import type { FeatureAuthoringResult } from '../../application/feature-authoring-contracts';
-const emit = defineEmits<{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
-const projectId = ref(''), projectProfiles = ref(false);
+import { featurePriorityOptions } from '../feature-priority';
+const props = defineProps<{ initialProjectId?: string }>();
+const emit = defineEmits<{ project: [id: string]; created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
+const projectId = ref(props.initialProjectId ?? ''), projectProfiles = ref(false), projectTemplates = ref(false);
+watch(projectId, id => { seed.templateId = ''; emit('project', id); });
+watch(() => props.initialProjectId, value => { if (!editorState.result && !seed.message.trim()) projectId.value = value ?? ''; });
 const projectSnapshot = useWorkerSnapshot(() => request<NonNullable<NonNullable<typeof state.environment>['sharedIntake']>>('/api/shared-intake' + (projectId.value ? '?projectId=' + encodeURIComponent(projectId.value) : '')), [projectId]);
 const projectChoices = computed(() => projectSnapshot.data.value?.projects ?? state.environment?.sharedIntake?.projects ?? []);
 const view = computed(() => projectSnapshot.data.value ?? (!projectId.value ? state.environment?.sharedIntake : undefined));
@@ -57,7 +62,7 @@ watch([() => state.settings?.providers, defaultProvider], () => {
 async function focusInstructions() { await nextTick(); document.getElementById(editorState.result ? 'feature-detail-goal' : 'new-task-instructions')?.focus(); }
 async function prepare() {
   if (locked.value || !seed.message.trim() || !binding() || !projectProfiles.value && !seed.provider) return;
-  await editor.prepare({ title: seed.title.trim() || seed.message.trim().slice(0, 80), message: seed.message, ...(projectProfiles.value ? seed.executionProfile ? { executionProfile: seed.executionProfile } : {} : { provider: seed.provider }),
+  await editor.prepare({ priority: Number(seed.priority), ...(projectTemplates.value && seed.templateId ? { templateId: seed.templateId } : {}), title: seed.title.trim() || seed.message.trim().slice(0, 80), message: seed.message, ...(projectProfiles.value ? seed.executionProfile ? { executionProfile: seed.executionProfile } : {} : { provider: seed.provider }),
     ...(!projectProfiles.value && seed.model.trim() ? { model: seed.model.trim() } : {}), ...(!projectProfiles.value && seed.effort ? { effort: seed.effort } : {}),
     paths: seed.paths.split('\n').map(path => path.trim()).filter(Boolean) });
   await focusInstructions();
@@ -83,6 +88,8 @@ defineExpose({ focusInstructions });
     <p v-if="view && !view.config.enabled" class="notice">Shared intake is paused. You can publish requests; execution waits until intake resumes.</p>
     <form v-if="!editorState.result" :aria-busy="editorState.busy" @submit.prevent="prepare">
       <fieldset :disabled="locked">
+        <FeatureTemplateSelection id="shared-request" v-model="seed.templateId" :project-id="view?.config.repositoryId || projectId || undefined" :disabled="locked" @configured="projectTemplates = $event" />
+        <label for="shared-request-priority">Priority</label><select id="shared-request-priority" v-model="seed.priority"><option v-for="priority in featurePriorityOptions" :key="priority.value" :value="priority.value">{{ priority.label }}</option></select>
         <label for="new-task-instructions">Request instructions</label>
         <UTextarea id="new-task-instructions" v-model="seed.message" :rows="6" :maxrows="12" autoresize :maxlength="8000" required placeholder="What would you like this worker to do?" class="w-full" aria-describedby="shared-instructions-help" @keydown="keydown" />
         <p id="shared-instructions-help" class="help">Start with your goal. Preparing a draft does not run the model or start implementation.</p>

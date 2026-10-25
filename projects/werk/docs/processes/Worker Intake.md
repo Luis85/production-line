@@ -13,15 +13,17 @@ inputs:
   - "[[Git Repository]]"
   - "[[Priority]]"
   - "[[Feature Request Template]]"
-outputs: "[[Feature Request]]"
+outputs:
+  - "[[Feature Request]]"
 emits:
   - "[[New Feature Request]]"
   - "[[Process Updated]]"
-supplier: "[[System User]]"
+supplier:
+  - "[[System User]]"
 customers:
   - "[[Worker]]"
-  - "[[projects/werk/docs/entities/systems/Orchestrator|Orchestrator]]"
-  - "[[projects/werk/docs/entities/systems/Factory|Factory]]"
+  - "[Orchestrator](../entities/systems/Orchestrator.md)"
+  - "[Factory](../entities/systems/Factory.md)"
   - "[[Webview Kanban Board]]"
   - "[[Worker Queue]]"
   - "[[Git Repository]]"
@@ -42,21 +44,15 @@ priority: ""
 assignee: ""
 iteration: ""
 ---
-The System provides the [[Webview Intake Form]] for the [[System User]] to input a new [[Feature Request]].
 
-The user inputs a new feature-request. In a drop-down he can choose from the registered projects. This fills out the mandatory git repository and the project string. 
+# Worker Intake
 
-The user can choose one of 3 priorities, default is "3 - low".
+The user selects a registered project and a project/default Feature Request template, gives the request a title and Markdown outcome, and chooses High, Medium or Low priority; the default is Low. Project selection supplies its repository identity. These feature priorities are separate from backlog P0/P1 labels.
 
-The user gives the feature-request a name and describes in the body what he envisions.
-Once a project is chosen, he can select one of the projects feature-request-templates or the default one. 
-The user can write the body in markdown or a markdown-editor.
+The worker validates the document, retains one stable request ID, saves its canonical Markdown and returns process feedback. Draft/readiness findings preserve the author's text. The queued request appears on the Kanban board with its next required action.
 
-On submit the feature-request gets validated and sanitized. 
-On success the worker ingests the feature-request and adds it to it's queue.
-The feature-request gets written to the workers feature-request folder as markdown file.
+For shared Git intake, publishing the ready document to the configured intake branch and confirming a durable claim precede implementation. The intake branch and implementation base are explicit project settings; protected-base permissions are not bypassed.
 
-The user receives process feedback.
-The feature-request appears on the Workers Kanban-Board.
+## Exit and recovery
 
-The worker pushes the new feature-request document to the shared branch (default main, configurable).
+Continue only after the request has passed its selected readiness policy and the accepted input, project policy and repository baseline are retained. Identical command retries reuse the receipt. Conflicting payloads, duplicate request IDs, failed publication and ambiguous sources block new dispatch and remain visible.

@@ -5,7 +5,7 @@ import type { SharedRepositoryPort } from './shared-feature-state.js';
 
 export type FeatureAuthoringBinding = Pick<SharedIntakeConfig, 'repositoryId' | 'remote' | 'branch' | 'workflowPath'>;
 export interface FeatureAuthoringSeed {
-  title: string; message: string; provider?: string; model?: string; effort?: ModelEffort; executionProfile?: string; paths?: string[];
+  title: string; message: string; templateId?: string; priority?: number; provider?: string; model?: string; effort?: ModelEffort; executionProfile?: string; paths?: string[];
   definitionRef?: string; agent?: string; useInstructionsOnly?: boolean;
 }
 export interface FeatureAuthoringCommand {
@@ -15,7 +15,13 @@ export interface FeatureAuthoringCommand {
   expectedWorkflowDigest?: string; expectedBinding?: FeatureAuthoringBinding;
 }
 export interface FeatureAuthoringReadiness { reviewRequired?: boolean; valid: boolean; errors: { code: string; message: string }[]; }
+export interface FeatureTemplateChoice { id: string; label: string; path: string; default: boolean; }
+export interface FeatureTemplateView {
+  projectId: string; configured: boolean; defaultTemplateId: string | null;
+  templates: FeatureTemplateChoice[]; workflowDigest?: string; reason?: string;
+}
 export interface FeatureAuthoringResult {
+  templateId?: string; templates?: FeatureTemplateChoice[];
   featureId: string; name: string; path: string; markdown: string; revision: string | null;
   status: 'draft' | 'ready'; readiness: FeatureAuthoringReadiness;
   workflowDigest: string; binding: FeatureAuthoringBinding;
@@ -33,7 +39,7 @@ export interface FeatureAuthoringRepository extends Pick<SharedRepositoryPort, '
 export interface FeatureAuthoringDocuments {
   prepare(snapshot: FeatureWorkflowSnapshot, featureId: string, seed?: FeatureAuthoringSeed): string;
   status(markdown: string, status: 'draft' | 'ready'): string;
-  inspect(markdown: string): { id: string; status: 'draft' | 'ready' };
+  inspect(markdown: string): { id: string; status: 'draft' | 'ready'; templateId?: string };
   ready(markdown: string, snapshot: FeatureWorkflowSnapshot, provider?: string): FeatureAuthoringReadiness;
 }
 export interface FeatureAuthoringPorts {

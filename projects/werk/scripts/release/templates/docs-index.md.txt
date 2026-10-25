@@ -24,6 +24,8 @@ contracts, and explanations describe the system and its limits.
 
 ## How-to guides
 
+- [Deliver a request through GitHub Releases](how-to/deliver-worker-release.md): managed projects, same-PR review, verified merge, exact-source build and publication.
+
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker](how-to/project-worker.md): app, private environment, provider and team authoring kit.
 - [Connect the shared Markdown queue](how-to/shared-feature-intake.md): CLI setup, committed requests, Task answers and PullRequest review handoffs.
@@ -54,6 +56,8 @@ contracts, and explanations describe the system and its limits.
 - [Operate with agents and scripts](how-to/operate-with-agents.md)
 
 ## Reference
+
+- [Worker intake to published release](reference/worker-release-workflow.md): lifecycle, identities, project policy and recovery.
 
 - [Project delivery policy](reference/delivery-policy.md): quality and execution profiles, routing, check packs, concurrency, behavior libraries and retention.
 

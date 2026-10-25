@@ -3,8 +3,8 @@ import { realpathSync } from 'node:fs';
 import { open, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureWorkflowPath as validatePath, validateFeaturePromptContent } from '../application/feature-workflow.js';
-import { validateFeatureReadiness, validateFeatureTemplate } from '../infrastructure/features/workflow.js';
+import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureWorkflowPath as validatePath, validateFeaturePromptContent, type FeatureTemplateSnapshot } from '../application/feature-workflow.js';
+import { validateFeatureReadiness, validateFeatureTemplate, featureTemplateContent } from '../infrastructure/features/workflow.js';
 import { validateFeatureReviewEligibility } from '../infrastructure/features/review-eligibility.js';
 import { digest, parseFeature, featureInput, requestName, type FeatureDocument } from '../infrastructure/features/document.js';
 import { authoringPath, authoringRoot, readAuthoringFile, seedAuthoringFile } from '../infrastructure/feature-authoring-files.js';
@@ -32,7 +32,16 @@ async function load(root: string) {
   if (ready === undefined || done === undefined) throw Error('Both configured ready and done check files are required.');
   const template = await readAuthoringFile(root, config.template);
   if (template === undefined) throw Error('The configured feature request template is missing.');
-  validateFeatureTemplate(template);
+  const defaultContract = validateFeatureTemplate(template);
+  let templates: FeatureTemplateSnapshot[] | undefined;
+  if (config.templates !== undefined) {
+    templates = [{ id: defaultContract.templateId, label: 'Default Feature Request', path: config.template, content: template, sha256: digest(template), default: true }];
+    for (const definition of config.templates) {
+      const content = await readAuthoringFile(root, definition.path);
+      if (content === undefined || validateFeatureTemplate(content).templateId !== definition.id || templates.some(item => item.id === definition.id)) throw Error('A configured project template is missing or does not match its unique ID.');
+      templates.push({ ...definition, content, sha256: digest(content), default: false });
+    }
+  }
   const readyCheck = validateFeatureCheck(JSON.parse(ready), 'ready'), doneCheck = validateFeatureCheck(JSON.parse(done), 'done');
   const policy = featureWorkflowPolicy(readyCheck, doneCheck, config.id);
   const base = await readAuthoringFile(root, config.base);
@@ -44,12 +53,12 @@ async function load(root: string) {
     if (content === undefined) throw Error(`Configured definition prompt is missing: ${path}`);
     prompts.push(validateFeaturePromptContent(content, path));
   }
-  return { config, template, policy, ready: readyCheck, done: doneCheck, revision: digest(raw + '\n' + ready + '\n' + done + '\n' + template + '\n' + base + (prompts.length ? '\n' + JSON.stringify(prompts) : '')) };
+  return { config, template, templates, policy, ready: readyCheck, done: doneCheck, revision: digest(raw + '\n' + ready + '\n' + done + '\n' + template + '\n' + base + (prompts.length ? '\n' + JSON.stringify(prompts) : '') + (templates ? '\n' + JSON.stringify(templates) : '')) };
 }
 function readiness(markdown: string, workflow: Awaited<ReturnType<typeof load>>) {
   return workflow.config.readyReviewPrompt
-    ? validateFeatureReviewEligibility(markdown, { configuration: workflow.config, template: workflow.template })
-    : validateFeatureReadiness(markdown, workflow.ready, 'codex-cli', workflow.template, { configuration: workflow.config, workflowPath: featureWorkflowPath });
+    ? validateFeatureReviewEligibility(markdown, { configuration: workflow.config, template: workflow.template, templates: workflow.templates })
+    : validateFeatureReadiness(markdown, workflow.ready, 'codex-cli', workflow.template, { configuration: workflow.config, templates: workflow.templates, workflowPath: featureWorkflowPath });
 }
 async function document(root: string, path: string | undefined, directory: string) {
   if (!path || dirname(path) !== directory || !requestName(basename(path))) throw Error('Choose a Markdown request directly inside the configured queue directory.');
@@ -74,16 +83,15 @@ async function locked<T>(root: string, action: () => Promise<T>): Promise<T> {
 export async function runFeatureAuthoring(args: string[], directory = process.cwd()) {
   if (!process.versions.node.startsWith('24.')) throw Error('Feature authoring requires Node 24.x.');
   const [command, ...rest] = args;
-  if (!command || ['help', '--help'].includes(command)) return { schemaVersion: 1, commands: { create: '--name NAME.md --title TITLE [--provider ID] [--model NAME] [--effort LEVEL]', validate: '--file QUEUE/NAME.md', ready: '--file QUEUE/NAME.md --if-match REVISION' }, behavior: 'Offline authoring; explicit readiness does not start a worker or merge changes.' };
+  if (!command || ['help', '--help'].includes(command)) return { schemaVersion: 1, commands: { create: '--name NAME.md --title TITLE [--provider ID] [--model NAME] [--effort LEVEL] [--template-id ID]', validate: '--file QUEUE/NAME.md', ready: '--file QUEUE/NAME.md --if-match REVISION' }, behavior: 'Offline authoring; explicit readiness does not start a worker or merge changes.' };
   if (!['create', 'validate', 'ready', 'submit'].includes(command)) throw Error('Choose create, validate, or ready.');
-  const opts = options(rest, command === 'create' ? ['name', 'title', 'provider', 'model', 'effort'] : command === 'validate' ? ['file'] : ['file', 'if-match']);
+  const opts = options(rest, command === 'create' ? ['name', 'title', 'provider', 'model', 'effort', 'template-id'] : command === 'validate' ? ['file'] : ['file', 'if-match']);
   const root = await authoringRoot(directory);
   const workflow = await load(root);
   if (command === 'create') return locked(root, async () => {
     if (!opts.name || !requestName(opts.name) || !opts.title?.trim() || opts.title.length > 120) throw Error('Supply a new Markdown --name and a --title of 1–120 characters.');
     validatePath(workflow.config.requestsDirectory + '/' + opts.name, 'Request path');
-    const template = await readAuthoringFile(root, workflow.config.template);
-    if (template === undefined) throw Error('The configured feature request template is missing.');
+    const template = featureTemplateContent(workflow, opts['template-id']);
     const parsed = parseFeature(template);
     if (parsed.data.werk !== undefined || parsed.data.source !== undefined) throw Error('The authoring template must not contain worker-owned metadata.');
     const id = 'fr-' + randomUUID();
@@ -93,7 +101,7 @@ export async function runFeatureAuthoring(args: string[], directory = process.cw
     featureInput(parseFeature(markdown), 'codex-cli', { reviewOnly: true });
     const path = workflow.config.requestsDirectory + '/' + opts.name;
     if (await seedAuthoringFile(root, path, markdown) !== 'created') throw Error('A request already exists at that name. Choose a new name; existing requests are never overwritten.');
-    return { schemaVersion: 1, path, id, status: 'draft', revision: digest(markdown), next: 'Fill in the template, then validate this request.' };
+    return { schemaVersion: 1, path, id, templateId: parsed.data.templateId, status: 'draft', revision: digest(markdown), next: 'Fill in the template, then validate this request.' };
   });
   if (command === 'validate') {
     const file = await document(root, opts.file, workflow.config.requestsDirectory);

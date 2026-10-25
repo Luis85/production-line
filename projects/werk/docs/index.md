@@ -32,6 +32,8 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 
 ## How-to guides — accomplish a specific goal
 
+- [Deliver a request through GitHub Releases](how-to/deliver-worker-release.md): managed projects, Claude execution, same-PR review, verified merge, exact-source build and publication.
+
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker](how-to/project-worker.md): app, private environment, provider and team authoring kit.
 - [Connect the shared Markdown queue](how-to/shared-feature-intake.md): CLI setup, committed requests, Task answers and PullRequest review handoffs.
@@ -69,6 +71,8 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Use Docker Agent harnesses and MCP](how-to/docker-agent.md)
 
 ## Reference — look up a contract
+
+- [Worker intake to published release](reference/worker-release-workflow.md): lifecycle contracts, exact identities, project release policy and durable recovery.
 
 - [Project delivery policy](reference/delivery-policy.md): quality and execution profiles, routing, check packs, concurrency, behavior libraries and retention.
 

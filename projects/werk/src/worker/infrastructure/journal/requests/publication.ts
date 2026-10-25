@@ -1,6 +1,7 @@
+import { remotePublicationPredecessor } from '../../../application/remote-delivery-history.js';
 import type { DeliveryMetricObservation } from '../../../application/delivery-metrics-contracts.js';
 import { currentRemoteCandidate, remoteDeliverySubject, remotePublicationContent } from '../../../application/remote-delivery-view.js';
-import { remotePublicationPending, type RemotePublication, type RemotePublicationUpdate } from '../../../application/remote-delivery-contracts.js';
+import { remotePublicationBranch, remotePublicationPending, type RemotePublication, type RemotePublicationUpdate } from '../../../application/remote-delivery-contracts.js';
 import { gateDigest, type RequestCommand, type WorkerRequest } from '../../../application/request-gates.js';
 import type { RequestStore } from './store.js';
 import { clone, conflict, identifier, invalid, iso } from './values.js';
@@ -28,9 +29,11 @@ export function requestPublicationCommand(store: RequestStore, request: WorkerRe
   if (action === 'pull_request' && !confirmed('push')) conflict('Publish and confirm the exact candidate branch before creating its pull request.');
   if ((run.publications?.length ?? 0) >= 32) conflict('This delivery reached its bounded publication history. Retain its evidence and inspect the destination.');
   if (action === 'pull_request') remotePublicationContent(request);
+  const predecessor = remotePublicationPredecessor(request, target);
+  if (predecessor && predecessor.pullRequest.state !== 'open') conflict('The retained pull request is closed or merged. Use a successor Feature Request for additional work.');
   const at = iso();
   const publication: RemotePublication = { operationId: input.operationId, action, candidate: clone(review.candidate), target: clone(target), repositoryId,
-    configurationDigest: snapshot.configurationDigest, status: 'pending', createdAt: at, updatedAt: at, detail: 'The exact candidate publication intent is saved; its remote outcome is not yet confirmed.' };
+    configurationDigest: snapshot.configurationDigest, ...(predecessor ? { predecessor } : {}), status: 'pending', createdAt: at, updatedAt: at, detail: 'The exact candidate publication intent is saved; its remote outcome is not yet confirmed.' };
   run.publications = [...(run.publications ?? []), publication]; store.save(request, 'publication_requested');
 }
 export function requestPublicationResult(store: RequestStore, request: WorkerRequest, update: RemotePublicationUpdate) {
@@ -44,8 +47,8 @@ export function requestPublicationResult(store: RequestStore, request: WorkerReq
   if (!['unknown', 'confirmed', 'not_observed', 'failed'].includes(result.status) || typeof result.detail !== 'string' || !result.detail.trim() || result.detail.length > 4000) invalid('Publication outcomes need a bounded state and explanation.');
   if (result.status === 'confirmed') {
     const observation = result.observation;
-    if (!observation || observation.branch !== publication.candidate.branch || observation.commit !== publication.candidate.candidateCommit) conflict('Publication confirmation must identify the exact candidate branch and commit.');
-    if (publication.action === 'pull_request' && (!observation.pullRequest || !Number.isSafeInteger(observation.pullRequest.number) || observation.pullRequest.number < 1 ||
+    if (!observation || observation.branch !== remotePublicationBranch(publication) || observation.commit !== publication.candidate.candidateCommit) conflict('Publication confirmation must identify the exact candidate branch and commit.');
+    if (publication.action === 'pull_request' && (!observation.pullRequest || publication.predecessor && observation.pullRequest.number !== publication.predecessor.pullRequest.number || !Number.isSafeInteger(observation.pullRequest.number) || observation.pullRequest.number < 1 ||
       !['open', 'closed', 'merged'].includes(observation.pullRequest.state) || typeof observation.pullRequest.url !== 'string' || observation.pullRequest.url.toLowerCase() !== `https://github.com/${publication.target.repository}/pull/${observation.pullRequest.number}`.toLowerCase()))
       conflict('Pull request confirmation requires the exact GitHub number, URL and observed state.');
     if (publication.action === 'push' && observation.pullRequest) conflict('A branch push cannot confirm pull request creation.');

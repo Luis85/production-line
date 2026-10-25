@@ -81,6 +81,7 @@ export function sessionView(context: SessionViewContext): SessionView {
             ? {
                 requestId: request.id,
                 requestPhase: request.phase,
+                ...(request.lifecycle ? { requestLifecycle: request.lifecycle } : {}),
                 requestRevision: request.revision,
               }
             : {}),

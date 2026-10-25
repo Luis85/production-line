@@ -1,5 +1,5 @@
 import type { WorkerRequest } from '../application/request-gates';
-import type { RemotePublication, RemotePublicationCommand, RemotePublicationView } from '../application/remote-delivery-contracts';
+import { remotePublicationBranch, type RemotePublication, type RemotePublicationCommand, type RemotePublicationView } from '../application/remote-delivery-contracts';
 import { deliveryReviewStages } from './delivery-review-stages';
 export const publicationStatusLabels = { pending: 'Publication pending', unknown: 'Outcome unknown · reconcile first', confirmed: 'Confirmed remotely', not_observed: 'Not found remotely', failed: 'Publication failed' };
 export function publicationCandidateMatches(request: WorkerRequest, view: RemotePublicationView): boolean {
@@ -17,6 +17,6 @@ export function publicationCommand(request: WorkerRequest, view: RemotePublicati
 }
 export function publicationLink(receipt: RemotePublication): string | null {
   const observed = receipt.observation;
-  if (receipt.status !== 'confirmed' || observed?.commit !== receipt.candidate.candidateCommit || observed.branch !== receipt.candidate.branch || !observed.pullRequest) return null;
+  if (receipt.status !== 'confirmed' || observed?.commit !== receipt.candidate.candidateCommit || observed.branch !== remotePublicationBranch(receipt) || !observed.pullRequest) return null;
   try { const url = new URL(observed.pullRequest.url); return url.protocol === 'https:' && url.hostname === 'github.com' && url.pathname === '/' + receipt.target.repository + '/pull/' + observed.pullRequest.number && !url.username && !url.password ? url.href : null; } catch { return null; }
 }

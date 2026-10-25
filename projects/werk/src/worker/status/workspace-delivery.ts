@@ -25,7 +25,7 @@ export async function featureDeliverySubmission(workspace: WorkspaceContext, rec
 }
 export async function featureSourceHold(workspace: WorkspaceContext, record: FeatureRecord, issue: FeatureSourceIssue | null): Promise<void> {
   const request = workspace.sessions.requests.forSession(record.sessionId);
-  if (!request || ['done', 'cancelled'].includes(request.phase)) return;
+  if (!request || request.phase === 'cancelled' || request.lifecycle === 'done' || request.phase === 'done' && request.lifecycle === undefined) return;
   workspace.sessions.requests.deliveryUpdate(request.id, issue ? { action: 'hold', code: 'source', reason: issue.reason } : { action: 'clear_hold', code: 'source' });
 }
 /** Source edits replace requirements, never the attempt's approved paths, provider or policy authority. */
@@ -56,4 +56,12 @@ export async function reviseFeatureSource(workspace: WorkspaceContext, record: F
     else await workspace.sessions.executeRequest(request.id);
   }
   return true;
+}
+
+/** Shared release work remains source-bound after local candidate acceptance. */
+export async function sharedFeatureSourceHold(workspace: WorkspaceContext, record: import('../application/shared-feature-state.js').SharedFeatureRecord, reason: string | null) {
+  if (!record.taskId) return;
+  const task = workspace.board.executionDetail(record.taskId), request = task.requestId ? workspace.sessions.requests.get(task.requestId) : undefined;
+  if (!request || request.lifecycle === 'done' || request.phase === 'cancelled') return;
+  workspace.sessions.requests.deliveryUpdate(request.id, reason ? { action: 'hold', code: 'source', reason } : { action: 'clear_hold', code: 'source' });
 }

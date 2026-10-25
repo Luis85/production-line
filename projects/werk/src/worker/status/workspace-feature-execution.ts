@@ -22,8 +22,9 @@ export async function prepareFeatureExecution(workspace: WorkspaceContext, input
   const policy = await readDeliveryPolicy(repository, signal, input.qualityProfile, baseline);
   const execution = policy.configuration.execution;
   if (!execution && input.executionProfile) throw new DomainError('conflict', 'Configure and approve project execution profiles before selecting execution_profile.');
-  // Existing shared workflows retain their gate contract unless they opt into project delivery.
-  if (!execution && input.requestSchema !== 'worker.request/v1') return legacy();
+  // A committed publication/release policy is an explicit delivery opt-in even for shared v1 templates.
+  const deliveryConfigured = !!policy.configuration.remoteDelivery || !!policy.configuration.release || !!policy.configuration.startPromptDirectory;
+  if (!execution && input.requestSchema !== 'worker.request/v1' && !deliveryConfigured) return legacy();
   try { assertDeliveryPolicyApproved(workspace.deliveryApprovals.view(), repositoryId, policy); }
   catch (error) { throw new FeatureIntakeBlocked(error, 'policy_approval', 'permissions'); }
   if (!execution) return { ...legacy(), deliveryPolicy: policy };

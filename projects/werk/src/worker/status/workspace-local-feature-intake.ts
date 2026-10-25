@@ -1,3 +1,5 @@
+import { projectFeatureTemplate } from './workspace-feature-templates.js';
+import { featureAuthoringDocuments } from '../infrastructure/features/authoring-document.js';
 import { nativeWorkStatus } from './workspace-native-work.js';
 import type { FeatureRequests } from '../application/feature-requests.js';
 import { resolve } from 'node:path';
@@ -28,7 +30,8 @@ export function usesLocalFeatureIntake(workspace: WorkspaceContext, input: unkno
 /** Runs before taskRequests serialization, so the canonical watcher can use the existing task port. */
 export async function createLocalFeatureInteraction(workspace: WorkspaceContext, input: unknown) {
   if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.executionProfiles?.pending()) throw new DomainError('unavailable', 'Finish the configuration change before creating a Feature Request.');
-  const body = object(input, 'Task command', ['action', 'id', 'title', 'provider', 'model', 'effort', 'message', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly', 'files', 'background', 'projectId', 'executionProfile']);
+  const body = object(input, 'Task command', ['action', 'id', 'title', 'provider', 'model', 'effort', 'message', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly', 'files', 'background', 'projectId', 'executionProfile', 'priority', 'templateId']);
+  if (body.priority !== undefined && (!Number.isSafeInteger(body.priority) || Number(body.priority) < 1 || Number(body.priority) > 3)) throw new DomainError('invalid_input', 'Choose priority 1 (high), 2 (medium) or 3 (low).');
   const id = body.id === undefined ? randomUUID() : identifier(body.id, 'id');
   if (!/^[a-z0-9-]{1,80}$/.test(id)) throw new DomainError('invalid_input', 'Local interaction IDs use 1–80 lowercase letters, digits or hyphens.');
   if (body.background !== undefined && (typeof body.background !== 'boolean' || body.background && !body.files)) throw new DomainError('invalid_input', 'background requires approved files.');
@@ -37,11 +40,14 @@ export async function createLocalFeatureInteraction(workspace: WorkspaceContext,
   if (files && resolve(text(files.repository, 'repository', 4096)) !== project) throw new DomainError('invalid_input', 'This intake folder belongs to another project. Select this worker’s project repository or use the worker assigned to the requested project.');
   const paths = files ? validateApprovedPaths(files.paths, 'Approved paths', { folders: true }) : undefined;
   const provider = workspace.settings.provider(String(body.provider ?? workspace.settings.value.defaultProvider)).id;
-  const fields = { schema: 'worker.request/v1', id, title: text(body.title, 'title', 120), intent: 'submit', mode: paths ? 'patch' : 'chat', ...(body.provider === undefined ? {} : { provider }),
-    priority: 'normal', ...(body.executionProfile === undefined ? {} : { execution_profile: body.executionProfile }), ...(paths ? { paths } : {}),
+  if (body.templateId !== undefined && (typeof body.templateId !== 'string' || !paths)) throw new DomainError('invalid_input', 'Template selection requires an approved-file request and a registered template ID.');
+  const selected = body.templateId === undefined ? undefined : await projectFeatureTemplate(workspace, workspace.featureProjects.id(intake), String(body.templateId));
+  const templated = selected ? parseFeature(featureAuthoringDocuments.prepare(selected.snapshot, id, { title: String(body.title), message: String(body.message), templateId: selected.templateId, priority: Number(body.priority ?? 3), provider, paths })) : undefined;
+  const fields = { ...templated?.data, schema: 'worker.request/v1', id, title: text(body.title, 'title', 120), intent: 'submit', mode: paths ? 'patch' : 'chat', ...(body.provider === undefined ? {} : { provider }),
+    priority: body.priority === 1 ? 'high' : body.priority === 2 ? 'normal' : 'low', ...(body.executionProfile === undefined ? {} : { execution_profile: body.executionProfile }), ...(paths ? { paths } : {}),
     ...Object.fromEntries(['model', 'effort', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'].filter(key => body[key] !== undefined).map(key => [key, body[key]])),
   };
-  const markdown = '---\n' + stringify(fields) + '---\n' + text(body.message, 'message', 8000) + '\n';
+  const markdown = '---\n' + stringify(fields) + '---\n' + (templated?.body ?? text(body.message, 'message', 8000)) + '\n';
   const normalized = featureInput(parseFeature(markdown), provider);
   workspace.definitions.select(body);
   const features: FeatureRequests = intake.features!;

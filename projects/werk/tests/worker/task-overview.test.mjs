@@ -281,3 +281,12 @@ test('project queue preserves low priority and orders urgent requests before hig
   assert.deepEqual(result.groups.queued.map(item => item.priority), [3, 2, 1, 0]);
   assert.equal(result.groups.draft[0].priority, 3);
 });
+
+test('accepted implementation with pending release remains attention even when request summaries are unavailable', () => {
+  const input = { sessions: sessions([session('release', { requestId: 'request-release', requestPhase: 'done', requestLifecycle: 'in_progress' })]) };
+  const item = buildTaskOverview(input).items[0];
+  assert.equal(item.group, 'attention'); assert.equal(item.statusLabel, 'Awaiting release');
+  assert.equal(item.primaryAction.label, 'Inspect release'); assert.match(item.summary, /publication still need confirmation/);
+  input.sessions.records[0].requestLifecycle = 'done';
+  assert.equal(buildTaskOverview(input).items[0].group, 'completed');
+});

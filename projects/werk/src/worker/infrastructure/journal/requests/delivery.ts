@@ -1,3 +1,5 @@
+import { releasePending } from '../../../application/release-contracts.js';
+import { requestReleaseResult } from './release.js';
 import type { DeliveryMetricObservation } from '../../../application/delivery-metrics-contracts.js';
 import { selectedDeliveryBehavior } from '../../../application/delivery-behavior-policy.js';
 import { deliveryProviderUpdate, validateDeliveryProfileStep } from './delivery-provider.js';
@@ -45,6 +47,7 @@ export function requestDeliveryUpdate(store: RequestStore, id: string, update: D
     }
     const run = request.delivery;
     if (!run || run.id !== update.deliveryRunId) conflict('The delivery run changed. Refresh its current identity.');
+    if (update.action === 'release_result') return requestReleaseResult(store, request, update);
     if (update.action === 'publication_result') return requestPublicationResult(store, request, update);
     if (update.action === 'plan' || update.action === 'assessment' || update.action === 'handoff') return deliveryProviderUpdate(store, request, update as Extract<DeliveryUpdate, { action: 'plan' | 'assessment' | 'handoff' }>);
     if (update.action === 'checkpoint') {
@@ -169,6 +172,7 @@ export function requestDeliveryCommand(store: RequestStore, request: WorkerReque
 export function requestReviseInput(store: RequestStore, id: string, input: GateInput): WorkerRequest {
   return store.transaction(() => {
     const request = store.get(id);
+    if (releasePending(request.delivery?.release) || request.delivery?.release?.merge) conflict('Reconcile or finish the merged request release before accepting another revision.');
     if (remotePublicationPending(request.delivery)) conflict('Reconcile the saved remote publication before accepting a changed request revision.');
     if (request.execution && ['running', 'prepared'].includes(request.execution.status) || request.delivery?.steps.some(step => ['running', 'outcome_unknown'].includes(step.status))) conflict('Stop the active operation before accepting a changed request revision.');
     if (['done', 'cancelled'].includes(request.phase)) conflict('Reopen the request explicitly before accepting a revision.');
