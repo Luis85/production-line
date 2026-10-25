@@ -17,7 +17,9 @@ export function canonicalStateDirectory(value: string): string {
     }
     if (ancestor === selected && (!info.isDirectory() || info.isSymbolicLink()))
       throw new DomainError('conflict', 'Worker state must use an ordinary directory, not a symbolic link.');
-    const canonical = realpathSync(ancestor);
+    // The native resolver expands Windows 8.3 names consistently with async
+    // realpath, which private-storage identity checks use.
+    const canonical = realpathSync.native(ancestor);
     if (!statSync(canonical).isDirectory()) throw new DomainError('conflict', 'Worker state must use an ordinary directory.');
     return join(canonical, ...missing);
   }
