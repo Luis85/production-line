@@ -1,4 +1,5 @@
 ---
+name:
 type: Node
 parent: "[[Primitives]]"
 description:
@@ -6,9 +7,6 @@ status:
 category:
 color:
 relations:
-tags:
-aliases:
-order: 50146.484375
 started: ""
 finished: ""
 horizon: ""
@@ -18,6 +16,9 @@ risk: ""
 priority: ""
 assignee: ""
 iteration: ""
+order: 50146.484375
+aliases:
+tags:
 ---
 # Base Entity
 

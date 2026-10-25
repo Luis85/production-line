@@ -33,7 +33,7 @@ prev_step: "[[Post-Production]]"
 next_step: "[[Merge]]"
 status: Open
 owner: "[[Worker]]"
-parent: "[[Direct Feature Request to a Worker through the Webview]]"
+parent: "[[Direct Feature Request to a Worker through the Webview Worker Intake]]"
 started: ""
 finished: ""
 horizon: ""

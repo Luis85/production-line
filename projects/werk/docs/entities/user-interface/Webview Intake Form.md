@@ -1,6 +1,6 @@
 ---
 type: User Interface
-extends: "[[Component]]"
+extends: "[[Form]]"
 parent: "[[User Interface]]"
 emits:
   - "[[New Feature Request]]"
@@ -22,4 +22,10 @@ risk: ""
 priority: ""
 assignee: ""
 iteration: ""
+inputs:
+  - "[[Feature Request Template]]"
+  - "[[Feature Request]]"
+  - "[[Git Repository]]"
+  - "[[Project]]"
+  - "[[Priority]]"
 ---

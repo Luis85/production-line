@@ -26,6 +26,7 @@ risk: ""
 priority: ""
 assignee: ""
 iteration: ""
+templates:
 ---
 
 ## Properties

@@ -12,13 +12,14 @@ inputs:
 outputs:
   - "[[Increment]]"
 emits:
+  - "[[Process Updated]]"
 supplier:
   - "[[System User]]"
 customers:
   - "[[System User]]"
 rules:
 prev_step:
-next_step:
+next_step: "[[Worker Intake]]"
 status: Open
 owner: "[[System]]"
 parent: "[[Processes]]"

@@ -28,7 +28,7 @@ customers:
 prev_step: "[[Build]]"
 status: Open
 owner: "[[System]]"
-parent: "[[Direct Feature Request to a Worker through the Webview]]"
+parent: "[[Direct Feature Request to a Worker through the Webview Worker Intake]]"
 started: ""
 finished: ""
 horizon: ""

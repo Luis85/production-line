@@ -19,4 +19,6 @@ risk: ""
 priority: ""
 assignee: ""
 iteration: ""
+emits:
+  - "[[Increment Updated]]"
 ---

@@ -22,4 +22,6 @@ risk: ""
 priority: ""
 assignee: ""
 iteration: ""
+emits:
+  - "[[Feature Request Updated]]"
 ---
