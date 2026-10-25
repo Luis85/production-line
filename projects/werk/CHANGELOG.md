@@ -7,6 +7,8 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-25
+
 Qualification: native Windows with a real Claude Code CLI account and worker-managed live GitHub Release publication remain pending; source, provider-protocol and host-API fixtures qualify only their observed boundaries. See the [workflow acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md).
 
 ### Added
@@ -20,6 +22,7 @@ Qualification: native Windows with a real Claude Code CLI account and worker-man
 
 ### Changed
 
+- Workflow mutation contracts now cover 19 modules with a reproducible 83.72% assertion-killed score over 2,955 mutants. Thirty added contracts raised the selected suite to 103 tests and killed 138 additional mutants without production-source, scope or mutation-budget changes; all remaining findings are retained.
 - Git and PullRequest Markdown are the default review handoff, with explicit user permission for the worker's exact main-checkout merge and existing manual Git integration still available. GitHub PRs, hosting-service merge and GitHub Releases require explicit committed integration policy and local approval; repository URLs and GitHub CLI availability do not opt in.
 - Candidate publication can opt into approved automatic publication after verification. Initial branch creation remains create-only; later verified candidates use the retained expected remote head and same owned open PR, preserving immutable candidate/operation history.
 - Release-enabled delivery remains in progress after local acceptance until the exact release source and expected published assets are confirmed. Existing local-only requests retain their established completion semantics.
@@ -27,6 +30,8 @@ Qualification: native Windows with a real Claude Code CLI account and worker-man
 
 ### Fixed
 
+- Managed-project review retains the effective accepted policy and project identity, confirms the pushed branch and Markdown handoff before integration progress, and keeps private review artifacts out of the main checkout.
+- Main-checkout integration preserves dirty or stale targets, records immutable preparation before mutation, refuses applicable external Git transforms, and fences later requests against every retained accepted merge. Uncertain outcomes reconcile read-only without repeating a write.
 - Provider checks wait up to 15 s per probe, and the status check and the execution gate retry a failed login probe once, so the first `provider check` or task after a cold Claude Code CLI start no longer reports `authentication: unknown` or holds with `authentication_required`.
 - After a crash or reboot, `status` reports `stale` when the recorded worker or app process is provably gone, and `start`, `stop` and `update apply` remove exactly its leftover `portable.json` and lock files instead of refusing with `unreachable` or `Feature folder is locked`. State written by 0.15.0 or earlier is not recovered automatically; follow the printed files and check once.
 - `update apply` and `install.mjs` scale the archive extraction timeout with the number of release entries (300 s minimum, 200 ms per entry) and, on a timeout, tell you to extract the archive yourself and use `update apply --from`.
