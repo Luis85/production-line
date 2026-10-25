@@ -3,12 +3,13 @@ pbl-id: 53
 type: PBI
 parent: "[[Worker intake to published release]]"
 order: 43999.999941
-status: Open
+status: Done
 tags:
   - primary-workflow
 priority: P0
 dependsOn:
   - "[[Verified merge of current reviewed candidate]]"
+finished: 2026-10-25
 ---
 
 # Exact-source build and GitHub Release publication

@@ -3,12 +3,13 @@ pbl-id: 51
 type: PBI
 parent: "[[Worker intake to published release]]"
 order: 43999.999762
-status: Open
+status: Done
 tags:
   - primary-workflow
 priority: P0
 dependsOn:
   - "[[Pinned Claude execution and verification]]"
+finished: 2026-10-25
 ---
 
 # Owned PR feedback and guarded rework

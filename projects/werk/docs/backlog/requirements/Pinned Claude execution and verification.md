@@ -3,12 +3,13 @@ pbl-id: 50
 type: PBI
 parent: "[[Worker intake to published release]]"
 order: 43999.999523
-status: Open
+status: Done
 tags:
   - primary-workflow
 priority: P0
 dependsOn:
   - "[[Canonical project intake and queue]]"
+finished: 2026-10-25
 ---
 
 # Pinned Claude execution and verification

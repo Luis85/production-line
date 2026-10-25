@@ -3,12 +3,13 @@ pbl-id: 52
 type: PBI
 parent: "[[Worker intake to published release]]"
 order: 43999.999881
-status: Open
+status: Done
 tags:
   - primary-workflow
 priority: P0
 dependsOn:
   - "[[Owned PR feedback and guarded rework]]"
+finished: 2026-10-25
 ---
 
 # Verified merge of current reviewed candidate

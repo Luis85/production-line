@@ -3,12 +3,13 @@ pbl-id: 49
 type: PBI
 parent: "[[Worker intake to published release]]"
 order: 43999.999047
-status: Open
+status: Done
 tags:
   - primary-workflow
 priority: P0
 dependsOn:
   - "[[Managed projects and Windows prerequisites]]"
+finished: 2026-10-25
 ---
 
 # Canonical project intake and queue

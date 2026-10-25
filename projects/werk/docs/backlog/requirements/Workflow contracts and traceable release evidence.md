@@ -3,10 +3,11 @@ pbl-id: 47
 type: PBI
 parent: "[[Worker intake to published release]]"
 order: 43999.996186
-status: Open
+status: Done
 tags:
   - primary-workflow
 priority: P0
+finished: 2026-10-25
 ---
 
 # Workflow contracts and traceable release evidence

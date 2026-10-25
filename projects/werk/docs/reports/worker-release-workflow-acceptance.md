@@ -11,13 +11,13 @@ Native Windows, Claude Code CLI with a real authenticated account, a real projec
 | Boundary | Required evidence | Qualification state |
 | --- | --- | --- |
 | Contracts and documentation | Process transitions, DoR/DoD, domain identities, guarded commands and recovery | Defined in the maintained workflow/reference and process notes |
-| Managed projects | Real local Git clone/adopt, duplicate/restart/failed-clone handling and unchanged developer checkout | Automated fixture qualification required; final command results belong in PR validation |
+| Managed projects | Real local Git clone/adopt, duplicate/restart/failed-clone handling and unchanged developer checkout | Passed real local Git clone/adopt, replay/recovery and approval-gated intake fixtures; managed/template regression group passed 49 tests |
 | Intake and execution | Canonical IDs across interfaces, pinned dispatch, owned worktree, independent checks and bounded repair | Automated provider protocol fixtures prove application behavior only |
-| Same-PR rework | Real bare-Git expected-head update/race tests and host protocol fixtures | Automated fixture qualification required; not live GitHub permissions |
-| Merge | Current-head acceptance, squash merge identity, conflicts/closed PR, lost acknowledgement/restart | Host protocol fixture qualification required; not a live merge claim |
-| Build | Exact merged source, successful/failed command, safe artifact inventory and digests | Real filesystem/process fixture qualification required |
-| Publish | Correct target/tag/assets, draft/partial/conflict, unknown outcome and retry | Host protocol fixture qualification required; not live publication |
-| Integrated UI/CLI | Same persisted milestones, next action, stale/unknown blockers and guarded commands | Runtime/browser qualification required |
+| Same-PR rework | Real bare-Git expected-head update/race tests and host protocol fixtures | Passed real bare-Git guarded branch updates and GitHub protocol/restart fixtures; not live GitHub permissions |
+| Merge | Current-head acceptance, squash merge identity, conflicts/closed PR, lost acknowledgement/restart | Passed draft readiness, current-head/squash merge, race, replay and restart fixtures; not a live merge claim |
+| Build | Exact merged source, successful/failed command, safe artifact inventory and digests | Passed exact-source real Git/process builds, source tampering, replace-ref and artifact-manifest recovery fixtures |
+| Publish | Correct target/tag/assets, draft/partial/conflict, unknown outcome and retry | Passed draft/partial release, exact tag/asset digests, unknown outcome and conflict fixtures; not live publication |
+| Integrated UI/CLI | Same persisted milestones, next action, stale/unknown blockers and guarded commands | Passed guarded CLI/Markdown/UI fixtures and 22 desktop/mobile browser checks; native and Docker extracted-archive smoke journeys passed |
 | Native Windows + live Claude | Packaged runtime on Windows, real provider invocation, interruption/recovery | Pending; a Linux fixture does not satisfy this target |
 | Live GitHub release | Same-PR feedback, actual reviewed merge, source-bound build and confirmed published asset digests | Pending; API fixtures do not satisfy this target |
 
@@ -52,3 +52,17 @@ The documentation pass ran these checks in the implementation checkout:
 | `node --test tests/operations/release-package.test.mjs tests/operations/release-changelog.test.mjs` | 44 tests passed; zero failed/skipped, including closed local links in the actual shipped documentation allowlist |
 
 These observations verify documentation/backlog consistency and packaging behavior. They do not replace the integrated implementation tests or pending native/live acceptance rows above. Root workspace backlog validation selects `01 - Product Backlog.base` explicitly because the project also keeps its own scoped Base.
+
+## Implementation qualification
+
+Implementation PR: [#54](https://github.com/Luis85/production-line/pull/54), including the reconciled concept documentation from #53. Implementation PBIs 47–53 are complete; live qualification PBI 54 remains open, and the parent release feature remains Active.
+
+Focused checks included 32 release-engine regressions, 49 managed-project/template regressions, 58 shared-intake/feedback regressions, 15 latest-source release-projection/recovery regressions, and 22 composer regressions. These groups overlap existing regression suites and must not be added together as a unique test total. Full unified source and cross-platform CI results are recorded on the implementation PR.
+
+[Browser qualification](../evidence/worker-e2e-release/browser-qualification.json) records 22 desktop/mobile checks with no page errors or overflow. Its screenshots use explicit synthetic project, provider and GitHub data; no live model or host mutation was performed.
+
+![Reviewed candidate and release workflow](../evidence/worker-e2e-release/worker-end-to-end-delivery--merge-reviewed-candidate-1440.png)
+
+![Mobile release publication controls](../evidence/worker-e2e-release/worker-end-to-end-delivery--publish-verified-build-390.png)
+
+The extracted native and Docker archives each completed the existing simulated runtime smoke, persisted evidence and restart checks. The Docker wrapper smoke ran without host Node on its wrapper PATH. These validate packaging and startup compatibility; they do not qualify a Windows Claude account or a worker-managed live release.
