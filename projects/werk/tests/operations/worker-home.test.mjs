@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { cp, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -27,7 +27,7 @@ async function api(url, token, path, body) {
 }
 
 test('verified ZIP starts directly from an empty chosen worker home and registers Git through the authenticated webview API', { timeout: 240000 }, async t => {
-  const outer = await mkdtemp(join(tmpdir(), 'werk downloaded worker ')), artifacts = join(outer, 'artifacts'), home = join(outer, 'Chosen Worker Home');
+  const outer = await realpath(await mkdtemp(join(tmpdir(), 'werk downloaded worker '))), artifacts = join(outer, 'artifacts'), home = join(outer, 'Chosen Worker Home');
   const packed = await packageRelease(project, artifacts), extracted = await extractRelease(artifacts, home, 'zip'), entry = join(extracted.root, 'worker.mjs');
   await ownWorkspace(t, outer, async () => { await cli(entry, home, ['stop']).catch(() => {}); });
   assert.equal(extracted.version, packed.version); assert.equal((await stat(entry)).isFile(), true);
@@ -63,13 +63,19 @@ test('verified ZIP starts directly from an empty chosen worker home and register
 });
 
 test('copied worker starter needs only Node and an explicit home outside its replaceable app folder', { timeout: 180000 }, async t => {
-  const outer = await mkdtemp(join(tmpdir(), 'werk independent starter ')), app = join(outer, 'application'), home = join(outer, 'private worker home');
+  const outer = await realpath(await mkdtemp(join(tmpdir(), 'werk independent starter '))), app = join(outer, 'application'), home = join(outer, 'private worker home');
   await cp(join(project, 'bin/apps/worker'), app, { recursive: true }); const entry = join(app, 'worker.mjs');
   await ownWorkspace(t, outer, async () => { await cli(entry, outer, ['stop', '--home', home]).catch(() => {}); });
   await assert.rejects(cli(entry, app, ['--no-open', '--port', '0']), error => error instanceof Error && /outside the copied app folder/.test(error.message));
   const started = await cli(entry, outer, ['--home', home, '--no-open', '--port', '0']); assert.equal(started.data.state, 'running');
   assert.equal(started.data.stateDirectory, join(home, '.werk', 'worker'));
   const token = (await readFile(started.data.credentialsFile, 'utf8')).trim(); assert.equal((await api(started.data.url, token, '/api/managed-projects')).projects.length, 0);
+  if (process.platform !== 'win32') {
+    const alias = join(outer, 'logical worker home'); await symlink(home, alias, 'dir');
+    const replay = await cli(entry, outer, ['--home', alias, '--no-open']);
+    assert.equal(replay.data.stateDirectory, join(home, '.werk', 'worker'));
+    assert.equal(replay.data.runId, started.data.runId); assert.equal(replay.data.alreadyRunning, true);
+  }
   const help = await cli(entry, outer, ['--help']); assert.match(help.data.home, /outside the copied app folder/);
   const manifest = JSON.parse(await readFile(join(app, 'package.json'), 'utf8')); assert.equal(manifest.dependencies, undefined);
 });
