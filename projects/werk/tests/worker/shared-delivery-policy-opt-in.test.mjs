@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -40,8 +40,15 @@ Run the committed value verification against the isolated candidate.
 `;
 
 /** Real shared Git handoff, worker request journal, worktree and checks; only provider inference is a fixture. */
-test('shared v1 release policy without named execution profiles freezes delivery and produces a verified release candidate', { timeout }, async t => {
-  const root = await mkdtemp(join(tmpdir(), 'werk-shared-release-policy-')), producer = join(root, 'producer'), remote = join(root, 'remote.git'), repository = join(root, 'worker'), state = join(root, 'state');
+for (const aliased of [false, true]) test('shared v1 release policy without named execution profiles freezes delivery and produces a verified release candidate' + (aliased ? ' through a host state-parent alias' : ''), { timeout }, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'werk-shared-release-policy-')), producer = join(root, 'producer'), remote = join(root, 'remote.git'), repository = join(root, 'worker');
+  let state = join(root, 'state');
+  if (aliased) {
+    const parent = join(root, 'state-parent'), alias = join(root, 'host-alias'); await mkdir(parent);
+    try { await symlink(parent, alias, 'junction'); }
+    catch (error) { await rm(root, { recursive: true, force: true }); if (error.code === 'EPERM' || error.code === 'EACCES') { t.skip('This host does not permit directory aliases.'); return; } throw error; }
+    state = join(alias, 'state');
+  }
   await mkdir(producer); git(root, 'init', '--bare', '--initial-branch=main', remote); git(producer, 'init', '--initial-branch=main'); git(producer, 'remote', 'add', 'origin', remote);
   const configuration = defaultFeatureWorkflow(), policy = defaultDeliveryProjectPolicy();
   policy.remoteDelivery = { remote: 'origin', repository: 'example/sample', base: 'main', push: true, pullRequest: true, draft: false };
@@ -99,6 +106,7 @@ test('shared v1 release policy without named execution profiles freezes delivery
     await worker.sharedIntakeCommand({ action: 'sync', projectId: 'project' }); await worker.board.tick();
     if (failures.length) throw failures[0];
     const record = worker.sharedIntakeView('project').requests.find(item => item.id === 'shared-release-feature');
+    assert.equal(record?.error ?? null, null, 'Shared admission must not reject the configured host state path.');
     if (record?.taskId) {
       const task = worker.board.executionDetail(record.taskId);
       result = task.requestId ? worker.sessions.requests.get(task.requestId) : undefined;
@@ -107,6 +115,7 @@ test('shared v1 release policy without named execution profiles freezes delivery
     await delay(20);
   }
   assert.equal(result?.phase, 'review', JSON.stringify(worker.sharedIntakeView('project')));
+  assert.equal(context.config.stateDir, await realpath(state));
   assert.equal(calls.length, 1); assert.equal(calls[0].provider.id, 'claude-cli');
   const acceptedContext = /** @type {{deliveryPolicy:import('../../src/worker/application/delivery-policy.ts').DeliveryPolicySnapshot}} */ (result.input.context);
   assert.equal(acceptedContext.deliveryPolicy.baseline, baseline);
