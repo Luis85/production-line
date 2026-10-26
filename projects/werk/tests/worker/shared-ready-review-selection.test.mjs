@@ -92,3 +92,15 @@ test('Ready Check answers cannot replace the accepted execution profile or agent
     assert.match((await f.state()).records[0].error, /agent definition/);
   }
 });
+
+
+test('policy-only Ready Check reservation rejects a changed quality profile without changing frozen source authority', async t => {
+  const configuration = defaultDeliveryProjectPolicy();
+  const f = await reviewedFixture(t, { prepare: (_input, _binding, commit) => ({ deliveryPolicy: deliveryPolicySnapshot(configuration, commit) }) });
+  await f.intake.sync(); f.finish(); await f.intake.sync(); const original = (await f.state()).records[0];
+  assert.equal(original.selection, undefined); assert.equal(original.deliveryExecution, undefined);
+  f.answer('Use the lightweight profile instead.', markdown => markdown.replace('mode: patch', 'quality_profile: lightweight\nmode: patch'));
+  await f.intake.sync(); assert.equal(f.inputs.length, 1); assert.equal(f.submits.length, 0);
+  const retained = (await f.state()).records[0]; assert.equal(retained.sourceCommit, original.sourceCommit); assert.deepEqual(retained.deliveryPolicy, original.deliveryPolicy);
+  assert.match(retained.error, /quality profile/); await f.restart(); await f.intake.sync(); assert.equal(f.inputs.length, 1);
+});

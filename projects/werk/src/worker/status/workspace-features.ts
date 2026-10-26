@@ -1,4 +1,5 @@
 import { validateSharedReadyReviewAnswer } from '../application/shared-ready-review-answer.js';
+import { sharedDeliveryPolicyForSource } from './workspace-shared-delivery-policy.js';
 import { sharedFeaturePolicy } from '../application/shared-feature-policy.js';
 import { gateDigest } from '../application/request-gates.js';
 import { assertLocalMergeBaseline } from './workspace-local-merge-baseline.js';
@@ -153,7 +154,8 @@ export async function submitSharedFeature(workspace: WorkspaceContext, record: S
     const assignment = workspace.repositories.resolve(record.binding.repositoryId);
     if (record.accepted.mode === 'patch') await assertLocalMergeBaseline(workspace, assignment.path, record.binding.repositoryId, record.sourceCommit, record.taskId ?? undefined);
     const effectivePolicy = sharedFeaturePolicy(record);
-    const delivery = record.deliveryPolicy ? await featureDeliverySubmission(workspace, { id: record.id, input: record.accepted, deliveryPolicy: record.deliveryPolicy, deliveryExecution: record.deliveryExecution }, assignment.path, record.workflow.policy) : undefined;
+    const deliveryPolicy = await sharedDeliveryPolicyForSource(record, assignment.path, AbortSignal.any([workspace.repositoryStop.signal, AbortSignal.timeout(30000)]));
+    const delivery = deliveryPolicy ? await featureDeliverySubmission(workspace, { id: record.id, input: record.accepted, deliveryPolicy, deliveryExecution: record.deliveryExecution }, assignment.path, record.workflow.policy) : undefined;
     if (delivery && gateDigest(delivery.policy) !== effectivePolicy.digest) throw new DomainError('conflict', 'Shared admission changed its frozen effective execution policy. Restore the accepted workflow and delivery profile.');
     await admitFeatureRequest(featureAdmissionPorts(workspace), {
       input: record.accepted, taskId: record.taskId!, submissionHash: record.inputHash, repository: assignment.path,

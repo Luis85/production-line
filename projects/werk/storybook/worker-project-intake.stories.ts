@@ -35,5 +35,29 @@ export const DirectProjectRequest: Story = {
 };
 export const SharedProjectAutomaticRouting: Story = {
   name: 'Prepare a shared project draft with automatic routing', parameters: { storymap: storymap('The shared composer preserves project Git binding and omits inherited provider settings for automatic routing. Preparing the draft neither publishes nor starts implementation.', true) }, render: render(true),
-  play: async ({ canvasElement }) => { const q = within(canvasElement); await userEvent.selectOptions(await q.findByLabelText('Project', { exact: true }), 'api'); await q.findByText('api · origin / team-intake'); await userEvent.click(q.getByText('Request options', { exact: true })); await q.findByLabelText('Project execution profile'); await waitFor(() => { if (!q.queryByText('via default', { exact: false })) throw Error('Project policy is still loading.'); }); await userEvent.type(q.getByLabelText('Request instructions', { exact: true }), 'Implement the API validation rules after the team completes its criteria.'); await userEvent.click(q.getByRole('button', { name: 'Prepare request' })); await q.findByText('FR-project-draft.md'); await q.findByLabelText('Context', { exact: true }); await q.findByLabelText('Verification plan', { exact: true }); const body = commands[0]; if (commands.length !== 1 || body.projectId !== 'api' || body.expectedBinding.repositoryId !== 'api' || ['executionProfile', 'provider', 'model', 'effort'].some(key => key in body.seed)) throw Error('Automatic routing did not preserve the project binding and omitted model fields.'); if (!(q.getByRole('button', { name: 'Mark ready and publish' }) as HTMLButtonElement).disabled) throw Error('Incomplete shared request could publish ready.'); await ready(canvasElement); },
+  play: async ({ canvasElement }) => {
+    const q = within(canvasElement);
+    const instruction = 'Implement the API validation rules after the team completes its criteria.';
+    await userEvent.selectOptions(await q.findByLabelText('Project', { exact: true }), 'api');
+    await q.findByText('api · origin / team-intake');
+    await userEvent.click(q.getByText('Request options', { exact: true }));
+    await q.findByLabelText('Project execution profile');
+    await waitFor(() => { if (!q.queryByText('via default', { exact: false })) throw Error('Project policy is still loading.'); });
+    await userEvent.type(q.getByLabelText('Request instructions', { exact: true }), instruction);
+    await userEvent.click(q.getByRole('button', { name: 'Prepare request' }));
+    const name = await q.findByLabelText('Request name') as HTMLInputElement;
+    const goal = await q.findByLabelText('Goal', { exact: true }) as HTMLTextAreaElement;
+    if (name.value !== 'API request' || goal.value !== instruction || canvasElement.querySelector('.request-identity strong')?.textContent !== instruction) throw Error('The prepared draft lost its readable request identity or accepted instructions.');
+    await q.findByLabelText('Context', { exact: true });
+    await q.findByLabelText('Verification plan', { exact: true });
+    const advanced = q.getByText('Advanced template editing', { exact: true });
+    await userEvent.click(advanced);
+    const markdown = q.getByLabelText('Complete request Markdown') as HTMLTextAreaElement;
+    if (!/^id: FR-project-draft$/m.test(markdown.value) || !/^title: API request$/m.test(markdown.value)) throw Error('The readable draft must preserve its exact canonical Feature Request ID in the project template.');
+    await userEvent.click(advanced);
+    const body = commands[0];
+    if (commands.length !== 1 || body.action !== 'prepare' || !body.operationId || body.projectId !== 'api' || body.expectedBinding.repositoryId !== 'api' || ['executionProfile', 'provider', 'model', 'effort'].some(key => key in body.seed)) throw Error('Automatic routing did not preserve the project binding and omitted model fields.');
+    if (!(q.getByRole('button', { name: 'Mark ready and publish' }) as HTMLButtonElement).disabled) throw Error('Incomplete shared request could publish ready.');
+    await ready(canvasElement);
+  },
 };

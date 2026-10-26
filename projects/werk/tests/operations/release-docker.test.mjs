@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, writeFile, symlink, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, symlink, rm, stat, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { packageRelease, releaseFiles, releaseTrees, releaseDocs } from '../../scripts/release/package.mjs';
@@ -47,7 +47,7 @@ test('Docker single-worker limitation rejects setup before generating credential
 
 
 test('packaged flat Home Docker launcher builds the internal runtime without requiring host Node', { skip: process.platform === 'win32' }, async t => {
-  const root = await mkdtemp(join(tmpdir(), 'werk-flat-docker-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-flat-docker-')));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = join(root, 'source'), home = join(root, 'Home with spaces'), tools = join(root, 'host-tools');
   const put = async (path, value = 'Fixture guidance.\n') => { await mkdir(dirname(join(source, path)), { recursive: true }); await writeFile(join(source, path), value); };
