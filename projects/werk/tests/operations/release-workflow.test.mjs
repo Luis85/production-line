@@ -332,3 +332,14 @@ test('release publication waits for the exact downloaded candidate browser journ
   const artifact = job.steps.find(step => step.with?.name === 'werk-worker-home-browser-evidence');
   assert.equal(artifact.if, 'always()'); assert.equal(artifact.with.path, run.env.WERK_BROWSER_EVIDENCE + '/');
 });
+
+
+test('bounded dashboard mutation analysis retains its own advisory evidence for pull requests and releases', () => {
+  const job = workflow.jobs['mutation-dashboard'];
+  assert.ok(job); assert.equal(job.if, undefined); assert.equal(job.needs, undefined); assert.equal(job['continue-on-error'], true); assert.equal(job['timeout-minutes'], 15);
+  const measurement = job.steps.find(step => step.id === 'mutation'); assert.equal(measurement.run, 'npm run mutation:release -- --scope dashboard'); assert.equal(measurement['timeout-minutes'], 4);
+  assert.equal(job.steps.find(step => step.id === 'dependencies').run, 'npm ci --ignore-scripts');
+  const artifact = job.steps.find(step => step.id === 'evidence'); assert.equal(artifact.if, 'always()'); assert.equal(artifact.with.name, 'werk-mutation-dashboard-report'); assert.match(artifact.with.path, /reports\/mutation\/dashboard\/$/);
+  assert.match(job.steps.at(-1).run, /werk-mutation-dashboard-report artifact/);
+  for (const [name, value] of Object.entries(workflow.jobs)) if (name !== 'mutation-dashboard') assert.equal([value.needs].flat().includes('mutation-dashboard'), false);
+});

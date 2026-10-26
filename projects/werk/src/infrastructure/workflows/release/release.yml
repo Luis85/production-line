@@ -133,6 +133,66 @@ jobs:
             echo ""
             echo "This scoped measurement is advisory. See the mutation summary and werk-mutation-workflow-report artifact; it does not gate publication."
           } >> "$GITHUB_STEP_SUMMARY"
+  mutation-dashboard:
+    name: Dashboard mutation testing (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - id: source
+        timeout-minutes: 2
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - id: node
+        timeout-minutes: 2
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ env.FORGE_PROJECT_PATH }}/package-lock.json
+      - id: dependencies
+        timeout-minutes: 3
+        run: npm ci --ignore-scripts
+      - id: mutation
+        name: Measure dashboard observation contracts without blocking publication
+        timeout-minutes: 4
+        run: npm run mutation:release -- --scope dashboard
+      - id: evidence
+        timeout-minutes: 2
+        name: Retain mutation reports even when the run is incomplete
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: werk-mutation-dashboard-report
+          path: ${{ env.FORGE_PROJECT_PATH }}/reports/mutation/dashboard/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Report advisory infrastructure failures
+        if: always()
+        working-directory: /
+        env:
+          SOURCE_OUTCOME: ${{ steps.source.outcome }}
+          NODE_OUTCOME: ${{ steps.node.outcome }}
+          DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
+          MUTATION_OUTCOME: ${{ steps.mutation.outcome }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+        run: |
+          incomplete=false
+          for outcome in "$SOURCE_OUTCOME" "$NODE_OUTCOME" "$DEPENDENCIES_OUTCOME" "$MUTATION_OUTCOME" "$EVIDENCE_OUTCOME"; do
+            if [ "$outcome" != success ]; then incomplete=true; fi
+          done
+          if [ "$incomplete" = true ]; then
+            echo "::warning title=Mutation testing incomplete::Advisory measurement or artifact retention did not complete. Inspect this job; publication remains independent."
+          fi
+          {
+            echo "### Mutation job infrastructure"
+            echo ""
+            echo "Checkout: $SOURCE_OUTCOME; Node: $NODE_OUTCOME; dependencies: $DEPENDENCIES_OUTCOME; measurement: $MUTATION_OUTCOME; artifact: $EVIDENCE_OUTCOME."
+            echo ""
+            echo "This scoped measurement is advisory. See the mutation summary and werk-mutation-dashboard-report artifact; it does not gate publication."
+          } >> "$GITHUB_STEP_SUMMARY"
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

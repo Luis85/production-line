@@ -185,3 +185,38 @@ test('integration receipts require literal valid commit identities and cannot pr
   const valid = boundaryRequest('sha256-receipt', { submittedAt: since, startedAt: since, completedAt: since }); valid.delivery.localMerge.merged.mergeCommit = 'a'.repeat(64);
   const measured = buildWorkflowMetrics(evidence([valid]), { since, until }, captured); assert.equal(measured.throughput.completed, 1); assert.equal(measured.timing.lead.p50Ms, 0); assert.equal(measured.timing.cycle.p50Ms, 0); assert.equal(measured.coverage.unknownCompletionTimes, 0);
 });
+
+
+test('every observed delivery phase enters its documented workflow stage with age from that phase start', () => {
+  const cases = /** @type {const} */ ([['assessing', 'pre_production'], ['planning', 'pre_production'], ['preparing', 'pre_production'], ['implementing', 'production'], ['repairing', 'production'], ['verifying', 'post_production'], ['packaging', 'post_production']]);
+  for (const [phase, expected] of cases) {
+    const request = boundaryRequest('phase-' + phase); request.phase = 'running'; request.delivery.phase = phase; request.delivery.steps = [{ ...request.delivery.steps[0], phase, startedAt: '2027-01-04T00:00:00Z' }];
+    const report = buildWorkflowMetrics(evidence([request]), { since, until }, captured);
+    assert.equal(report.flow.wip, 1); assert.equal(stage(report, expected).wip, 1); assert.equal(stage(report, expected).age.p50Ms, 7 * 86400000); assert.equal(stage(report, expected).age.unknown, 0);
+    assert.equal(report.flow.stages.filter(value => value.wip > 0).length, 1);
+  }
+});
+
+test('stage pressure reports the oldest known age independently of its median and missing anchors', () => {
+  const younger = boundaryRequest('age-younger'), older = boundaryRequest('age-older'), unknown = boundaryRequest('age-unknown');
+  for (const request of [younger, older]) { request.phase = 'running'; request.delivery.steps = [{ ...request.delivery.steps[0], phase: 'planning', startedAt: request === older ? '2027-01-02T00:00:00Z' : '2027-01-04T00:00:00Z' }]; }
+  unknown.phase = 'ready'; unknown.delivery.steps = [];
+  const report = buildWorkflowMetrics(evidence([younger, older, unknown]), { since, until }, captured), pre = stage(report, 'pre_production');
+  assert.equal(pre.wip, 3); assert.deepEqual(pre.age, { samples: 2, unknown: 1, p50Ms: 7 * 86400000, p95Ms: 9 * 86400000, totalMs: 16 * 86400000 }); assert.equal(pre.oldestAgeMs, 9 * 86400000); assert.equal(stage(report, 'publish').oldestAgeMs, null);
+});
+
+test('retained canonical integration counts once at its earliest confirmed receipt rather than its latest attempt', () => {
+  const request = boundaryRequest('earliest-receipt', { completedAt: '2027-01-06T00:00:00Z' }), previous = structuredClone(request.delivery);
+  previous.id = 'earlier-integrated-run'; previous.localMerge.merged.mergedAt = '2026-12-30T00:00:00Z'; request.deliveryHistory = [previous];
+  const report = buildWorkflowMetrics(evidence([request]), { since, until }, captured);
+  assert.equal(report.throughput.completed, 1); assert.deepEqual(report.throughput.weeks.map(week => week.completed), [1, 0]); assert.equal(report.timing.lead.p50Ms, 29 * 86400000); assert.equal(report.timing.cycle.p50Ms, 15 * 86400000);
+});
+
+test('failure and rework observations respect half-open event boundaries and deduplicate a failed step across journal and run evidence', () => {
+  const request = boundaryRequest('observation-window'); request.updatedAt = until;
+  const events = [boundaryEvent(request, 1, since, 'execution_failed', 'running', 'in_progress'), boundaryEvent(request, 2, '2027-01-10T23:59:59Z', 'review_failed', 'review', 'in_review'), boundaryEvent(request, 3, '2027-01-05T00:00:00Z', 'delivery_step_failed', 'running', 'in_progress'), boundaryEvent(request, 4, '2026-12-27T23:59:59Z', 'review_failed', 'review', 'in_review'), boundaryEvent(request, 5, until, 'execution_failed', 'running', 'in_progress'), boundaryEvent(request, 6, since, 'review_changes_requested', 'review', 'in_review'), boundaryEvent(request, 7, until, 'review_changes_requested', 'review', 'in_review')];
+  events[2].deliveryRunId = request.delivery.id; events[2].deliveryStepId = 'failed-check';
+  request.delivery.steps.push({ ...request.delivery.steps[0], id: 'failed-check', phase: 'verifying', status: 'failed', startedAt: '2027-01-04T00:00:00Z', finishedAt: '2027-01-05T00:00:00Z' }, { ...request.delivery.steps[0], id: 'repair-inside', phase: 'repairing', startedAt: '2027-01-10T23:59:59Z' }, { ...request.delivery.steps[0], id: 'repair-outside', phase: 'repairing', startedAt: until });
+  const report = buildWorkflowMetrics(evidence([request], [...events, events[1]]), { since, until }, captured);
+  assert.deepEqual(report.failures, { requests: 1, observations: 3, measuredRequests: 1, unknownRequests: 0 }); assert.deepEqual(report.rework, { requests: 1, observations: 2, measuredRequests: 1, unknownRequests: 0 });
+});

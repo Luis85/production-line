@@ -13,7 +13,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Changed
 
-- Dashboard mutation testing has a separate three-module advisory scope with retained receipts and residual findings. The corrected-source measurement records 677 assertion kills over 998 mutants (67.84%), with 305 survivors, 14 uncovered and two timeouts; existing authority and workflow baselines remain unchanged.
+- Dashboard mutation testing has a separate three-module advisory scope with retained receipts and residual findings. Four added contracts raise the strict score to 72.04% over 998 mutants, retaining all prior kills and recording 264 survivors, 13 uncovered and two timeouts; an independent advisory CI job retains dashboard reports, and existing authority and workflow baselines remain unchanged.
 
 ## [0.16.0] - 2026-10-25
 

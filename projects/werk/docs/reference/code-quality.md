@@ -60,14 +60,20 @@ run also checks source, selected-test and configuration fingerprints before and
 after measurement. The authority and workflow scopes retain their own targets,
 denominators, evidence and baselines.
 
-The corrected-source measurement on 2026-10-26 completed over 998 mutants:
-677 assertion-killed, 305 survived, 14 uncovered and two timed out, with no
-compile/runtime errors. The strict score is 67.84% (Stryker: 68.04%), below the
-advisory 70% threshold. The retained repository proof is under
-`docs/evidence/local-delivery/mutation-dashboard-v1-2026-10-26/`, including all
-three attempt receipts, complete residual inventories and the test-only status
-comparison. The final source correction changes the earlier 982-mutant universe,
-so its score is reported independently.
+The contract follow-up on 2026-10-26 completed over 998 mutants: 719
+assertion-killed, 264 survived, 13 uncovered and two timed out, with no
+compile/runtime errors. The strict score is 72.04% (Stryker: 72.24%); four added
+contract groups killed 42 more mutants while retaining every previous kill on
+the same three target sources and mutant universe. The retained repository proof
+is under `docs/evidence/local-delivery/mutation-dashboard-v1-followup-2026-10-26/`.
+Earlier receipts and the separate 982-mutant source version remain preserved in
+`docs/evidence/local-delivery/mutation-dashboard-v1-2026-10-26/`.
+
+The release workflow configures an independent advisory dashboard measurement
+for pull requests, tags and manual runs, with a fifteen-minute job allowance
+for setup, installation, the bounded measurement and evidence retention. Its
+`werk-mutation-dashboard-report` artifact contains this scope's reports, and
+publication does not depend on the job.
 
 ## Oxlint's role
 
