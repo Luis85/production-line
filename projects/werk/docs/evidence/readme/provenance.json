@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "version": "0.17.0",
-  "commit": "773dc427539e6d9c7ad371eafe671b810c8d3cf0",
-  "sourceDigest": "260a96f3b88ec3465590e8e498c231a29819c902a03f74ba318fac9b83fb4ac2",
-  "capturedAt": "2026-10-26T17:48:47.572Z",
+  "commit": "1dbe478a5aa8957900123a74933c0af1f8cacd12",
+  "sourceDigest": "c31346b07c3ded98033e620356e92412281f9e542352ef93521b22ecb5dd3b61",
+  "capturedAt": "2026-10-26T18:26:33.056Z",
   "fixtureTime": "2026-10-15T09:30:00.000Z",
   "sampleData": true,
   "qualification": "Every Storybook story and desktop/mobile handbook passed before selection.",
@@ -90,7 +90,7 @@
       "path": "docs/evidence/readme/worker-settings.png",
       "width": 1440,
       "height": 1000,
-      "sha256": "b73066daa5c99df79cb9b3c38f00a57c410effbe84be79dfce3618b187c6e53c",
+      "sha256": "931540d20980556b50bb7418c9dd96d7e31a1d4b6b049e080b94706296157948",
       "capture": "storymap/screenshots/worker-workspace--settings-directory-desktop.png"
     }
   ]

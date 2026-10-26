@@ -1,7 +1,7 @@
 # README screenshots
 
-Generated from the qualified real Vue components for Werk 0.17.0, commit `773dc427539e6d9c7ad371eafe671b810c8d3cf0`.
-Capture: 2026-10-26T17:48:47.572Z. Fixture clock: 2026-10-15T09:30:00.000Z.
+Generated from the qualified real Vue components for Werk 0.17.0, commit `1dbe478a5aa8957900123a74933c0af1f8cacd12`.
+Capture: 2026-10-26T18:26:33.056Z. Fixture clock: 2026-10-15T09:30:00.000Z.
 
 These browser captures use deterministic **sample data**. They do not establish
 live model execution, real account usage, Git publication or human acceptance.
@@ -18,7 +18,7 @@ No screenshot has been retouched; these are the exact qualified PNG bytes.
 | [Settings directory grouping independent worker settings by the task to perform.](worker-settings.png) | `worker-workspace--settings-directory` | desktop | 1440 × 1000 |
 
 [Machine-readable provenance](provenance.json) records source identity and every image hash.
-Source digest: `260a96f3b88ec3465590e8e498c231a29819c902a03f74ba318fac9b83fb4ac2`.
+Source digest: `c31346b07c3ded98033e620356e92412281f9e542352ef93521b22ecb5dd3b61`.
 
-Refresh instructions are maintained in [README generation](https://github.com/Luis85/production-line/blob/773dc427539e6d9c7ad371eafe671b810c8d3cf0/projects/werk/docs/how-to/generate-readme.md).
+Refresh instructions are maintained in [README generation](https://github.com/Luis85/production-line/blob/1dbe478a5aa8957900123a74933c0af1f8cacd12/projects/werk/docs/how-to/generate-readme.md).
 Release generation writes separate artifacts and never commits changes to the source branch.
