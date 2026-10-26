@@ -20,8 +20,8 @@ async function fixture(t, name, ports = {}) {
   const router = { push: async path => navigations.push(path) };
   const document = { getElementById: id => ({ focus: () => focused.push(id), scrollIntoView() {} }) };
   let deactivate, activate;
-  const bindings = { reactive, ref, computed, watch, nextTick, onActivated: callback => { activate = callback; }, onDeactivated: callback => { deactivate = callback; }, useRoute: () => route, useRouter: () => router, state, workspaceAction, request, document, taskStatus: value => value };
-  const exposed = name.startsWith('components') ? 'inspect, closeDetail, readDetail, detail, selectedId, detailLoading, detailError, actionError, action, beginRemoval, removeWorktree, removing, worktreeNotice, openConversation, search, status, archived, visible, canRetry, canManage' : 'chatArchive, taskKind, chatTasks, openChat, chatStatus, clearChatFilters';
+  const bindings = { options: {}, reactive, ref, computed, watch, nextTick, onActivated: callback => { activate = callback; }, onDeactivated: callback => { deactivate = callback; }, useRoute: () => route, useRouter: () => router, state, workspaceAction, request, document, taskStatus: value => value };
+  const exposed = name.startsWith('components') ? 'inspect, closeDetail, readDetail, detail, selectedId, detailLoading, detailError, actionError, action, beginRemoval, removeWorktree, removing, worktreeNotice, openConversation, search, status, archived, visible, canRetry, canManage' : 'chatArchive, taskKind, chatTasks, chatStatus, clearChatFilters';
   const js = ts.transpile(script, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
   const scope = effectScope(); t.after(() => scope.stop());
   const result = scope.run(() => new Function(...Object.keys(bindings), `${js}\nreturn { ${exposed} };`)(...Object.values(bindings)));
@@ -75,17 +75,20 @@ test('review and failure entry links reset stale file filters and file evidence 
   assert.deepEqual(f.visible.value.map(task => task.id), ['a']); assert.equal(f.search.value, ''); assert.equal(f.archived.value, false);
   f.route.query.fileState = 'failed'; await nextTick(); assert.deepEqual(f.visible.value.map(task => task.id), ['b']);
   await f.inspect('b', event); await f.openConversation();
-  assert.deepEqual(f.calls[0], { path: '/api/sessions', body: { action: 'select', id: 'local-b' } }); assert.deepEqual(f.navigations, [{ path: '/taskboard', query: { session: 'local-b' } }]);
+  assert.deepEqual(f.calls[0], { path: '/api/sessions', body: { action: 'select', id: 'local-b' } }); assert.deepEqual(f.navigations, [{ path: '/request', query: { session: 'local-b' } }]);
 });
 
-test('History recovers archived file and orchestrator sessions and filters by task kind', async t => {
+test('History filters retained file and orchestrator sessions without selecting or restoring them', async t => {
   const f = await fixture(t, 'pages/HistoryPage.vue');
   f.state.sessions.records = ['chat', 'local', 'orchestrator'].map((kind, index) => ({ id: kind, taskId: kind, kind, title: kind, archived: index > 0, status: 'completed', createdAt: '2026-10-14T12:00:00Z' }));
   f.chatArchive.value = 'archived'; assert.deepEqual(f.chatTasks.value.map(task => task.id), ['local', 'orchestrator']);
   f.taskKind.value = 'local'; assert.deepEqual(f.chatTasks.value.map(task => task.id), ['local']);
-  await f.openChat('local'); assert.deepEqual(f.calls[0], { path: '/api/sessions', body: { action: 'select', id: 'local' } });
-  assert.deepEqual(f.navigations, [{ path: '/taskboard', query: { session: 'local' } }]);
+  assert.equal(f.state.sessions.records[1].archived, true);
+  f.activate(); await nextTick();
+  assert.deepEqual(f.calls, [], 'Read-only filtering and activation cannot select or restore an archived request');
+  assert.deepEqual(f.navigations, []);
   f.clearChatFilters(); assert.equal(f.chatTasks.value.length, 3);
+  assert.equal(f.state.sessions.records[1].archived, true); assert.deepEqual(f.calls, []);
 });
 
 
@@ -118,7 +121,7 @@ test('failed admission evidence stays inspectable but never retries its unaccept
   assert.equal(f.calls.length, 0);
   await f.openConversation();
   assert.equal(f.calls[0].body.id, 'local-b');
-  assert.deepEqual(f.navigations, [{ path: '/taskboard', query: { session: 'local-b' } }]);
+  assert.deepEqual(f.navigations, [{ path: '/request', query: { session: 'local-b' } }]);
 });
 
 

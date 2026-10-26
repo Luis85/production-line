@@ -97,8 +97,9 @@ checked out at its accepted base commit. The default location is
 `<repository>/.werk/worktrees/<name>`. The worker adds `/.werk/worktrees/` to
 Git's local exclude file, which other tools do not read. Exclude `.werk/` in
 vault linters, search indexes, file watchers and test runners that scan the whole
-project, or set **Settings → Repositories → Task worktree folder** to an absolute
-folder outside every checkout. Its parent folder must exist. On Windows, choose
+project. Retained non-Home workers can set **Settings → Repositories → Task
+worktree folder** to an absolute folder outside every checkout; central Home
+keeps worker-owned worktrees in its private effective state. Its parent folder must exist. On Windows, choose
 a short path. Existing worktrees keep their recorded location after this setting
 changes. See [repository configuration](../reference/configuration.md#assigned-git-repositories).
 
@@ -138,7 +139,7 @@ Back up repositories and retained worktrees separately from private worker state
 
 ## Tool limits
 
-In **Settings → Queue & duration**, configure the accepted invocation budget.
+In **Settings → Execution time limits**, configure the accepted invocation budget.
 Defaults are six hours, 128 tool calls and a five-minute ceiling per command.
 Command presets and CLI grants can set shorter per-tool timeouts in **Settings →
 Tools & MCP**; leaving a timeout blank inherits the global command ceiling. MCP

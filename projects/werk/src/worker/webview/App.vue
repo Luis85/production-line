@@ -22,7 +22,7 @@ const tourSteps: TourStep[] = [
   { title: 'Start on Workboard', text: 'Follow Feature Requests from the shared queue through implementation, review and explicit merge. Needs you collects questions and blockers.', target: '.page-heading', activate: () => router.push('/workboard') },
   { title: 'Add your projects', text: 'One worker serves multiple repositories in Werk Home. Clone a project, review its workflow files, approve the exact policy and recheck setup.', target: '.projects-page', activate: () => router.push('/projects') },
   { title: 'Connect your provider', text: 'Configure the provider CLI and account on this worker. Model execution and GitHub integration are separate choices.', target: '.settings-content', activate: () => router.push('/settings#provider-connections') },
-  { title: 'Create a Feature Request', text: 'Choose New Feature Request on Workboard. Prepare from the project template, check the draft, then explicitly commit and push it into intake.', target: '#new-feature-request', activate: () => router.push('/workboard') },
+  { title: 'Create a Feature Request', text: 'Open the focused request editor, describe the outcome and criteria, then check and publish it to the project’s Git intake.', target: '#new-feature-request-title', activate: () => router.push('/requests/new') },
   { title: 'Understand workflow health', text: 'Workflow measures retained requests, confirmed delivered increments and weekly velocity. Missing business and customer outcomes remain unmeasured.', target: '.workflow-page', activate: () => router.push('/workflow') },
 ];
 const route = useRoute(),
@@ -81,9 +81,9 @@ watch(
   <UApp>
     <AccessPanel
       v-if="!state.unlocked"
-      title="Your worker, ready when you are."
-      lead="Unlock this workspace to create a Feature Request, follow progress, or review a delivered increment."
-      caption="One worker. Multiple projects. Your work stays together."
+      title="Unlock Werk"
+      lead="Open your private worker workspace."
+      caption="Private access to this worker."
     >
       <p v-if="!state.accessChecked" role="status">Checking saved access…</p>
       <form v-else @submit.prevent="connect">

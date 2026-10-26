@@ -1,7 +1,7 @@
 # Monitor long-running worker sessions
 
 A local model invocation has a six-hour execution budget by default. Inspect its
-measurements in **Metrics**; use **Settings → Queue & duration** to adjust the
+measurements in **Worker health**; use **Settings → Execution time limits** to adjust the
 elapsed-time warning and maximum execution duration. The warning defaults to
 one hour; it does not stop work. The maximum is a separate deadline, configurable from one second to 24 hours.
 Provider-side limits can still end an invocation earlier.
@@ -28,7 +28,7 @@ does not implicitly forward every host environment variable.
 
 ## Interpret the measurements
 
-The worker samples every ten seconds. Metrics shows active warnings, measurement
+The worker samples every ten seconds. Worker health shows active warnings, measurement
 age and retained alert history; Workboard shows the active task.
 The measurements describe the **worker Node process**, not the model CLI child,
 remote provider or account. Missing readings remain unavailable. A stale snapshot

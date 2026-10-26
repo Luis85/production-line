@@ -106,6 +106,7 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
   if (candidate?.implementation) {
     if (!candidate.verified) Object.assign(verification, { state: 'blocked', detail: candidate.description });
     else if (!done) Object.assign(verification, { state: 'unknown', detail: 'Required implementation checks passed; completion gate evidence is unavailable.' });
+    else if (acceptanceOnly && !attested) Object.assign(verification, { label: 'Human acceptance', state: 'pending', detail: 'Required checks passed. Your acceptance is not yet recorded.' });
   }
   if (!request && shared?.done) Object.assign(verification, { state: shared.done.passed ? 'complete' : 'blocked', detail: shared.done.passed ? 'The shared completion check passed.' : shared.done.issues.join(' ') || 'The shared completion check has not passed.' });
   const handoff: FeatureReviewStage = { id: 'handoff', label: 'Review handoff', state: 'pending', detail: 'No review handoff is confirmed.' };

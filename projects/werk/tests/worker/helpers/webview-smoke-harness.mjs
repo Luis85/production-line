@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 
 // Isolated real Worker transport and persistence; the executable below is a
 // labelled protocol fixture. No provider login or live inference occurs.
@@ -34,7 +35,7 @@ export async function createHarness() {
   await writeFile(join(repository, 'README.md'), '# Worker UI fixture\nOriginal instructions.\n');
   const patchText = JSON.stringify({ summary: 'Fixture patch for review; no checkout changes or tests were performed.', files: [{ path: 'README.md', content: '# Worker UI fixture\nUpdated task interaction guidance.\n' }] });
   const fixtureCode = `#!${process.execPath}
-if(process.argv.slice(2).join(' ')==='login status'){console.log('Logged in using protocol fixture');process.exit(0)}
+if(process.argv.slice(2).join(' ')==='login status'){console.log('Logged in using ChatGPT');process.exit(0)}
 let input='';for await(const part of process.stdin)input+=part;
 const messages=JSON.parse(input.split('Conversation JSON:\\n').at(-1));
 const latest=messages.at(-1)?.content ?? '';
@@ -47,7 +48,7 @@ setTimeout(()=>{console.log(JSON.stringify({type:'item.completed',item:{type:'ag
   const port = await freePort(), url = `http://127.0.0.1:${port}`;
   const log = await open(join(evidence, 'worker.log'), 'w');
   let worker, browser, token;
-  const result = { checks: [], screenshots: [], pageErrors: [], liveProvider: false };
+  const result = { checks: [], screenshots: [], pageErrors: [], fixtureAdmissions: [], liveProvider: false };
   async function start() {
     worker = spawn(process.execPath, ['werk.mjs', 'worker', 'run', '--state-dir', state, '--status-port', String(port)], { cwd, stdio: ['ignore', log.fd, log.fd] });
     await until(async () => (await fetch(url + '/healthz')).ok, 'isolated worker ready');
@@ -59,11 +60,48 @@ setTimeout(()=>{console.log(JSON.stringify({type:'item.completed',item:{type:'ag
     await Promise.race([new Promise(resolve => worker.once('exit', resolve)), delay(10000)]);
     if (worker.exitCode === null) worker.kill('SIGKILL');
   }
-  async function api(path, body) {
+  async function request(path, body) {
     const response = await fetch(url + path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
-    const value = await response.json();
-    assert.ok(response.ok, `${path}: ${value.error ?? response.status}`);
-    return value;
+    return { ok: response.ok, status: response.status, value: await response.json() };
+  }
+  async function api(path, body) {
+    const response = await request(path, body);
+    assert.ok(response.ok, `${path}: ${response.value.error ?? response.status}`);
+    return response.value;
+  }
+  // Deliberately seeded retained legacy data, never a claim about canonical UI creation.
+  // The real transport, persistence, provider adapter and queue still execute.
+  /** @param {string} title @param {string} message @param {{background?: boolean, files?: {repository: string, paths: string[]}, definitionId?: string, agent?: string, useInstructionsOnly?: boolean}} [options] */
+  async function seedLegacyTask(title, message, options = {}) {
+    const selected = (await api('/api/sessions')).selected;
+    const command = { action: 'create', id: randomUUID(), title, message, provider: 'codex-cli', ...options };
+    const response = await request('/api/tasks', command);
+    assert.ok(response.ok, response.value.error ?? 'Legacy protocol fixture admission failed');
+    let accepted = response.value;
+    if (accepted.preparation) {
+      assert.equal(response.status, 202, 'background preparation is not durable acceptance');
+      assert.equal(command.background, true);
+      assert.ok(command.files);
+      assert.equal(accepted.preparation.id, command.id);
+      assert.equal(accepted.preparation.state, 'preparing');
+      await until(async () => {
+        const detail = await request('/api/tasks', { action: 'get', id: 'local-' + command.id });
+        if (!detail.ok) return false;
+        accepted = detail.value;
+        return !!accepted.session && !!accepted.chat;
+      }, 'retained fixture preparation accepted');
+      assert.equal(accepted.session.id, 'local-' + command.id);
+    }
+    assert.ok(accepted.session && accepted.chat, 'fixture admission has durable session and conversation');
+    assert.equal((await api('/api/sessions')).selected, selected, 'API fixture seeding must not select browser work');
+    result.fixtureAdmissions.push({ title, sessionId: accepted.session.id, kind: command.files ? 'legacy-approved-files' : 'legacy-conversation' });
+    return { sessionId: accepted.session.id, command, detail: accepted };
+  }
+  async function assertLockedTransport() {
+    const response = await fetch(url + '/api/sessions');
+    assert.equal(response.status, 401, 'private API requires bearer or an unlocked browser session');
+    const browserResponse = await browser.contexts()[0].request.get(url + '/api/sessions');
+    assert.equal(browserResponse.status(), 401, 'locked browser has no valid private session cookie');
   }
   async function close(error) {
     if (error) {
@@ -108,7 +146,16 @@ setTimeout(()=>{console.log(JSON.stringify({type:'item.completed',item:{type:'ag
       await page.getByRole('button', { name: 'Refresh worker', exact: true }).click();
       await delay(200);
     }
-    return { page, context, url, evidence, fixture, repository, api, screenshot, unlock, choose, refresh, start, stop, close, result };
+    async function assertPrivateAccess() {
+      const cookies = (await context.cookies(url + '/api')).filter(cookie => cookie.name.startsWith('werk_worker_'));
+      assert.equal(cookies.length, 1, 'unlock establishes one worker browser session');
+      assert.equal(cookies[0].httpOnly, true);
+      assert.equal(cookies[0].sameSite, 'Strict');
+      assert.equal(cookies[0].value === token, false, 'durable access token is not the session cookie');
+      assert.equal(page.url().includes(token), false);
+      assert.equal(await page.evaluate(secret => JSON.stringify([document.body.innerText, document.cookie, { ...localStorage }, { ...sessionStorage }]).includes(secret), token), false, 'durable token is not exposed in workspace content or browser storage');
+    }
+    return { page, context, url, evidence, fixture, repository, api, request, seedLegacyTask, assertLockedTransport, assertPrivateAccess, screenshot, unlock, choose, refresh, start, stop, close, result };
   } catch (error) {
     await close(error);
     throw error;

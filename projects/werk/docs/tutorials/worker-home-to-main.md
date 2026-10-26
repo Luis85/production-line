@@ -59,14 +59,17 @@ before starting a second worker against the same work.
 
 The startup result prints the worker URL and its private `credentialsFile` path. Open that URL and unlock locally using the token in that file. Keep the token outside browser URLs, requests and Git. The printed credential path is not the credential value.
 
-In **Settings → Providers & accounts**, choose Claude Code CLI and the intended authentication mode, inspect its executable/login diagnostics, and check the connection. Review allowed file/command/MCP tools and required project checks. A successful login check does not prove a model call succeeded or grant tool access.
+In **Settings → Provider connections**, choose Claude Code CLI and the intended authentication mode, inspect its executable/login diagnostics, and check the connection. Review allowed file/command/MCP tools and required project checks. A successful login check does not prove a model call succeeded or grant tool access.
 
 Open **Projects → Add a project**, then choose **Clone and add project**. Clone the configured remote into the visible Home project directory. Choose the
 repository/branch, watched Feature Request folder (default `features`) and poll
 interval (default 30 seconds; allowed 1–300 seconds). New project
 registration does not adopt an arbitrary existing checkout. Registration does not opt into GitHub APIs even when the remote URL is hosted on GitHub.
 
-For a fresh worker-owned clone, use **Preview project workflow setup** to inspect the exact target baseline, generated paths and file contents. Approve the displayed commit/push confirmation, then choose **Commit and push project setup**. Existing project files are preserved. After the Git handoff is confirmed, under **Project delivery policy**, choose **Approve this exact policy**, then choose **Recheck project setup** to enable intake. This workflow setup includes `localMerge: true` and leaves GitHub integration absent.
+Choose the registered project from Projects. Its **Workflow files** stage opens
+`/project?project=<id>&step=workflow`. Use **Preview project workflow setup** to inspect the exact target baseline, generated paths and file contents. Approve the displayed commit/push confirmation, then choose **Commit and push project setup**. Existing project files are preserved. After the Git handoff is confirmed, continue to the project's **Policy approval** stage, choose **Approve this exact
+policy**, then continue to **Enable requests** and choose **Recheck project setup**
+to enable intake. This workflow setup includes `localMerge: true` and leaves GitHub integration absent.
 
 A preview or saved policy draft is not a commit, a push or policy approval. A stale checkout, unknown push result, missing template or unapproved policy remains a visible setup hold. Retained legacy project locations stay visible at their verified paths; registration
 does not relocate or duplicate them. GitHub integration remains off unless explicitly configured and approved.
@@ -77,7 +80,7 @@ use the old runtime for recovery/export rather than enabling a second watcher.
 
 ## 3. Create the Feature Request in the webview
 
-Open **Workboard → New Feature Request**, select the registered project and one of its committed templates, and describe a small observable change. Choose Low, Medium or High priority; Low is the default. Include acceptance criteria, approved file scope, a verification plan and relevant context.
+Open **Workboard → New Feature Request** (`/requests/new`), select the registered project and one of its committed templates, and describe a small observable change. Choose Low, Medium or High priority; Low is the default. Include acceptance criteria, approved file scope, a verification plan and relevant context.
 
 Choose **Prepare request**, inspect the resulting draft and use its readiness check. In shared mode, **Save draft to Git** retains unfinished authoring; **Mark ready and publish** commits/pushes the ready request. The worker executes only after the shared handoff and claim are confirmed. New Home project work uses the shared Git authoring/claim handoff; it is not a
 generic local-chat submission.
@@ -86,7 +89,10 @@ If preparation/readiness reports a blocker, resolve it on that same request. A s
 
 ## 4. Observe implementation and Git updates
 
-Follow the request on the Kanban board and open its detail. The **Delivery progress**, **Retained Git checkpoints** and **Request activity**
+Choose the request from Workboard. Its existing conversation opens in a focused
+request view (`/request?session=<id>`); pre-admission shared requests use the exact
+project/request query instead. Open Review when its current candidate needs a
+decision. Required checks and pending human acceptance are separate facts. The **Delivery progress**, **Retained Git checkpoints** and **Request activity**
 disclosures show the persisted phase, candidate/evidence identities and required next action. Use **Worker updates** to open the request review from its notification. Inspect Git commit/push observations and the original Feature Request's generated status rather than treating a notification alone as proof of completion.
 
 The worker prepares an isolated worktree, retains its start prompt, invokes the approved provider and runs independent checks. Shared Git uses committed requests, claims, progress and review handoffs; pull the watched branch in another clone to inspect those Markdown updates. The worker's execution workspace is separate from the main checkout it may later merge into.

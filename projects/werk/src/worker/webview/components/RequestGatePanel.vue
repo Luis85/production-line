@@ -16,7 +16,7 @@ import DeliveryHumanReview from './DeliveryHumanReview.vue';
 import MessageContent from './MessageContent.vue';
 import type { WorkerRequest } from '../../application/request-gates';
 import { useRequestGatePanel } from './useRequestGatePanel';
-const props = defineProps<{ requestId?: string; sessionId?: string; featureSource?: string; summary?: boolean; disabled?: boolean }>();
+const props = defineProps<{ requestId?: string; sessionId?: string; featureSource?: string; summary?: boolean; focused?: boolean; disabled?: boolean }>();
 const emit = defineEmits<{ change: [WorkerRequest | null] }>();
 const {
   sharedRequest, scopeMutable, activeExecution, activeReview, attest, busy, canAttest,
@@ -27,8 +27,8 @@ const {
 } = useRequestGatePanel(props, emit);
 </script>
 <template>
-  <section v-if="view || loading || error" class="request-gate-panel" aria-labelledby="request-gate-title">
-    <div class="request-gate-heading">
+  <section v-if="view || loading || error" class="request-gate-panel" :aria-labelledby="props.focused ? undefined : 'request-gate-title'" :aria-label="props.focused ? 'Review decision controls' : undefined">
+    <div v-if="!props.focused" class="request-gate-heading">
       <div>
         <h2 id="request-gate-title">{{ props.summary === false ? 'Review actions' : 'Feature Request review' }}</h2>
         <p v-if="view && props.summary !== false">{{ phaseLabel(view.phase) }} · input revision {{ view.inputRevision }}</p>
@@ -50,7 +50,6 @@ const {
         />
       </div>
       <div v-if="props.summary !== false" class="request-next-step">
-        <p class="request-next-label">Next step</p>
         <h3>{{ review.nextStep.title }}</h3>
         <p>{{ review.nextStep.description }}</p>
         <div class="request-gate-badges" aria-label="Current request checks">
@@ -63,9 +62,15 @@ const {
         <UButton variant="outline" :loading="isPending('retry')" :disabled="busy" @click="send(operation)">Retry saved action</UButton>
       </div>
       <WorkflowTimeline v-if="view.delivery && props.summary !== false" :subject="view" />
-      <DeliveryControls v-if="view.delivery" :run="view.delivery" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="deliveryCommand" />
+      <details v-if="view.delivery && props.focused" :open="review.nextStep.action?.kind === 'delivery_controls'"><summary>Execution controls</summary><DeliveryControls :run="view.delivery" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="deliveryCommand" /></details>
+      <DeliveryControls v-else-if="view.delivery" :run="view.delivery" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="deliveryCommand" />
+      <details v-if="props.focused && view.delivery" :open="!canAttest && ['inspect_checks', 'review_request'].includes(review.nextStep.action?.kind || '')"><summary>Readiness and criterion decisions</summary>
       <DeliveryReadinessPanel :subject="view" :evaluation="currentEvaluation('ready')" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
       <DeliveryCriterionDecisions :subject="view" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
+      </details><template v-else>
+      <DeliveryReadinessPanel :subject="view" :evaluation="currentEvaluation('ready')" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
+      <DeliveryCriterionDecisions :subject="view" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
+      </template>
       <form v-if="canAttest" id="request-attestation" class="request-attestation" @submit.prevent="attest">
         <h3>Record your review</h3>
         <p>This request requires human acceptance. Review its result and evidence, then record your review for this exact input and output.</p>
@@ -80,7 +85,9 @@ const {
           :readonly="busy"
           @update:model-value="setDraft('attestation', String($event))"
         />
+        <details class="review-time"><summary>Record review time · optional</summary>
         <label for="request-review-minutes">Time spent reviewing · optional minutes</label><input id="request-review-minutes" type="number" min="0" max="1440" step="any" :value="draft('review-minutes')" :readonly="busy" @input="setDraft('review-minutes', ($event.target as HTMLInputElement).value)" /><p v-if="!reportedReviewMinutes(draft('review-minutes')).valid" class="error-text">Enter a number from 0 to 1,440 minutes, or leave it blank.</p><p class="request-gate-note">Recorded as your estimate, separately from elapsed time with this page open.</p>
+        </details>
         <p class="request-gate-note">Recording acceptance re-evaluates the saved completion evidence. It does not run verification commands or merge changes.</p>
         <p v-if="view.delivery?.review && !humanReviewReady" class="request-gate-note">Acceptance requires recorded passing evidence or a separate current policy-authorized decision for each required criterion. Record explicit observations for remaining human criteria.</p>
         <div class="request-gate-actions"><UButton type="submit" :disabled="!mutable || !reportedReviewMinutes(draft('review-minutes')).valid || !draft('attestation').trim() || !humanReviewReady" :loading="isPending('attest')">Record acceptance</UButton><UButton v-if="view.delivery?.review" type="button" color="neutral" variant="outline" :disabled="!mutable || !reportedReviewMinutes(draft('review-minutes')).valid || !draft('attestation').trim()" :loading="isPending('request_changes')" @click="requestChanges">Request changes</UButton></div>
@@ -95,7 +102,7 @@ const {
       <p v-if="pendingModel">The model is waiting for input. Answer its checkpoint in the interaction or the linked Task note.</p>
       <p v-if="activeExecution && !view.delivery">The worker is {{ view.execution?.status === 'prepared' ? 'queued' : 'running' }} with its accepted scope. Its task controls can stop the invocation.</p>
       <p v-if="activeReview && !view.delivery" role="status">An instruction review or proposal is queued or running. It cannot accept its own proposal or satisfy verified checks.</p>
-      <div v-if="!view.delivery && !['done', 'cancelled'].includes(view.phase) && !pendingModel && !activeExecution && !activeReview" class="request-gate-actions">
+      <div v-if="!view.delivery && !['done', 'cancelled'].includes(view.phase) && !pendingModel && !activeExecution && !activeReview && (!props.focused || !canAttest)" class="request-gate-actions">
         <UButton
           v-if="scopeMutable && stage === 'ready' && !view.owner.remote"
           :disabled="!mutable"
@@ -146,6 +153,7 @@ const {
       </details>
       <details class="request-advanced">
         <summary>Advanced request controls</summary>
+        <UButton v-if="props.focused" variant="outline" :loading="loading" :disabled="busy" @click="load(true)">Refresh request details</UButton>
         <p v-if="scopeMutable">Rework owner: {{ view.assignee === 'operator' ? 'Human operator' : 'Model' }}. Instruction proposals change the request text; they do not implement a coding fix.</p>
         <div v-if="scopeMutable && !['done', 'cancelled'].includes(view.phase)" class="request-gate-actions">
           <UButton

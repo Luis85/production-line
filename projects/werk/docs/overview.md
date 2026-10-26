@@ -186,18 +186,22 @@ does not merge the feature branch.
 
 ## Inspect and configure the worker
 
-The **Workboard** leads with Feature Requests, live progress and review.
-**Projects** keeps visible clone paths and guided setup one click away. **Workflow** shows
-recorded delivery stages, confirmed-increment velocity and measurement coverage.
-Secondary **Metrics** explains measured consumption and execution activity; **History**
-keeps previous runs and their evidence. **Settings** holds the worker's operating
-configuration.
+Each focused view serves one user goal. **Workboard** helps choose the next request
+and leads with work needing your input. **New Feature Request** prepares and publishes
+one request; its conversation and **Review** have separate focused views.
+**Projects** is the project directory: adding a clone, publishing workflow files,
+approving policy and enabling intake each have an explicit next step.
+**Workflow** explains recorded delivery health, with delivery-quality evidence in a
+separate view. **Worker health** explains resources and consumption. **History**
+inspects retained evidence without selecting or restoring archived requests.
+**Settings** first helps you choose a setting, then opens one independent editor;
+unsent edits survive navigation within the unlocked tab.
 
 <!-- readme-image: worker-metrics -->
 
 For development servers and other long-running project services, configure named
 service presets explicitly. The worker supervises them in the request’s pinned
-worktree, with bounded lifetime and restart limits. **Metrics → Processes** shows
+worktree, with bounded lifetime and restart limits. **Worker health → Processes** shows
 owned services, observed resource use and stop/restart controls; missing operating
 system measurements stay visible as unavailable. See
 [manage worker processes](how-to/manage-worker-processes.md).

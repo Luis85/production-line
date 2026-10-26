@@ -7,10 +7,10 @@ This optional extension targets a native Windows worker using Claude Code CLI an
 ## Prepare the worker and project
 
 1. Install a prebuilt worker with [project worker setup](project-worker.md) and use Node 24.x. Keep private worker state separate from shared Git content.
-2. Configure Claude Code CLI in the account that runs the worker and check it in **Settings → Providers & accounts**. Review approved file/command/MCP access independently of provider authentication.
+2. Configure Claude Code CLI in the account that runs the worker and check it in **Settings → Provider connections**. Review approved file/command/MCP access independently of provider authentication.
 3. Register the remote project through managed-project settings, or explicitly adopt the intended existing checkout. Choose its shared branch and request directory. A registration failure keeps actionable diagnostics; it does not authorize changing an unrelated checkout.
 4. For this optional integration, authenticate Git and GitHub CLI in that same worker account. The worker uses their official host authentication. Never copy credentials into a Feature Request, prompt, policy, URL or release asset.
-5. Commit the project's template, readiness/completion rules, approved build/check configuration and `.werk/delivery-policy.json`. Approve the exact displayed policy digest in **Settings → Project delivery**.
+5. Commit the project's template, readiness/completion rules, approved build/check configuration and `.werk/delivery-policy.json`. Approve the exact displayed policy digest in the selected project's **Policy approval** view.
 
 A managed clone lives in `<state-dir>/projects/<project-id>/checkout`. A registered project is not automatically ready for execution: missing templates, unapproved policy, unavailable tools and unresolved readiness still require action.
 

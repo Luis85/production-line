@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-26",
+  "candidate": "polished working tree before commit; no clean-head claim",
+  "liveProvider": false,
+  "storyConfirmation": {
+    "initialCases": 68,
+    "initialPassing": 64,
+    "correctedReruns": [
+      {
+        "id": "worker-main-checkout-workflow--first-worker-home",
+        "width": 1440,
+        "ready": true,
+        "overflow": false,
+        "errors": [],
+        "timeout": ""
+      },
+      {
+        "id": "worker-project-goals--keep-recovery-with-its-project",
+        "width": 1440,
+        "ready": true,
+        "overflow": false,
+        "errors": [],
+        "timeout": ""
+      },
+      {
+        "id": "worker-main-checkout-workflow--first-worker-home",
+        "width": 390,
+        "ready": true,
+        "overflow": false,
+        "errors": [],
+        "timeout": ""
+      },
+      {
+        "id": "worker-project-goals--keep-recovery-with-its-project",
+        "width": 390,
+        "ready": true,
+        "overflow": false,
+        "errors": [],
+        "timeout": ""
+      }
+    ]
+  },
+  "sourceBrowser": {
+    "checks": [
+      "private unlock, invalid token, Workboard default, reload keeps independent HttpOnly access; durable token absent from URL/storage/cookie",
+      "Settings directory opens independent provider/default goals; saved provider sign-in probe and inert definition preview/import",
+      "labelled legacy fixture admission stays idempotent with frozen definition/model; exact Markdown download, busy follow-up gating, isolated drafts and full-capacity admission refusal retain accepted work",
+      "Workboard pause preserves active task; request route distinguishes stopping active work from cancelling queued work",
+      "request follow-up preserves draft/reading position on rejection, scrolls after success, keeps exact session; formatted output/code copy and inert provider HTML",
+      "Workboard opens exact checkpoint; choice never auto-submits, answer draft survives navigation, paused queue holds continuation, lost acknowledgement retries the identical answer once",
+      "Workboard Board/List/search and desktop/tablet/mobile bounds; canonical creation has explicit setup boundary; focused mobile request, composer focus and retained per-request draft",
+      "History Inspect request is read-only for archived exact evidence; worker health owns resources without configuration forms or request editing",
+      "Settings directory and separate capacity/time/default goals; navigation-retained drafts, CAS stale-save refusal, explicit reload, exact uncertain-save retry, duration save and mobile navigation",
+      "tour, worker restart relocks and preserves transcript/draft; exact legacy bookmark opens focused request, plain Chat redirects to Workboard; explicit Lock clears draft and survives reload",
+      "labelled approved-file legacy fixture yields unapplied patch; Workboard exact file/session-only Review preserves scope and selection; explicit conversation action keeps exact identity"
+    ],
+    "screenshots": [
+      "login-desktop",
+      "login-mobile",
+      "definition-preview-desktop",
+      "running-request-desktop",
+      "checkpoint-uncertain-desktop",
+      "search-list-desktop",
+      "workboard-desktop",
+      "workboard-tablet",
+      "workboard-mobile",
+      "request-mobile",
+      "history-inspected-desktop",
+      "worker-health-desktop",
+      "settings-queue-stale-desktop",
+      "settings-duration-desktop",
+      "settings-duration-mobile",
+      "settings-consumption-mobile",
+      "tour-desktop",
+      "file-patch-review-desktop",
+      "file-patch-review-mobile"
+    ],
+    "pageErrors": [],
+    "fixtureAdmissions": [
+      {
+        "title": "Review worker lifecycle",
+        "sessionId": "2bc2b08e-378f-4c21-bb16-8a132b1194cc",
+        "kind": "legacy-conversation"
+      },
+      {
+        "title": "Prepare release notes",
+        "sessionId": "e2f73dad-ba9b-443c-b3a2-878b23ca26de",
+        "kind": "legacy-conversation"
+      },
+      {
+        "title": "Review task results",
+        "sessionId": "eed6659e-dfa1-4da2-8a79-d8a4f2e9c7bd",
+        "kind": "legacy-conversation"
+      },
+      {
+        "title": "Choose delivery target",
+        "sessionId": "b15bb943-2506-4e67-95b6-7ca1ff766e1d",
+        "kind": "legacy-conversation"
+      },
+      {
+        "title": "Review navigation patch",
+        "sessionId": "local-6434359c-92fe-4dd6-a695-31e002799108",
+        "kind": "legacy-approved-files"
+      }
+    ],
+    "liveProvider": false,
+    "retiredContracts": [
+      "Inline generic New task intake, optional task tabs and generic intake draft were deliberately removed from the product. API fixture seeding retains legacy lifecycle coverage; worker-home-browser.mjs qualifies real canonical project/template/prepare/publish creation."
+    ]
+  },
+  "extractedHomeBrowser": {
+    "fixture": "Deterministic Claude CLI protocol; no real provider login or inference",
+    "liveProvider": false,
+    "checks": [
+      "Verified archive starts in an empty dedicated home and unlocks through the real browser without source/npm/init.",
+      "Browser clones and acknowledges the project, publishes its workflow after consent, approves the exact scoped policy, and explicitly enables intake.",
+      "Browser prepares, completes, checks and commits/pushes a ready Feature Request before any inference.",
+      "Real candidate tools, committed verification, feature commit/push and Markdown pull request appear before browser acceptance; explicit exact-main consent merges into checkout."
+    ],
+    "screenshots": [
+      "01-first-worker-home",
+      "01a-project-ready",
+      "02-published-feature-request",
+      "03-taskboard-in-progress",
+      "04-taskboard-review-ready",
+      "05-markdown-candidate-review",
+      "06-main-checkout-merge-confirmed"
+    ],
+    "pageErrors": [],
+    "version": "0.16.0",
+    "sourceCommit": null,
+    "archiveSha256": "65f5f69e6d655f21eb62ffbecfb21e665684191c13e4f755e876b263af429d01",
+    "manifestSha256": "7f03351792974a8cfa4b7fbfea348f132bef31ddd86e0028eae8e5e840ce6b25",
+    "candidateCommit": "0d7a6cddbabebd3acd98b7fa747bd95f08a75391",
+    "publishedFeatureCommit": "d9f5cd44771ca780acb197f3095125bf99da00b5",
+    "mergedCommit": "0d7a6cddbabebd3acd98b7fa747bd95f08a75391",
+    "reviewNote": "feature-reviews/fr-f3a21c9e80bbf57fbd37be00-0a62c32a0f70.md",
+    "providerInvocations": [
+      {
+        "fixture": true,
+        "mode": "ready-review"
+      },
+      {
+        "fixture": true,
+        "mode": "candidate-tools"
+      }
+    ]
+  }
+}

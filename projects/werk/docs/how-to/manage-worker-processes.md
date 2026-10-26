@@ -1,6 +1,6 @@
 # Manage development services and worker processes
 
-Use **Metrics → Services & execution processes** to inspect processes started for
+Use **Worker health → Services & execution processes** to inspect processes started for
 local Feature Requests. A development service, such as a preview server or
 watcher, can remain available while the team reviews the result. Finite provider,
 command, MCP and Git executions keep their existing deadlines and cancellation
@@ -23,7 +23,7 @@ behavior.
 5. Enable both **Allow models to manage development services** and the preset's
    individual grant, then save tool access. Resume new starts.
 6. Ask the Feature Request to use the preset when its preview or watcher is
-   needed. Inspect its service card in Metrics and follow the Feature Request
+   needed. Inspect its service card in Worker health and follow the Feature Request
    link to see the owning work.
 
 The grant starts disabled. An ordinary command preset does not authorize a

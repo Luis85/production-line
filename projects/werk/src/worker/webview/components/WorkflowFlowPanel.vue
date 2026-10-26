@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { WorkflowMetricsReport } from '../../application/workflow-metrics-contracts';
-import { workflowDuration, workflowUtcDate } from '../workflow-dashboard';
+import { workflowDuration } from '../workflow-dashboard';
 const props = defineProps<{ flow: WorkflowMetricsReport['flow'] }>();
 const stages = computed(() => props.flow.stages.filter(stage => stage.id !== 'unknown'));
 const unknown = computed(() => props.flow.stages.find(stage => stage.id === 'unknown'));
@@ -11,10 +11,9 @@ const unknown = computed(() => props.flow.stages.find(stage => stage.id === 'unk
     <header>
 <div>
 <h2 id="workflow-flow-title">Observed workflow</h2>
-<p>Requests in progress as of {{ workflowUtcDate(flow.asOf) }} UTC. Includes all submission dates for the selected project.</p>
+<p>Current requests across all submission dates.</p>
 </div>
-<p class="flow-total">
-<strong>{{ flow.wip }}</strong> in progress · <strong>{{ flow.blocked }}</strong> blocked · {{ flow.blockedUnknown }} blocker state unknown</p>
+
 </header>
     <p v-if="flow.unknownState" class="flow-gap" role="status">{{ flow.unknownState }} historical request states could not be reconstructed at this observation time.</p>
     <ol class="stage-rail" aria-label="Feature Request delivery stages">
@@ -28,14 +27,14 @@ const unknown = computed(() => props.flow.stages.find(stage => stage.id === 'unk
         <p v-if="stage.id === 'build' || stage.id === 'publish'" class="stage-note">Optional release policy</p>
 <p v-else-if="stage.id === 'review'" class="stage-note">Human acceptance</p>
 <p v-else-if="stage.id === 'merge'" class="stage-note">Explicit integration approval</p>
-        <p class="stage-blocked">{{ stage.blocked }} blocked<template v-if="stage.blockedUnknown"> · {{ stage.blockedUnknown }} unknown</template>
+        <p v-if="stage.blocked || stage.blockedUnknown" class="stage-blocked">{{ stage.blocked }} blocked<template v-if="stage.blockedUnknown"> · {{ stage.blockedUnknown }} unknown</template>
 </p>
         <p v-if="stage.wip" class="stage-age">Oldest in stage {{ workflowDuration(stage.oldestAgeMs) }}</p>
-<p v-if="stage.wip" class="stage-samples">{{ stage.age.samples }} {{ stage.age.samples === 1 ? 'age measured' : 'ages measured' }} · {{ stage.age.unknown }} unknown</p>
+<p v-if="stage.wip && stage.age.unknown" class="stage-samples">{{ stage.age.samples }} {{ stage.age.samples === 1 ? 'age measured' : 'ages measured' }} · {{ stage.age.unknown }} unknown</p>
       </li>
     </ol>
     <p v-if="unknown?.wip" class="flow-gap" role="status">{{ unknown.wip }} {{ unknown.wip === 1 ? 'request has' : 'requests have' }} an unmapped retained stage. Missing workflow evidence is not treated as completed work.</p>
-    <p class="flow-definition">Review acceptance and merge are separate decisions. Merge uses the assigned main checkout, or an explicitly approved GitHub release workflow. Build and Publish require an opted-in release policy. Age begins at recorded stage entry, or submission for Intake.</p>
+    <details class="flow-definition"><summary>How stages and ages are counted</summary><p>Review acceptance and merge are separate decisions. Merge uses the assigned main checkout, or an explicitly approved GitHub release workflow. Build and Publish require an opted-in release policy. Age begins at recorded stage entry, or submission for Intake.</p><dl><div v-for="stage in stages" :key="stage.id"><dt>{{ stage.label }}</dt><dd>{{ stage.age.samples }} ages measured · {{ stage.age.unknown }} unknown</dd></div></dl></details>
   </section>
 </template>
 <style scoped>
@@ -68,15 +67,6 @@ header p  {
   margin-top:var(--space-2);
 
 }
-.flow-total  {
-   font-variant-numeric:tabular-nums;
-
-}
-.flow-total strong  {
-   color:var(--ui-text);
-  font-weight:650;
-
-}
 .stage-rail  {
    display:grid;
   grid-template-columns:repeat(8,minmax(0,1fr));
@@ -93,7 +83,7 @@ header p  {
 
 }
 .stage-name  {
-   min-height:58px;
+   min-height:44px;
   display:flex;
   gap:var(--space-2);
   align-items:flex-start;
@@ -145,13 +135,10 @@ h3  {
 
 }
 .stage-note  {
-   min-height:2.8em;
+   min-height:0;
 
 }
-.stage-rail li:not(:has(.stage-note)) .stage-count  {
-   margin-bottom:calc(var(--space-2) + 2.8em);
-
-}
+.stage-count { margin-block:var(--space-3); }
 .has-blockers .stage-blocked,.flow-gap  {
    color:var(--ui-warning);
 
@@ -172,6 +159,7 @@ h3  {
 }
 
 }
+.flow-definition summary { min-height:44px;cursor:pointer;padding-block:var(--space-3); }.flow-definition dl { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-3); }.flow-definition dd { margin:var(--space-1) 0 0;color:var(--ui-text-muted); }
 @media(max-width:600px)  {
    .stage-rail  {
    grid-template-columns:repeat(2,minmax(0,1fr));

@@ -25,10 +25,12 @@ Open **Projects → Add a project**. Clone the configured remote into the visibl
 checkouts. Choose the watched Feature Request folder and polling interval.
 Registration never grants GitHub API integration.
 
-For a worker-owned clone, preview the missing workflow files and exact target
-branch; approve **Commit and push project setup** only after inspecting that
-preview. Separately approve the exact committed delivery policy, then recheck
-project setup. Existing custom workflow files are preserved. The generated policy
+Choose the project from Projects. Its **Workflow files** stage
+(`/project?project=<id>&step=workflow`) previews missing files and the exact target
+branch. Approve **Commit and push project setup** only after inspecting that
+preview. Continue to **Policy approval** (`step=policy`) to inspect and approve
+the exact committed delivery policy, then **Enable requests** (`step=enable`) to
+recheck project setup. The project identity remains fixed across those views. Existing custom workflow files are preserved. The generated policy
 requires explicit local-main merge confirmation and leaves GitHub integration off.
 Existing retained legacy locations remain at their verified paths.
 
@@ -49,8 +51,11 @@ provider state and journals belong to the worker's private effective state path.
 ## Choose or change the feature folder
 
 Choose the project's feature directory during registration and commit its
-workflow configuration. Existing requests and accepted evidence retain their
-saved paths. Changing a path is not migration: do not move a watched queue or
+workflow configuration. Later, choose the project and **Configure request
+polling** (`/project?project=<id>&step=intake`) to edit that project's binding.
+**Edit project delivery policy** (`step=edit`) separately edits a draft; saving it
+does not commit or approve authority. Existing requests and accepted evidence
+retain their saved paths. Changing a path is not migration: do not move a watched queue or
 retained evidence while work is active. Inspect the saved project/setup view and
 resolve any drift before enabling intake again.
 
@@ -126,7 +131,7 @@ Home launcher itself requires Node 24. Downloaded applications are prebuilt.
 
 ## Add an orchestrator later
 
-Connect an independently running Orchestrator in **Settings → Orchestrator**.
+Connect an independently running Orchestrator in **Settings → Orchestrator connection**.
 Enrollment does not transfer project ownership or opt into live host integration.
 See [independent components](assemble-independent-components.md).
 

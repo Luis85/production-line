@@ -17,7 +17,7 @@ import MessageContent from './MessageContent.vue';
 import type { InteractionView, InteractionTurn } from '../../application/interactions';
 import { state, request, refresh, date } from '../store';
 const props = defineProps<{ currentStatus?: string }>();
-const emit = defineEmits<{ change: [InteractionView | null]; busy: [boolean] }>();
+const emit = defineEmits<{ change: [InteractionView | null]; busy: [boolean]; recovery: [{ sessionId: string; required: boolean }] }>();
 const view = ref<InteractionView | null>(null), lastTurn = ref<InteractionTurn | null>(null);
 const reading = ref(false), loading = ref(false), busy = ref(false), active = ref(true), error = ref(''), readError = ref(''), notice = ref('');
 let generation = 0, consumptionKey = '';
@@ -37,6 +37,7 @@ const draftKey = computed(() => `${sessionId.value}:${checkpoint.value}`);
 const draft = computed({ get: () => answerDrafts.get(draftKey.value) ?? '', set: value => answerDrafts.set(draftKey.value, value) });
 const earlierDrafts = computed(() => [...answerDrafts.entries()].filter(([key, text]) => key.startsWith(sessionId.value + ':') && key !== draftKey.value && text.trim()).map(([key, text]) => ({ key, text })));
 const retry = computed(() => [...operations.entries()].find(([, command]) => command.sessionId === sessionId.value));
+watch([sessionId, () => state.unlocked, () => !!retry.value], ([id, unlocked, required]) => { emit('recovery', { sessionId: id, required: unlocked && required }); }, { immediate: true, flush: 'sync' });
 const mutationBlocked = computed(() => busy.value || loading.value || !!readError.value || !!retry.value || responsePending.value);
 const legacyStopped = computed(() => !sharedRequest.value && !view.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(props.currentStatus ?? ''));
 const nativeContinuation = computed(() => lastTurn.value?.dispatch?.schemaVersion === 2 && !!lastTurn.value.dispatch.session && lastTurn.value.dispatch.capabilities.nativeResume && lastTurn.value.dispatch.policy.continuation === 'provider_session');
@@ -127,6 +128,7 @@ onDeactivated(() => { active.value = false; generation++; reading.value = false;
   </template>
   <p v-if="readError" role="alert" class="error-text">{{ readError }} Task checkpoint data may be stale. Refresh the task state to retry.</p>
   <p v-if="error" role="alert" class="error-text">{{ error }}</p><p v-if="notice" role="status" class="page-note">{{ notice }}</p>
+  <p v-if="retry && view && !view.pending && !resumable" class="checkpoint-recovery-note" role="status">Your last response is still unconfirmed. Retry the same request before sending another response.</p>
   <div v-if="retry" class="actions"><UButton color="neutral" variant="outline" :loading="busy" @click="retryCommand">Retry the same request</UButton><UButton color="neutral" variant="ghost" :disabled="busy" :loading="loading" @click="load(true)">Refresh task state</UButton></div>
   <details v-if="earlierDrafts.length" class="checkpoint-turn-history"><summary>Earlier unsent drafts · {{ earlierDrafts.length }}</summary><p class="page-note">These drafts belong to earlier checkpoints in this task. Review the current question before reusing one.</p><div v-for="earlier in earlierDrafts" :key="earlier.key"><pre>{{ earlier.text }}</pre><UButton color="neutral" variant="outline" :disabled="busy || !!retry || !checkpoint" @click="useChoice(earlier.text)">Use this draft</UButton></div></details>
   <div v-if="lastTurn?.usage" class="turn-consumption"><h4>Latest turn consumption</h4><dl class="facts"><div><dt>Input / output tokens</dt><dd>{{ measured(lastTurn.usage.inputTokens) }} / {{ measured(lastTurn.usage.outputTokens) }}</dd></div><div><dt>{{ costHeading(lastTurn.usage.costBasis) }}</dt><dd>{{ cost(lastTurn.usage.providerReportedCostUsd) }}</dd></div></dl><p class="page-note">{{ lastTurn.usage.reason || 'Reported by the provider for this turn.' }} Missing measurements are unavailable, never zero. Reported costs are not a verified invoice or a subscription balance.</p><UButton v-if="lastTurn.runId" :to="'/history?view=runs&runSession=' + encodeURIComponent(sessionId) + '&runId=' + encodeURIComponent(lastTurn.runId)" color="neutral" variant="ghost">Inspect this turn’s evidence</UButton></div>

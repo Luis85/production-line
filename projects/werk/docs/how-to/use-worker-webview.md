@@ -1,27 +1,43 @@
 # Use the worker webview
 
 Extract a verified prebuilt archive directly into a fresh WerkHome and start
-`node worker.mjs`. Node24 and Git are required; no npm install, source checkout or
+`node worker.mjs`. Node 24 and Git are required; no npm install, source checkout or
 project-local worker is needed. The root launcher's directory anchors Home,
 regardless of cwd. Startup prints the secure local URL and private credential-file
 path. Fresh private state is `Home/state/worker`; cloned repositories are visible
 at `Home/projects/<id>`, and replaceable application files are in `Home/runtime`.
 
-Four primary pages organize the workspace:
+Four primary navigation destinations lead to focused views. Every focused view
+has one operator goal:
 
-| Page | Use it to |
+| Destination | Use it to |
 | --- | --- |
-| Workboard · `/workboard` | Prepare Feature Requests, follow live stages and open review/merge actions. |
-| Projects · `/projects` | Register a remote clone, inspect its visible path and complete guarded workflow setup. |
-| Workflow · `/workflow` | Inspect recorded delivery flow, weekly increments and measurement coverage. |
-| Settings · `/settings` | Configure provider accounts, capacity, tools and optional integrations. |
+| Workboard · `/workboard` | Choose the next request to advance; Needs you comes first. |
+| Projects · `/projects` | Choose a project and open its next setup action. |
+| Workflow · `/workflow` | Understand recorded flow and confirmed delivery velocity. |
+| Settings · `/settings` | Choose one independently saved worker setting. |
 
-Workboard opens after unlock/setup. **New Feature Request** opens project Git
-authoring on demand. Metrics (`/dashboard`) and History (`/history`) remain
-secondary evidence links. A request opens its own Review page for diff, checks and
-the current human decision. `/taskboard` and `/chat` bookmarks redirect to
-Workboard preserving their queries; `/monitoring-status` opens Metrics. Choose
-**Tour** for a replayable introduction that changes no worker configuration.
+Workboard opens after unlock/setup. **New Feature Request** opens
+`/requests/new` for preparation, readiness and explicit Git publication; project
+and draft identity remain in its query. An existing conversation opens at
+`/request?session=<id>`. A pre-admission shared request opens at
+`/request?project=<id>&request=<name>`, including its Ready Check. Review
+(`/review`) owns the exact candidate decision. Retained file-task priority, retry
+and cleanup open `/request/maintenance?fileId=<id>`.
+
+**Add a project** opens `/projects/new`. The chosen project's
+`/project?project=<id>&step=workflow|policy|enable|edit|intake` views separately
+prepare workflow files, approve committed policy, recheck readiness, edit a policy
+draft or configure request polling. **Delivery quality evidence**
+(`/workflow/evidence`) inspects outcome cohorts. **Worker health** (`/dashboard`)
+shows resources and consumption; **History** (`/history`) opens read-only evidence.
+
+Legacy `/taskboard`, `/chat` and Workboard session bookmarks preserve the exact
+session at `/request`; unscoped bookmarks open Workboard. Old Projects project
+queries open the selected project; project plus request opens that request.
+`/monitoring-status` opens Worker health. Earlier settings bookmarks reach their
+focused editor or project workflow. Choose **Tour** for a replayable introduction
+that changes no worker configuration.
 
 ## Use requests from project files
 
@@ -68,7 +84,14 @@ Deleting that file cannot override a configured environment token. See
 
 ## Connect Claude, Codex or Cursor
 
-Use **Settings → Providers & accounts**.
+Use **Settings → Provider connections**. Settings itself is a grouped directory;
+each selected destination opens one editor with its own save. Default provider,
+Queue capacity, Execution time limits and Token allowance are separate editors.
+**Saved project authority** only revokes retained grants; new policy approval
+belongs to the selected project. Optional coordination separates Execution
+profiles, Orchestrator connection and Assigned request rules. Central Home's old
+project-settings links lead to Projects or the selected project; retained Factory
+configuration stays available in its applicable legacy context.
 Workboard links directly to this editor when a provider needs setup.
 Worker access and model sign-in are separate: unlocking the webview never signs
 you into a provider. Five connections are supported:
@@ -160,7 +183,7 @@ subprocess. Account mode uses the supported CLI login and excludes API-key
 fallback. Keep credentials out of request notes and command arguments. Project
 `.env` files contain only their documented Werk launch keys. See [Cursor authentication](https://cursor.com/docs/cli/reference/authentication).
 
-Select **Cursor CLI** in **Settings → Providers & accounts**, save its executable,
+Select **Cursor CLI** in **Settings → Provider connections**, save its executable,
 default model and optional key, then use **Check sign-in**. The bounded status and
 version probes do not prompt a model. **Account on the worker machine** displays
 recognized identity information; it does not establish subscription quota or remaining usage.
@@ -182,7 +205,7 @@ alone does not establish a passing check. See the
 [Cursor execution boundary](../reference/model-interaction.md#cursor-native-execution).
 
 Cursor supports **Provider default** effort only. Token and cost counters,
-including native subagent usage, are unavailable in this adapter. Metrics show
+including native subagent usage, are unavailable in this adapter. Worker health shows
 unknown usage; an enabled consumption limiter can hold subsequent work until
 unverified usage is resolved through the existing controls. An account login or
 successful reply does not establish a remaining allowance.
@@ -214,8 +237,9 @@ see the [acceptance ledger](https://github.com/Luis85/production-line/blob/main/
 
 ## Choose provider, model and effort
 
-In **Settings → Providers & accounts**, save **Default provider for new requests**
-to choose the connection offered for new intake. Each connection also has
+In **Settings → Default provider**, save **Default provider for new requests**
+to choose the connection offered for new intake. This is separate from connecting
+and checking an account in **Settings → Provider connections**. Each connection has
 **Default model** and **Default effort**. Save the connection after changing
 those defaults. Existing provider-save restrictions still apply while work is
 queued or running.
@@ -269,8 +293,9 @@ authoring. Do not create a local watcher over the same shared queue.
 
 ## Answer a Ready Check from Workboard
 
-Open the request's Ready Check card. It selects the exact project/request in
-**Projects → Shared request progress**. Inspect the findings, then use **Answer
+Open the request's Ready Check card. It opens the exact project/request in its
+focused request view (`/request?project=<id>&request=<name>`), independently of
+project configuration. Inspect the findings, then use **Answer
 the Ready Check → Your answer to the Ready Check** and **Commit and push answer**.
 The worker commits the canonical answer; normal shared intake rechecks it before
 implementation. The main request Markdown preview remains read-only.
@@ -310,9 +335,13 @@ or infer that Home is a source repository. The visible destination is
 `Home/projects/<id>`. Choose a repository-relative **Feature Request folder**
 (default `features`) and polling interval (default 30 seconds; allowed 1–300 seconds).
 
-Preview project workflow setup, inspect its exact files/baseline, approve the
-commit/push, separately approve the committed delivery policy and recheck setup.
-Projects exposes status and recovery for incomplete setup. Existing tracked
+From Projects, choose the exact project. In **Workflow files**, inspect the
+proposed files/baseline and approve their commit/push. Continue to **Policy
+approval** to inspect and approve the exact committed authority, then **Enable
+requests** to recheck setup. Each stage retains the selected project and opens
+only that operation. **Edit project delivery policy** and **Configure request
+polling** open separate project-scoped editors. Projects exposes status and
+recovery for incomplete setup. Existing tracked
 customization remains preserved. Unknown pushes reconcile before a new operation.
 
 Retained legacy clone locations remain verified at their exact saved paths and
@@ -424,12 +453,15 @@ A lost response offers **Retry same stop confirmation**, retaining the run, reco
 
 ## Configure the taskboard and orchestrator queue
 
-History lists conversations from chat, file tasks and orchestrator assignments.
-Search by title, ID or provider, filter task type and state, or choose archived
-tasks to **Restore and open** a conversation. File tasks also appear in Queued,
-Running, and Review & finished columns with their own search and state filter. Inspect file tasks
-to stop, change queued priority, retry failed work, archive or delete. The file
-taskboard retains at most 100 tasks. Open **Settings → Queue & duration** to configure:
+History offers mutually exclusive read-only request, file-task, execution,
+project-request and assigned-attempt views. Search and filter retained evidence;
+browsing does not select a conversation, restore archived work or control the
+queue. Explicit request links open the exact existing request. Retained file-task
+priority, retry and cleanup open **Manage saved task** at
+`/request/maintenance?fileId=<id>`; those actions retain their original checks.
+The file-task store retains at most 100 tasks.
+
+Open **Settings → Queue capacity** to configure:
 
 - **Local task capacity:** 1–64 accepted local tasks, counting queued and running
   work and temporary preparation/resume reservations. This does not add execution slots.
@@ -438,6 +470,9 @@ taskboard retains at most 100 tasks. Open **Settings → Queue & duration** to c
 - **Extra orchestrator queue places:** 0–64 accepted assignments in the remote
   waiting buffer; defaults to zero and does not add execution slots.
 - **Start order:** FIFO or high priority first for queued file tasks.
+
+**Settings → Execution time limits** separately saves attempt duration, warnings
+and bounded tool/wait limits. Its save does not replace queue capacity policy.
 
 All provider work shares the machine ceiling. Approved project delivery can run
 concurrently within its project limit; the same session cannot execute twice.
@@ -474,7 +509,7 @@ server and existing terminal evidence is not executed again.
 
 ## Connect an orchestrator later
 
-In **Settings → Orchestrator**, enter its HTTP(S) origin and enrollment token, then
+In **Settings → Orchestrator connection**, enter its HTTP(S) origin and enrollment token, then
 choose **Save & connect**. The worker registers automatically and retries when
 unavailable; the webview, sessions and local taskboard remain available. Initial
 CLI enrollment also works with `--url` and `WERK_ENROLLMENT_TOKEN`.
@@ -501,7 +536,8 @@ orchestrator assignments, separate from provider sign-in, model settings and
 imported agent definitions. A simulated worker supports 1–8 Claude/Codex profiles;
 a worker already configured for native Linux Codex supports one Codex profile.
 Editing keeps the current execution mode and exclusive orchestrator assignment
-semantics. Project provider choices belong to **Settings → Project delivery**;
+semantics. Project provider choices belong to the selected project's
+**Policy approval** or **Edit project delivery policy** view;
 **Queue capacity** separately configures the worker's machine execution ceiling.
 
 1. Finish or stop queued/running tasks and active replies, then **Pause new starts**.
@@ -578,37 +614,38 @@ for completion rules, window boundaries and coverage. Failed refreshes retain a
 matching **Last successful snapshot**; changing filters clears results from the
 previous scope while the new observation loads.
 
-## Inspect History and Metrics
+<a id="inspect-history-and-metrics"></a>
 
-History also exposes **Project requests** from the configured feature folder and
-**Execution evidence** for local Chat/file/feature executions. Inspect the current
-request state, paired run observations and provider-reported consumption; use
-filters, aggregate coverage and export to compare many runs. Missing usage is
-unknown, not zero. See the [run metrics contract](../reference/worker-run-metrics.md)
-and [complete worker lifecycle](../tutorials/worker-feature-lifecycle.md).
+## Inspect History and Worker health
 
-Below the taskboard, History shows retained orchestrator before/after snapshots.
-Search and filter attempts, inspect evidence and download local task patches.
-A simulated attempt is never presented as implemented code. Missing or unreadable
-evidence remains explicit. Snapshot history follows retention; the reader
-inspects at most 1,000 directories and discloses when this is only a sample.
-New task titles are kept in a bounded private index.
+History opens one evidence view at a time: **Requests**, retained file-task
+evidence, **Execution attempts**, **Project requests** or **Assigned attempts**.
+Request browsing does not select another worker session or restore an archived
+record. Explicit links open the exact request, Review or maintenance workflow.
+No queue controls appear in History.
 
-Metrics shows the configured token allowance, resource observations, retained
-execution evidence and operational health. Measurement age and missing readings remain
-visible. Settings links open the corresponding editor without mixing forms into
-the measurements. Standalone mode is healthy without an orchestrator.
+Execution evidence retains local Chat/file/feature runs, paired observations and
+provider-reported consumption; filters and export support comparison. Original
+orchestrator assignments retain their own before/after snapshot contract.
+Simulated attempts remain labelled. Missing usage and unreadable evidence remain
+unknown. Snapshot history follows retention; the reader inspects at most 1,000
+directories and discloses bounded coverage. See the
+[run metrics contract](../reference/worker-run-metrics.md) and
+[complete worker lifecycle](../tutorials/worker-feature-lifecycle.md).
 
-Metrics also retains detailed delivery evidence for compatibility. Its delivery
-metrics cohort includes eligible local/shared submissions observed
-before readiness or admission succeeds, even when no implementation has started.
-The same request is counted once after admission. Ready Check provider time,
-recorded clarification answers and waits remain linked to that feature. Missing
-or truncated evidence remains unknown; it is not an invented completion or cost.
+Worker health (`/dashboard`) shows the configured token allowance, resource
+observations, invocation activity and operational health. Measurement age and
+missing readings remain visible. Settings links open independent editors.
+Standalone mode is healthy without an orchestrator.
 
-**All time** also includes historical submissions with an unknown original time.
-Choosing a date range excludes those requests and displays the excluded count.
-Do not interpret an empty dated cohort as proof that no older submissions exist.
+**Workflow → Delivery quality evidence** (`/workflow/evidence`) owns delivery
+outcome cohorts. Eligible local/shared submissions can appear before readiness or
+admission succeeds, even when implementation has not started; a request is counted
+once after admission. Ready Check provider time, clarification answers and waits
+remain linked to that request. Missing/truncated evidence is unknown rather than
+invented completion or cost. **All time** includes historical submissions whose
+original time is unknown; date ranges exclude them and display that count. An
+empty dated cohort does not prove that no older submissions exist.
 
 The **Services & execution processes** section reports owned development services
 and observed model, tool, MCP and Git processes separately from the worker Node
@@ -623,7 +660,7 @@ summarizes local invocations with coverage, while original remote assignments
 retain their separate snapshot history. Reported costs may be estimates;
 subscription balance and model progress are not inferred from these metrics.
 
-**Settings → Consumption** sets this worker's share of a configured
+**Settings → Token allowance** sets this worker's share of a configured
 daily or monthly token allowance. It shows measured usage, reservations,
 remaining tokens and the next UTC reset. Limits start disabled. When enabled,
 insufficient budget holds new model calls while accepted work stays queued;
@@ -639,10 +676,12 @@ No environment-variable values or credentials are shown.
 
 ## Answer a question or continue after interruption
 
-The taskboard places a pending question or escalation in **Needs you** and opens its answer controls in **Follow up**.
+Workboard puts a pending question or escalation in **Needs you** first. Open the
+exact request to use its checkpoint answer controls.
 Read its reason/choices, enter your response and submit through the pending-input
 control. Generic follow-up sending is held until that decision is resolved.
-Workboard and History identify requests needing input and link back to the selected task on the taskboard.
+Workboard and History identify requests needing input and link to that exact
+request; browsing History does not change the worker's selected session.
 
 Inspect the saved checkpoint before resuming a compatible failed or interrupted
 turn. Canonical cancelled or accepted requests require explicit reopening. Continuation replays saved context in a fresh invocation and may consume

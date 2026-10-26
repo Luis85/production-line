@@ -47,7 +47,7 @@ export const SharedProjectAutomaticRouting: Story = {
     await userEvent.click(q.getByRole('button', { name: 'Prepare request' }));
     const name = await q.findByLabelText('Request name') as HTMLInputElement;
     const goal = await q.findByLabelText('Goal', { exact: true }) as HTMLTextAreaElement;
-    if (name.value !== 'API request' || goal.value !== instruction || canvasElement.querySelector('.request-identity strong')?.textContent !== instruction) throw Error('The prepared draft lost its readable request identity or accepted instructions.');
+    if (name.value !== 'API request' || goal.value !== instruction || canvasElement.querySelector('.request-identity strong')?.textContent !== 'API request') throw Error('The prepared draft lost its readable request identity or accepted instructions.');
     await q.findByLabelText('Context', { exact: true });
     await q.findByLabelText('Verification plan', { exact: true });
     const advanced = q.getByText('Advanced template editing', { exact: true });

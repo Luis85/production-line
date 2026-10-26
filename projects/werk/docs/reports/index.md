@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Worker focused-view goals · 2026-10-26](worker-ui-goals-2026-10-26.md) | Independent desktop/mobile critique, one-goal route catalogue, safety-preserving improvements and explicit verification limits |
 | [Worker release workflow acceptance](worker-release-workflow-acceptance.md) | Primary standalone workflow, acceptance matrix and explicit pending native Windows/Claude/GitHub qualification |
 | [Worker review experience research](worker-review-experience-research.md) | Primary-source review patterns, product perspectives, next-step clarity and preserved workflow authority |
 | [Durable Feature Request sessions and delegation](worker-durable-sessions-review.md) | Overnight handoff, provider/API/subscription research, session/context boundaries and controlled subagents |

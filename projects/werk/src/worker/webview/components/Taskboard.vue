@@ -9,6 +9,7 @@ import MessageContent from "./MessageContent.vue";
 import PatchReview from "./PatchReview.vue";
 import TaskKanban from "../../../shared/webview/components/TaskKanban.vue";
 import { useTaskboard } from "./useTaskboard";
+const props = defineProps<{ focusedTaskId?: string }>();
 const {
   action,
   actionError,
@@ -41,14 +42,16 @@ const {
   visible,
   workspaceAction,
   worktreeNotice,
-} = useTaskboard();
+} = useTaskboard({ focusedTaskId: () => props.focusedTaskId ?? "" });
 </script>
 <template>
   <section
     v-if="state.unlocked"
     class="taskboard"
-    aria-labelledby="taskboard-title"
+    :aria-labelledby="focusedTaskId ? undefined : 'taskboard-title'" :aria-label="focusedTaskId ? 'Saved task controls' : undefined"
   >
+    <p v-if="worktreeNotice && focusedTaskId" role="status">{{ worktreeNotice }}</p>
+    <div v-if="!focusedTaskId" class="taskboard-index">
     <div class="section-heading">
       <div>
         <h2 id="taskboard-title" tabindex="-1">File tasks</h2>
@@ -143,10 +146,11 @@ const {
       <input v-model="archived" type="checkbox" />
       Show archived tasks
     </label>
+    </div>
     <section
       v-if="selectedId"
       id="local-task-evidence"
-      @keydown.esc.prevent="closeDetail"
+      @keydown.esc="!focusedTaskId && closeDetail()"
       class="evidence-panel"
       :aria-busy="detailLoading"
     >
@@ -157,7 +161,7 @@ const {
         <UButton
           color="neutral"
           variant="ghost"
-          aria-label="Close local task"
+          v-if="!focusedTaskId" aria-label="Close local task"
           class="min-w-11 min-h-11"
           icon="i-lucide-x"
           @click="closeDetail"
@@ -184,24 +188,25 @@ const {
           {{ detail.provider }}
         </p>
         <UButton :to="{ path: '/review', query: { session: detail.sessionId, fileId: detail.id } }" icon="i-lucide-git-pull-request">Open Feature Request review</UButton>
-        <details class="accepted-instructions"><summary>Accepted instructions</summary><MessageContent :text="detail.instruction" /></details>
+        <details v-if="!focusedTaskId" class="accepted-instructions"><summary>Accepted instructions</summary><MessageContent :text="detail.instruction" /></details>
 
         <p v-if="detail.error" class="error-text">{{ detail.error }}</p>
         <div v-if="detail.admissionFailure" class="notice" role="status">
           <p>This request stopped before approved file snapshots were saved. Inspect the preserved worktree, then use New request on the taskboard to continue.</p>
           <p v-if="detail.worktree" class="break-anywhere">Preserved worktree: <code>{{ detail.worktree }}</code></p>
         </div>
-        <MessageContent v-if="detail.summary" :text="detail.summary" />
-        <CandidateEvidence v-if="!detail.admissionFailure" :key="detail.id" :task="detail" />
-        <PatchReview v-if="detail.patch" :patch="detail.patch" :task-id="detail.id" />
+        <MessageContent v-if="!focusedTaskId && detail.summary" :text="detail.summary" />
+        <CandidateEvidence v-if="!focusedTaskId && !detail.admissionFailure" :key="detail.id" :task="detail" />
+        <PatchReview v-if="!focusedTaskId && detail.patch" :patch="detail.patch" :task-id="detail.id" />
         <RequestGatePanel
-          v-if="detail.requestId && !detail.admissionFailure"
+          v-if="!focusedTaskId && detail.requestId && !detail.admissionFailure"
           :request-id="detail.requestId"
           :session-id="detail.sessionId"
           :feature-source="detail.feature?.source"
         />
         <p class="break-anywhere">{{ detail.repository }}</p>
-        <ul>
+        <p v-if="focusedTaskId && detail.worktree" class="break-anywhere">Worktree: <code>{{ detail.worktree }}</code></p>
+        <ul v-if="!focusedTaskId">
           <li v-for="file in detail.files" :key="file.path" class="break-anywhere">{{ file.path }}</li>
         </ul>
         <div class="actions">
@@ -273,7 +278,7 @@ const {
             Keep task
           </UButton>
         </div>
-        <p v-if="detail.patch" class="page-note">
+        <p v-if="!focusedTaskId && detail.patch" class="page-note">
           Inspect this patch before applying it. <template v-if="!detail.implementation">This proposal has not been automatically applied or verified.</template> In your
           repository, use
           <code>git apply --check path/to/download.patch</code>
@@ -284,8 +289,8 @@ const {
 
       </template>
     </section>
-    <p class="page-note">Queue capacity and task duration are managed in <RouterLink to="/settings#queue">Settings</RouterLink>.</p>
-    <section v-if="state.status?.queuedTasks?.length" class="monitor-section">
+    <p v-if="!focusedTaskId" class="page-note">Queue capacity and task duration are managed in <RouterLink to="/settings#queue">Settings</RouterLink>.</p>
+    <section v-if="!focusedTaskId && state.status?.queuedTasks?.length" class="monitor-section">
       <h3>Waiting from the orchestrator</h3>
       <ul class="profile-list">
         <li v-for="task in state.status.queuedTasks" :key="task.id">

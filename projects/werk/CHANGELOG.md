@@ -9,18 +9,22 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Added
 
-- WerkHome extracts directly into one transparent workspace with stable root launchers, visible project clones and private worker state separated from replaceable runtime files. Workboard prioritizes project Feature Requests, live delivery and review; Projects and Workflow remain primary navigation, with Metrics and History as secondary evidence.
-- Ready Check questions can be answered from Workboard/Projects with an exact-checkpoint Git publication; uncertain acknowledgements retain the same answer operation before normal intake rechecks.
+- WerkHome extracts directly into one transparent workspace with stable root launchers, visible project clones and private worker state separated from replaceable runtime files. Workboard prioritizes project Feature Requests, live delivery and review; Projects and Workflow remain primary navigation, with Worker health and History as secondary evidence.
+- Ready Check questions open an exact focused request from Workboard with an exact-checkpoint Git publication; uncertain acknowledgements retain the same answer operation before normal intake rechecks.
 - Explicit migration planning/adoption retains compatible stopped standalone state at its original absolute path; project-installed state requires old-runtime recovery/export. Home updates inspect a verified candidate plan before replacing owned application files.
-- A dedicated Workflow page shows recorded Feature Request stage pressure, project/time filters, UTC-week confirmed-increment velocity, measured lead/cycle times and explicit evidence coverage. Evidence-based management separates operational delivery proxies from unmeasured business outcomes; Metrics retains host, consumption and submission-cohort observations.
+- A dedicated Workflow page shows recorded Feature Request stage pressure, project/time filters, UTC-week confirmed-increment velocity, measured lead/cycle times and explicit evidence coverage. Evidence-based management separates operational delivery proxies from unmeasured business outcomes; Worker health retains host and consumption observations; delivery-quality cohorts have their own Workflow evidence view.
 
 ### Changed
 
+- Worker pages now follow one user goal per focused view: choose work, author a request, advance its conversation, decide a review, choose/register a project, complete an explicit setup stage, inspect retained evidence or edit one setting. Attention leads mobile Workboard; advanced options and secondary evidence are disclosed progressively. Legacy bookmarks preserve exact project/request identity.
+- History inspection no longer selects or restores archived sessions. Capacity, time limits, provider connections and default provider are independent cached editors with retained drafts and exact conflict/retry protection.
 - Dashboard mutation testing has a separate three-module advisory scope with retained receipts and residual findings. Four added contracts raise the strict score to 72.04% over 998 mutants, retaining all prior kills and recording 264 survivors, 13 uncovered and two timeouts; an independent advisory CI job retains dashboard reports, and existing authority and workflow baselines remain unchanged.
-
-### Changed
-
 - New worker project-local installation is retired. New projects clone their remote into `Home/projects/<id>` with configurable watched folder/poll interval, and Workboard request creation uses committed templates and Git publication rather than generic local chat.
+
+### Fixed
+
+- A lost checkpoint-answer acknowledgement keeps its recovery controls visible after the server advances; retry replays the same immutable command once before another response is allowed. Project setup stays on the chosen goal through publication and retains uncertain operations with their original project.
+- Review names passed required checks separately from pending human acceptance. Project next-step links retain readable text and focused task/history controls meet the 44 px target.
 
 ## [0.16.0] - 2026-10-25
 

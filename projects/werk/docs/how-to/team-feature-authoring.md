@@ -221,7 +221,7 @@ vary by provider and model; Cursor CLI accepts only `default`.
 
 For Cursor, select `provider: cursor-cli` after the operator configures its native
 CLI connection. For portable team defaults, the operator can edit **Settings →
-Providers & accounts**; an omitted provider uses that worker's default. Explicit
+Provider connections**; an omitted provider uses that worker's default. Explicit
 provider values already in committed templates remain explicit.
 
 Once claimed, provider, model and effort remain fixed through Ready Check answers,

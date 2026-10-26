@@ -71,9 +71,12 @@ Keep `.werk/agent-integrations.pending.json` and the ownership manifest intact,
 inspect a fresh plan, then retry guarded sync. Recovery reconciles only writes
 proven by that checkpoint and file hashes; unknown edits remain conflicts.
 
-**Settings → Project integration** presents the same installed paths and guarded plan/apply
-workflow. Integrations are available only for its configured project root;
-requests cannot choose an arbitrary target folder.
+Retained non-Home installations keep **Settings → Project integration** for the
+same installed paths and guarded plan/apply workflow. In central Home, earlier
+project-integration bookmarks lead to Projects or the selected project; the
+legacy editor is not offered as a new project-local installation path.
+Integrations are available only for their configured project root; requests
+cannot choose an arbitrary target folder.
 
 ## Questions, resources and evidence
 

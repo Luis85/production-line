@@ -17,7 +17,7 @@ const longestBlocker = computed(() => Math.max(1, ...data.value?.blockers.map(it
 </script>
 <template>
   <section class="delivery-metrics" aria-labelledby="delivery-metrics-title">
-    <header><div><h2 id="delivery-metrics-title">Feature Request outcomes</h2><p>Delivery lifecycle measurements for this worker’s retained requests. Model attempts are shown separately below.</p></div><UButton color="neutral" variant="outline" :loading="refreshing" :disabled="!state.unlocked" @click="refresh">Refresh outcomes</UButton></header>
+    <header><div><h2 id="delivery-metrics-title">Feature Request outcomes</h2><p>Submission-cohort measurements for retained requests, with their observed coverage.</p></div><UButton color="neutral" variant="outline" :loading="refreshing" :disabled="!state.unlocked" @click="refresh">Refresh outcomes</UButton></header>
     <div class="metric-filters">
       <div><label for="delivery-metrics-window">Submitted within</label><select id="delivery-metrics-window" v-model="window"><option v-for="item in executionWindows" :key="item.value" :value="item.value">{{ item.label }}</option></select></div>
       <div><label for="delivery-metrics-project">Project</label><select id="delivery-metrics-project" v-model="projectId"><option value="">All retained projects</option><option v-for="id in projects" :key="id" :value="id">{{ id }}</option></select></div>

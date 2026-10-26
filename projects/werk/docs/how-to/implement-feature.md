@@ -5,10 +5,10 @@ Use this workflow when an attached model should change project code, run your ch
 ## Prepare the project and worker
 
 1. Commit the project's starting state. In **Projects**, register its remote clone, preview/approve workflow publication and separately approve the committed delivery policy.
-2. Configure an attached provider under **Settings → Providers & accounts**. For a CLI provider, sign in using the stock CLI on the worker machine. Provider availability and sign-in do not grant repository tools.
+2. Configure an attached provider under **Settings → Provider connections**. For a CLI provider, sign in using the stock CLI on the worker machine. Provider availability and sign-in do not grant repository tools.
 3. Pause new starts and drain queued/running work. In **Settings → Tools & MCP**, enable task-worktree file access.
 4. Add a fixed command preset for each check the feature must pass. Use an absolute executable path and a JSON array of fixed arguments. Enable the preset and mark **Required feature check**, then save.
-5. Review **Settings → Queue & duration**. The total task limit defaults to six hours. Tool execution defaults to 128 calls and five minutes per command. Set limits appropriate for the project's check suite. Optional command/CLI timeouts in **Tools & MCP** can shorten the global command ceiling; MCP connections have their own deadlines. Resume new starts after saving.
+5. Review **Settings → Execution time limits**. The total task limit defaults to six hours. Tool execution defaults to 128 calls and five minutes per command. Set limits appropriate for the project's check suite. Optional command/CLI timeouts in **Tools & MCP** can shorten the global command ceiling; MCP connections have their own deadlines. Resume new starts after saving.
 
 For Cursor CLI, also review the native Cursor permissions and hooks that apply
 to the worker account and candidate workspace. Werk's file/tool grants do not
@@ -143,7 +143,7 @@ including binary assets, are limited to 8 MiB each; the complete source inspecti
 is limited to 20,000 paths and 64 MiB. The path count includes approved new paths.
 Untracked ignored dependency/build outputs are excluded.
 
-If inspection reports a size or file-count limit, open **Settings → Queue & duration**
+If inspection reports a size or file-count limit, open **Settings → Execution time limits**
 and expand **Repository inspection limits**. Raise the named bound to cover the
 project, keeping the individual-file limit within the total, then **Save execution limits**. The CLI exposes the same values through
 `settings set`; see [worker execution policy](../reference/configuration.md#local-worker-execution-policy).

@@ -15,19 +15,39 @@ visual navigation, dedicated dashboards, focused editors and a replayable tour.
 
 ## Worker Scope
 
-The worker uses Vue with Nuxt UI and four primary pages: Workboard (`/workboard`),
-Projects (`/projects`), Workflow (`/workflow`) and Settings (`/settings`). After
-unlock/setup, Workboard leads with Feature Requests, live delivery progress and
-review actions. Projects and Workflow health remain one navigation action away.
-Metrics (`/dashboard`) and History (`/history`) remain secondary evidence links.
-A request-scoped Review route leads with changes, checks and the current human
-decision; execution identities and detailed activity disclose progressively.
+The worker uses Vue with Nuxt UI and four primary navigation destinations:
+Workboard (`/workboard`), Projects (`/projects`), Workflow (`/workflow`) and
+Settings (`/settings`). Every focused view has exactly one user goal. Navigation
+and supporting evidence may help that goal; unrelated editors and mutation
+workflows open their own focused views.
 
-**New Feature Request** uses the selected project's committed template, guarded
-preparation/readiness and shared Git publication. It does not submit generic local
-chat as a substitute. Projects owns remote clone registration, visible repository
-paths, watched-folder/poll configuration and guided workflow setup. Settings owns
-provider accounts, queue/duration policy, tools and optional orchestrator enrollment.
+Workboard helps the operator choose the next request, with Needs you first.
+New Feature Request opens `/requests/new` to prepare, inspect, check and explicitly
+publish a ready request using its project's committed template and shared Git
+handoff. Project and draft query identity survive navigation. It does not submit
+generic local chat as a substitute. `/request?session=<id>` opens the exact existing
+conversation; before admission, `/request?project=<id>&request=<name>` opens the
+exact shared request and Ready Check. Neither is appended underneath Workboard.
+Request Review (`/review`) owns the decision for the exact current increment:
+changes, required checks and missing human acceptance remain distinct.
+Retained file-task priority, retry and cleanup belong to
+`/request/maintenance?fileId=<id>`.
+
+Projects is a directory for choosing a project. `/projects/new` clones one remote
+repository. `/project?project=<id>&step=workflow|policy|enable|edit|intake` selects
+one focused project operation: publish setup files, approve its exact policy,
+recheck intake readiness, edit a policy draft or configure request polling.
+The selected project stays explicit across these steps. Settings is a grouped
+directory of independent worker editors; repository/project setup stays with
+Projects. Provider authentication remains separate from project authority.
+
+Workflow summarizes recorded flow and confirmed delivery velocity.
+`/workflow/evidence` inspects delivery-quality cohorts and their coverage.
+Worker health (`/dashboard`) owns resource and consumption observations;
+History (`/history`) offers mutually exclusive read-only request, file-task, run,
+shared-request and assigned-attempt evidence views. Reading History does not select
+another session, restore archived work or change the queue. Explicit links open
+request, review or maintenance workflows when action is needed.
 
 WerkHome is transparent: stable root launchers, replaceable `runtime/`, visible
 `projects/` and private `state/`. The worker starts from its launcher directory,
@@ -36,9 +56,13 @@ New project-local worker installation is retired. Legacy standalone state needs
 explicit stopped-state adoption; retained absolute paths are not relocated.
 Project-installed state requires its old runtime for recovery/export.
 
-The legacy `/taskboard` and `/chat` routes preserve their queries when redirecting
-to Workboard. `/monitoring-status` opens Metrics; earlier Dashboard setup bookmarks
-redirect to their corresponding Settings sections.
+Legacy `/taskboard` and `/chat` bookmarks preserve their query identity: a saved
+session opens `/request`, while an unscoped bookmark opens Workboard.
+Earlier Workboard session bookmarks also open the exact request. A Projects
+project query opens the focused project; project plus request opens the request.
+`/monitoring-status` opens Worker health. Earlier setup bookmarks redirect to their
+focused editor or project destination. Retained Factory configuration remains
+available in its applicable legacy context.
 
 ## Worker Access
 
@@ -128,6 +152,15 @@ and uncertain-response recovery.
 
 ## Worker Settings
 
+Settings opens a grouped directory. Hash destinations expose one independent
+editor: `provider-connections`, `default-provider`, `queue`, `duration-policy`,
+`consumption-limits`, `tool-access`, `agent-definitions`, `retained-approvals`,
+optional `execution-profiles`, `orchestrator` and `request-policy`.
+Saved project authority supports global revocation only; new exact-policy approval
+belongs to the selected project. Orchestrator connection and request policy save
+separately. Central Home's earlier repository, integration and shared-intake
+settings destinations lead to Projects or the scoped project.
+
 Settings sections save independently and retain unsaved edits while navigating
 in the current tab. Queue, duration and consumption editors compare the saved
 baseline before replacing policy; another operator's change produces a conflict
@@ -137,7 +170,9 @@ apply where needed before changing providers, repositories, profiles or tools.
 
 ## Worker Workflow
 
-Workflow is a read-only view of recorded Feature Request delivery. Project and
+Workflow is a read-only view of recorded Feature Request delivery. Its health
+summary and `/workflow/evidence` delivery-quality analysis are separate focused
+views; the latter owns request outcome cohorts rather than Worker health. Project and
 time filters scope the same persisted evidence across flow stages, stage pressure,
 UTC-week velocity and delivery timing. Velocity counts delivered increments, not
 story points, model invocations or passing checks. Human acceptance, a confirmed
@@ -181,7 +216,7 @@ and current work in Workboard. See the
 
 ## Worker Provider and Agent Definitions
 
-Provider connections belong to the worker. Settings → Providers & accounts owns
+Provider connections belong to the worker. Settings → Provider connections owns
 saved settings, local Codex or Claude sign-in commands and checks of saved connections.
 Workboard links there when a connection needs setup. CLI sign-in must belong to
 the user running the worker;
@@ -263,7 +298,7 @@ requires exact-policy approval and a setup recheck. Arbitrary existing-checkout
 adoption and project-local worker installation are not new registration paths.
 
 The original request owns intent. Shared request publication, claims, progress,
-questions and PullRequest Markdown remain Git-backed. Workboard authoring uses
+questions and PullRequest Markdown remain Git-backed. The focused New Feature Request authoring view uses
 this same flow. Rework retains request/candidate evidence; changed accepted scope
 needs the supported successor path. Existing local records retain their source
 semantics without making legacy installation a current product path.
@@ -310,12 +345,14 @@ changes independently of provider formats. See the
 
 ## Repository consent and execution profiles
 
-On startup, a worker inspects its installation/project folder for an exact Git
-checkout, including linked worktrees. An unassigned detected repository appears
+Retained non-Home workers can inspect their installation/project folder for an
+exact Git checkout, including linked worktrees. Central Home uses explicit
+project clone registration instead; it never infers Home to be a project. An unassigned detected repository appears
 as an optional consent prompt after unlock. Accepting adds a repository assignment;
 watching starts only when a branch and remote are available. Coding tasks use
 retained worktrees. Declining is remembered across restarts and can be reconsidered
-in Settings → Repositories. Detection does not search parent folders or contact
+in the applicable legacy Settings → Repositories editor. Detection does not
+search parent folders or contact
 remotes.
 
 Settings → Execution profiles edits profile IDs and providers within the worker’s

@@ -24,9 +24,9 @@ node worker.mjs --port 4201
 
 Open `http://127.0.0.1:4201`. Unlock it using the private
 credential file named by `node worker.mjs status`. Workboard opens first;
-Metrics contains observations, History retains tasks and evidence, and Settings
-contains configuration. Configure **Settings → Providers & accounts** to submit
-model-backed tasks; **Settings → Orchestrator** handles optional enrollment.
+Worker health contains observations, History retains tasks and evidence, and Settings
+contains configuration. Configure **Settings → Provider connections** to submit
+model-backed tasks; **Settings → Orchestrator connection** handles optional enrollment.
 Configuration alone does not verify login, subscription quota or model access. See [Use the worker webview](use-worker-webview.md)
 for provider setup, unified task interaction and optional repository-file approval.
 
@@ -89,7 +89,7 @@ The runtime image does not install or authenticate Codex/Claude subscription
 CLIs. Configure an available API connection on each worker, or supply a separately
 prepared CLI-enabled image and login. Do not assume a host CLI login exists inside
 a container. These commands start standalone workers; enroll each later through
-**Settings → Orchestrator** using an address reachable from that container. Container
+**Settings → Orchestrator connection** using an address reachable from that container. Container
 `127.0.0.1` is the container itself, not the host or another container. See
 [Manage access](manage-access.md) for deliberate remote-listener/HTTPS setup.
 
@@ -111,7 +111,7 @@ Open `http://127.0.0.1:3001` and sign in with `adminToken` from the private
 **Dashboard** (`#system`), with Intake, Taskboard, Worker and metrics alongside.
 Choose **Tour starten** to explore the process, routing and evidence views.
 
-In the worker's **Settings → Orchestrator**,
+In the worker's **Settings → Orchestrator connection**,
 enter `http://127.0.0.1:3001` and the orchestrator's `enrollmentToken` from the
 same `component.json`, then choose **Save & connect**. The worker retries
 registration when the service is unavailable. Its project comes from the

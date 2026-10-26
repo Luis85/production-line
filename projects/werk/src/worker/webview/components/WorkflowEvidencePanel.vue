@@ -6,7 +6,7 @@ const props = defineProps<{ report: WorkflowMetricsReport }>();
 const measures = computed(() => workflowMeasures(props.report));
 </script>
 <template>
-  <section id="workflow-measures" class="workflow-evidence" aria-labelledby="workflow-measures-title">
+  <details id="workflow-measures" class="workflow-evidence"><summary>Delivery measures and coverage</summary><section aria-labelledby="workflow-measures-title">
 <h2 id="workflow-measures-title">Delivery measures</h2>
 <p>Completion-window evidence, with its measured samples. Unknown observations remain unmeasured rather than becoming zero.</p>
 <dl class="measure-list">
@@ -19,8 +19,8 @@ const measures = computed(() => workflowMeasures(props.report));
 </dd>
 </div>
 </dl>
-</section>
-  <section id="workflow-ebm" class="workflow-evidence" aria-labelledby="workflow-ebm-title">
+</section></details>
+  <details id="workflow-ebm" class="workflow-evidence"><summary>Customer value and evidence-based management</summary><section aria-labelledby="workflow-ebm-title">
 <h2 id="workflow-ebm-title">Evidence-based management</h2>
 <p>Four Key Value Areas. Operational delivery observations are proxies; shipping an increment does not establish customer or business value.</p>
 <dl class="ebm-areas">
@@ -39,7 +39,7 @@ const measures = computed(() => workflowMeasures(props.report));
 </dd>
 </div>
 </dl>
-</section>
+</section></details>
   <details class="measurement-notes">
 <summary>Measurement coverage and definitions</summary>
 <dl>
@@ -68,14 +68,15 @@ const measures = computed(() => workflowMeasures(props.report));
 <dd>{{ report.coverage.unknownCompletionTimes }}</dd>
 </div>
 </dl>
-<p>Flow is an observation snapshot across submission dates. Throughput, timing and event observations use the completion window shown above, including its start and excluding its end. Submission-cohort quality metrics use a different population in Metrics.</p>
+<p>Flow is an observation snapshot across submission dates. Throughput, timing and event observations use the completion window shown above, including its start and excluding its end. Submission-cohort quality evidence uses a different population.</p>
 <ul>
 <li v-for="note in report.notes" :key="note">{{ note }}</li>
 </ul>
-<RouterLink to="/dashboard">Open resource and submission-cohort metrics</RouterLink>
+<RouterLink to="/workflow/evidence">Inspect submission-cohort quality evidence</RouterLink>
 </details>
 </template>
 <style scoped>
+.workflow-evidence > summary { cursor:pointer;min-height:44px;padding-block:var(--space-3);font-size:.875rem;font-weight:600;line-height:1.6; }
 .workflow-evidence  {
    padding-block:var(--space-6);
   border-bottom:1px solid var(--ui-border);

@@ -4,6 +4,12 @@ import UIcon from '@nuxt/ui/components/Icon.vue';
 import type { NavigationLink } from '../../../shared/webview/types';
 defineProps<{ links: NavigationLink[]; homePath: string; homeLabel: string; navLabel: string }>();
 const route = useRoute();
+function primaryDestination(path: string) {
+  if (path === '/request' || path.startsWith('/request/') || path.startsWith('/requests/') || path === '/review') return '/workboard';
+  if (path === '/project' || path.startsWith('/projects/')) return '/projects';
+  if (path.startsWith('/workflow/')) return '/workflow';
+  return path;
+}
 function skipToContent() { document.getElementById('main')?.focus(); }
 </script>
 <template>
@@ -13,7 +19,7 @@ function skipToContent() { document.getElementById('main')?.focus(); }
       <RouterLink class="wordmark" :to="homePath" :aria-label="homeLabel">werk<span>.</span></RouterLink>
       <div class="worker-header-identity"><slot name="identity" /></div>
       <nav :aria-label="navLabel">
-        <RouterLink v-for="link in links" :key="link.path" :to="link.path" :aria-current="route.path === link.path ? 'page' : route.path === '/review' && link.path === '/workboard' ? 'location' : undefined"><UIcon v-if="link.icon" :name="link.icon" /><span>{{ link.label }}</span></RouterLink>
+        <RouterLink v-for="link in links" :key="link.path" :to="link.path" :aria-current="route.path === link.path ? 'page' : primaryDestination(route.path) === link.path ? 'location' : undefined"><UIcon v-if="link.icon" :name="link.icon" /><span>{{ link.label }}</span></RouterLink>
       </nav>
       <div class="worker-header-actions"><slot name="actions" /></div>
     </header>
@@ -23,7 +29,7 @@ function skipToContent() { document.getElementById('main')?.focus(); }
     </main>
     <footer class="worker-footer">
       <div class="worker-footer-status"><slot name="status" /><slot name="mode" /></div>
-      <div class="worker-footer-evidence" aria-label="Worker evidence"><RouterLink to="/dashboard">Resource metrics</RouterLink><RouterLink to="/history">History</RouterLink></div>
+      <div class="worker-footer-evidence" aria-label="Worker evidence"><RouterLink to="/dashboard">Worker health</RouterLink><RouterLink to="/history">History</RouterLink></div>
       <div class="worker-footer-refresh"><slot name="footer" /></div>
     </footer>
   </div>

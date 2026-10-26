@@ -15,7 +15,7 @@ quota remains available for personal use.
 
 ## Configure in the webview
 
-Open **Settings → Consumption**.
+Open **Settings → Token allowance**.
 Enable **Limit this worker’s consumption**, choose the daily or monthly UTC
 period, and enter the total allowance and worker percentage. Expand
 **Model call reservation** to adjust the amount held before each invocation.

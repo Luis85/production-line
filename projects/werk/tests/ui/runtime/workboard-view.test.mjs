@@ -44,6 +44,6 @@ test('primary navigation opens Workboard with Projects and Workflow one step awa
 test('pre-admission notifications keep the project and exact Feature Request instead of an installation fallback', () => {
   const request=item({projectId:'company',featureName:'export orders.md',primaryAction:{kind:'feature',label:'Inspect Ready Check',href:'/settings#shared-intake'}});
   const projected=workboardAction(request), url=new URL(projected.primaryAction.href,'http://localhost');
-  assert.equal(url.pathname,'/projects');assert.equal(url.searchParams.get('project'),'company');assert.equal(url.searchParams.get('request'),'export orders.md');assert.equal(url.hash,'#shared-progress');
+  assert.equal(url.pathname,'/request');assert.equal(url.searchParams.get('project'),'company');assert.equal(url.searchParams.get('request'),'export orders.md');assert.equal(url.hash,'');
   assert.equal(request.primaryAction.href,'/settings#shared-intake');
 });

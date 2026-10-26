@@ -12,7 +12,7 @@ const chartLabel = computed(() => weeks.value.map(week => `Week of ${workflowWee
     <header>
 <div>
 <h2 id="workflow-velocity-title">Weekly delivery velocity</h2>
-<p>Recorded confirmed increments delivered per UTC week. A model turn, review acceptance or story point is not an increment.</p>
+<p>Confirmed merges or required release publications per UTC week.</p>
 </div>
 <p class="velocity-mean">
 <strong>{{ workflowNumber(throughput.meanPerCompleteWeek) }}</strong>
@@ -35,7 +35,7 @@ const chartLabel = computed(() => weeks.value.map(week => `Week of ${workflowWee
 </div>
 </div>
 </div>
-      <p class="velocity-note">Weeks begin Monday at 00:00 UTC. Retained confirmations may omit deliveries whose history is unavailable. Partial edge weeks contribute to delivered totals and are excluded from the complete-week mean.</p>
+      <p class="velocity-note">Mean uses complete UTC weeks. Dimmed bars are partial weeks. Retained histories may omit older deliveries.</p>
       <details>
 <summary>Weekly values and exact UTC bounds</summary>
 <div class="velocity-table" tabindex="0" role="region" aria-label="Weekly UTC values; scroll horizontally when needed">

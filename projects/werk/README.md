@@ -16,7 +16,7 @@ merging.
 
 ![Worker taskboard showing capacity and requests grouped by their current state.](docs/evidence/readme/worker-taskboard.png)
 
-*The real worker taskboard with sample local requests. Select a request to inspect its conversation and progress; use Metrics, History and Settings to inspect and configure the worker. [Screenshot provenance](docs/evidence/readme/README.md).*
+*Workboard with deterministic sample requests. Choose the next request to advance; authoring, conversation and review have separate focused views. [Screenshot provenance](docs/evidence/readme/README.md).*
 
 ## Choose your starting point
 
@@ -194,27 +194,31 @@ does not merge the feature branch.
 
 ## Inspect and configure the worker
 
-The **Workboard** leads with Feature Requests, live progress and review.
-**Projects** keeps visible clone paths and guided setup one click away. **Workflow** shows
-recorded delivery stages, confirmed-increment velocity and measurement coverage.
-Secondary **Metrics** explains measured consumption and execution activity; **History**
-keeps previous runs and their evidence. **Settings** holds the worker's operating
-configuration.
+Each focused view serves one user goal. **Workboard** helps choose the next request
+and leads with work needing your input. **New Feature Request** prepares and publishes
+one request; its conversation and **Review** have separate focused views.
+**Projects** is the project directory: adding a clone, publishing workflow files,
+approving policy and enabling intake each have an explicit next step.
+**Workflow** explains recorded delivery health, with delivery-quality evidence in a
+separate view. **Worker health** explains resources and consumption. **History**
+inspects retained evidence without selecting or restoring archived requests.
+**Settings** first helps you choose a setting, then opens one independent editor;
+unsent edits survive navigation within the unlocked tab.
 
-![Worker Metrics with current capacity, configured token allowance, resources and execution activity.](docs/evidence/readme/worker-metrics.png)
+![Worker health with resources, measured consumption and execution activity.](docs/evidence/readme/worker-metrics.png)
 
-*Metrics in the real worker UI with deterministic sample measurements. Worker process resources, host observations and the configured allowance are separate; these are not live account balances. [Screenshot provenance](docs/evidence/readme/README.md).*
+*Worker health with deterministic sample measurements. Resource use and allowance are separate from delivery quality and live provider account balances. [Screenshot provenance](docs/evidence/readme/README.md).*
 
 For development servers and other long-running project services, configure named
 service presets explicitly. The worker supervises them in the request’s pinned
-worktree, with bounded lifetime and restart limits. **Metrics → Processes** shows
+worktree, with bounded lifetime and restart limits. **Worker health → Processes** shows
 owned services, observed resource use and stop/restart controls; missing operating
 system measurements stay visible as unavailable. See
 [manage worker processes](docs/how-to/manage-worker-processes.md).
 
-![Worker settings with provider connections and navigation to repositories, tool access and consumption settings.](docs/evidence/readme/worker-settings.png)
+![Focused provider connection settings with navigation to other independent setting editors.](docs/evidence/readme/worker-settings.png)
 
-*Settings in the real worker UI, using sample configuration. Keep credentials local to the worker machine. [Screenshot provenance](docs/evidence/readme/README.md).*
+*One provider connection editor with sample configuration. Default provider, capacity and time limits have separate saves. Keep credentials local to the worker machine. [Screenshot provenance](docs/evidence/readme/README.md).*
 
 | Configure | Where to learn more |
 | --- | --- |

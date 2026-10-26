@@ -4,7 +4,7 @@ import SharedFeatureComposer from './SharedFeatureComposer.vue';
 import { request, state } from '../store';
 import { useWorkerSnapshot } from '../useWorkerSnapshot';
 import type { ManagedProjectsView } from '../../application/managed-projects';
-defineProps<{ initialProjectId?: string }>();
+defineProps<{ initialProjectId?: string; draftName?: string }>();
 defineEmits<{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
 const snapshot = useWorkerSnapshot(() => request<ManagedProjectsView>('/api/managed-projects'));
 const clones = computed(() => snapshot.data.value?.projects.filter(project => project.mode === 'clone') ?? []);
@@ -21,7 +21,7 @@ const providerReady = computed(() => state.settings?.providers.some(provider => 
         <ol><li><RouterLink to="/projects">{{ clones.length ? 'Finish project setup' : 'Add a project' }}</RouterLink><span>Clone into Werk Home, review workflow files, approve the exact policy, then recheck setup.</span></li><li><RouterLink to="/settings#provider-connections">{{ providerReady ? 'Provider configured' : 'Set up a provider' }}</RouterLink><span>Confirm the CLI account on this worker.</span></li></ol>
         <p v-for="project in clones.filter(item => !ready.includes(item))" :key="project.id"><strong>{{ project.name }}</strong> · {{ project.intakeBlockedReason || project.detail }}</p>
       </div>
-      <SharedFeatureComposer v-if="ready.length && providerReady" :initial-project-id="initialProjectId || ready[0]?.id" :registered-projects="ready.map(project => ({ id: project.id, label: project.name, enabled: true }))" @created="(id, previous) => $emit('created', id, previous)" @busy="$emit('busy', $event)" />
+      <SharedFeatureComposer :heading="false" :draft-name="draftName" v-if="ready.length && providerReady" :initial-project-id="initialProjectId || ready[0]?.id" :registered-projects="ready.map(project => ({ id: project.id, label: project.name, enabled: true }))" @created="(id, previous) => $emit('created', id, previous)" @busy="$emit('busy', $event)" />
     </template>
   </section>
 </template>

@@ -5,8 +5,10 @@ import { h, KeepAlive, nextTick, type Component } from 'vue';
 import UApp from '@nuxt/ui/components/App.vue';
 import App from '../src/worker/webview/App.vue';
 import WorkerShell from '../src/worker/webview/components/WorkerShell.vue';
+import RequestPage from '../src/worker/webview/pages/RequestPage.vue';
 import TaskboardPage from '../src/worker/webview/pages/TaskboardPage.vue';
 import HistoryPage from '../src/worker/webview/pages/HistoryPage.vue';
+import TaskMaintenancePage from '../src/worker/webview/pages/TaskMaintenancePage.vue';
 import { renderMetricsPage } from './worker-metrics-fixtures';
 import SettingsPage from '../src/worker/webview/pages/SettingsPage.vue';
 import DurationSettingsPanel from '../src/worker/webview/components/DurationSettingsPanel.vue';
@@ -19,7 +21,6 @@ import NewTask from '../src/worker/webview/components/NewTask.vue';
 import SettingsPanel from '../src/worker/webview/components/SettingsPanel.vue';
 import DefinitionPanel from '../src/worker/webview/components/DefinitionPanel.vue';
 import RequestGatePanel from '../src/worker/webview/components/RequestGatePanel.vue';
-import RequestPolicyPanel from '../src/worker/webview/components/RequestPolicyPanel.vue';
 import RepositoryPanel from '../src/worker/webview/components/RepositoryPanel.vue';
 import StatusApp from '../src/worker/webview/status/StatusApp.vue';
 import { diagnosticFixture, formattedReplyFixture, installWorkerFixture, type WorkerFixture } from './worker-fixtures';
@@ -61,8 +62,9 @@ async function ready(canvas: HTMLElement) {
 }
 const settled = async ({ canvasElement }: { canvasElement: HTMLElement }) => ready(canvasElement);
 const selectConversation = async (canvasElement: HTMLElement) => {
-  if (!canvasElement.querySelector('#followup-task-tab')) { const open = [...canvasElement.querySelectorAll('button')].find(button => button.textContent?.includes('Continue selected task')); open?.click(); }
-  (await element(canvasElement, '#followup-task-tab')).click();
+  const tab = canvasElement.querySelector<HTMLButtonElement>('#followup-task-tab');
+  if (tab) tab.click();
+  await element(canvasElement, '#task-interaction-title');
 };
 const followUp = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
   await selectConversation(canvasElement);
@@ -78,7 +80,7 @@ export const LockedWorkspace: Story = {
 };
 export const EmptyTaskboard: Story = {
   name: '02 · First task and empty board',
-  parameters: { storymap: storymap('An empty board explains where questions, queued work and results will appear. One composer creates a feature request with a persistent Markdown progress record.', boardCovers.filter(item => item !== 'components/OverviewTaskCard'), '/taskboard', 2) },
+  parameters: { storymap: storymap('An empty board explains where questions, queued work and results will appear. A focused New Feature Request page prepares canonical project requests; the board remains an overview.', boardCovers.filter(item => item !== 'components/OverviewTaskCard'), '/taskboard', 2) },
   render: renderPage(TaskboardPage, 'empty'), play: settled,
 };
 export const PopulatedTaskboard: Story = {
@@ -88,13 +90,13 @@ export const PopulatedTaskboard: Story = {
 };
 export const RunningTask: Story = {
   name: '04 · Monitor the selected model attempt',
-  parameters: { storymap: storymap('The running strip records the actual attempt model and its usage. Stop task applies to that current attempt; a follow-up can be drafted while it runs.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/OverviewTaskCard', 'components/TaskInteraction', 'components/MessageContent'], '/workboard', 4) },
-  render: renderPage(TaskboardPage, 'running'), play: followUp,
+  parameters: { storymap: storymap('The exact existing request remains visible while its attempt runs. Follow-up text is retained without enabling another new-request flow.', ['components/WorkerShell', 'pages/RequestPage', 'components/TaskInteraction', 'components/MessageContent'], '/request?session=running', 4) },
+  render: renderPage(RequestPage, 'running'), play: followUp,
 };
 export const AnswerCheckpoint: Story = {
   name: '05 · Answer a saved checkpoint',
-  parameters: { storymap: storymap('A saved model question keeps its choices and context visible. Selecting a choice fills an answer without sending it.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/OverviewTaskCard', 'components/TaskInteraction', 'components/InteractionPanel', 'components/MessageContent'], '/workboard', 5) },
-  render: renderPage(TaskboardPage, 'checkpoint'),
+  parameters: { storymap: storymap('A saved model question keeps its choices and context visible. Selecting a choice fills an answer without sending it.', ['components/WorkerShell', 'pages/RequestPage', 'components/TaskInteraction', 'components/InteractionPanel', 'components/MessageContent'], '/request?session=decision', 5) },
+  render: renderPage(RequestPage, 'checkpoint'),
   play: async context => { await followUp(context); await element(context.canvasElement, '#checkpoint-answer'); await ready(context.canvasElement); },
 };
 export const FollowUp: Story = {
@@ -109,8 +111,8 @@ export const FailedAttempt: Story = {
   play: async context => { await followUp(context); await element(context.canvasElement, '#checkpoint-answer'); await ready(context.canvasElement); },
 };
 export const FileTaskIntake: Story = {
-  name: '08 · Add repository files to the same request',
-  parameters: { storymap: storymap('One set of instructions creates a Markdown feature request. Optional approved repository files extend that request; the worker produces a patch for human review without changing the original checkout.', ['components/TaskInteraction', 'components/TaskIntake', 'components/RunTask'], '/workboard', 8) },
+  name: '08 · Retained legacy approved-file intake',
+  parameters: { storymap: storymap('This retained legacy intake is a source-compatibility example, not the primary project request form. Optional approved repository files extend its request; the worker produces a patch for human review without changing the original checkout.', ['components/TaskInteraction', 'components/TaskIntake', 'components/RunTask'], '/workboard', 8) },
   render: renderComponent(TaskInteraction),
   play: async ({ canvasElement }) => {
     const input = await element(canvasElement, '#new-task-instructions') as HTMLTextAreaElement;
@@ -134,15 +136,18 @@ export const FileTaskIntake: Story = {
   },
 };
 export const ReviewFilePatch: Story = {
-  name: '09 · Review the proposed patch',
-  parameters: { storymap: storymap('History links directly to one retained file patch, its approved scope and human review controls.', ['components/WorkerShell', 'pages/HistoryPage', 'components/Taskboard'], '/history?fileState=review&fileId=file-review', 9) },
-  render: renderPage(HistoryPage),
-  play: async ({ canvasElement }) => { await element(canvasElement, '#local-task-detail'); await ready(canvasElement); },
+  name: '09 · Find a retained file-task candidate',
+  parameters: { storymap: storymap('History preserves the exact file ID and links to review without selecting, restoring or changing running work.', ['components/WorkerShell','pages/HistoryPage','components/FileTaskHistory'], '/history?fileState=review&fileId=file-review', 9) }, render:renderPage(HistoryPage),
+  play:async({canvasElement})=>{const q=within(canvasElement);const link=await q.findByRole('link',{name:'Inspect request'});if(!link.getAttribute('href')?.includes('fileId=file-review'))throw Error('Retained identity lost.');if(q.queryByRole('button',{name:/Pause queue|Resume queue/}))throw Error('History must not operate the queue.');await ready(canvasElement);},
 };
 export const TaskHistory: Story = {
-  name: '10 · Find saved work',
-  parameters: { storymap: storymap('Task history distinguishes conversations, approved-file tasks and original orchestrator attempts, with filters for type and lifecycle.', ['components/WorkerShell', 'pages/HistoryPage', 'components/Taskboard', 'components/TaskConversationHistory'], '/history', 10) },
-  render: renderPage(HistoryPage), play: settled,
+  name:'10 · Find retained requests',parameters:{storymap:storymap('Read-only request search preserves archive state. Inspection opens exact review evidence; active queue controls belong to Workboard.',['components/WorkerShell','pages/HistoryPage','components/TaskConversationHistory'],'/history',10)},render:renderPage(HistoryPage),play:async({canvasElement})=>{const q=within(canvasElement);await q.findByRole('heading',{name:'Retained requests'});if(q.queryByRole('button',{name:/Pause queue|Resume queue|Restore and open/}))throw Error('History exposes mutation controls.');await ready(canvasElement);},
+};
+export const AssignedAttemptHistory: Story = {
+  name:'Inspect assigned attempt history',parameters:{storymap:storymap('Assigned snapshots have their own evidence view and do not repeat conversations or active queue controls.',['pages/HistoryPage','components/AssignedAttemptHistory'],'/history?view=assigned')},render:renderPage(HistoryPage),play:settled,
+};
+export const SavedTaskMaintenance: Story = {
+  name:'Manage one saved file task',parameters:{storymap:storymap('Task priority, retry and cleanup remain available outside read-only history, scoped to an explicit retained file ID.',['pages/TaskMaintenancePage','components/Taskboard'],'/request/maintenance?fileId=file-review')},render:renderPage(TaskMaintenancePage),play:async({canvasElement})=>{await element(canvasElement,'#local-task-detail');const q=within(canvasElement);if(q.queryByRole('button',{name:/Pause queue|Resume queue/})||canvasElement.querySelector('.task-kanban'))throw Error('Focused maintenance must not operate or browse the global queue.');await ready(canvasElement);},
 };
 export const ExecutionEvidence: Story = {
   name: '11 · Inspect an execution evidence pair',
@@ -160,13 +165,13 @@ export const WorkerDashboard: Story = {
   name: '13 · Review consumption and worker health',
   parameters: { storymap: storymap('Metrics identifies this worker, explains its current capacity, visualizes measured and reserved consumption, and separates current process resources from retained execution outcomes. All values are fictional examples.', ['components/WorkerShell', 'pages/MonitoringPage', 'components/MetricsConsumptionPanel', 'components/MetricsResourcesPanel', 'components/MetricsExecutionPanel', 'components/ResourceMonitorPanel'], '/dashboard', 12) },
   render: renderMetricsPage(),
-  play: async ({ canvasElement }) => { await element(canvasElement, '#consumption-limits'); await element(canvasElement, '[data-resource="cpu"] meter'); await element(canvasElement, '[data-execution-metric="duration"]'); await ready(canvasElement); },
+  play: async ({ canvasElement }) => { await element(canvasElement, '#consumption-limits'); await element(canvasElement, '[data-resource="cpu"] meter'); await userEvent.click(within(canvasElement).getByText('Execution usage and outcomes',{exact:true})); await element(canvasElement, '[data-execution-metric="duration"]'); await ready(canvasElement); },
 };
 export const ModelControls: Story = {
-  name: '14 · Configure model connections and gate policy',
-  parameters: { storymap: storymap('Provider configuration and request policy remain explicit controls. Credential inputs start empty, and the examples never contact a provider.', ['components/SettingsPanel', 'components/RequestPolicyPanel'], '/settings#provider-connections') },
-  render: () => ({ setup() { installWorkerFixture(); return () => h(UApp, null, { default: () => h('div', { style: 'max-width:1100px;margin:auto;padding:24px' }, [h(SettingsPanel), h(RequestPolicyPanel)]) }); } }),
-  play: async ({ canvasElement }) => { const input = await element(canvasElement, '#request-policy-json'); const disclosure = input.closest('details'); if (disclosure) disclosure.open = true; await ready(canvasElement); },
+  name:'14 · Connect one model provider',parameters:{storymap:storymap('Provider configuration owns one connection. Defaults and assigned request policy have their own save destinations.',['components/SettingsPanel'],'/settings#provider-connections')},render:renderComponent(SettingsPanel,'settings-ready',{providerOnly:true,hideDefaults:true}),play:async({canvasElement})=>{await element(canvasElement,'#provider-connection');if(canvasElement.querySelector('#worker-default-provider')||canvasElement.querySelector('#request-policy-json'))throw Error('Provider connection view combines independent goals.');await ready(canvasElement);},
+};
+export const AssignedRequestRules: Story = {
+  name:'Set assigned request rules',parameters:{storymap:storymap('Readiness and completion policy for assigned requests stays independent of connecting an orchestrator.',['pages/SettingsPage','components/RequestPolicyPanel'],'/settings#request-policy')},render:renderPage(SettingsPage),play:async({canvasElement})=>{const input=await element(canvasElement,'#request-policy-json');const disclosure=input.closest('details');if(disclosure)disclosure.open=true;await ready(canvasElement);},
 };
 export const AgentDefinitions: Story = {
   name: '15 · Inspect imported agent definitions',
@@ -190,7 +195,7 @@ export const RequestReview: Story = {
 };
 export const ResourcePolicy: Story = {
   name: '17 · Set warning and maximum duration',
-  parameters: { storymap: storymap('Warning duration and maximum attempt duration are separate settings. The form preserves drafts and explains the effect on new attempts.', ['components/DurationSettingsPanel'], '/settings#queue') },
+  parameters: { storymap: storymap('Warning duration and maximum attempt duration are separate settings. The form preserves drafts and explains the effect on new attempts.', ['components/DurationSettingsPanel'], '/settings#duration-policy') },
   render: renderComponent(DurationSettingsPanel, 'running'),
   play: async ({ canvasElement }) => { await element(canvasElement, '#duration-settings-title'); await ready(canvasElement); },
 };
@@ -202,7 +207,7 @@ export const ProjectRequests: Story = {
 };
 export const LegacyConversation: Story = {
   name: '19 · Retained conversation component',
-  parameters: { storymap: storymap('The legacy conversation component remains documented for source compatibility; the public /chat route redirects to Taskboard.', ['components/WorkerShell', 'pages/ChatPage', 'components/SessionPanel', 'components/MessageContent', 'components/RequestGatePanel'], '/workboard') },
+  parameters: { storymap: storymap('The legacy conversation component remains documented for source compatibility; the public /chat links resolve through the focused request route when a session identity is supplied.', ['components/WorkerShell', 'pages/ChatPage', 'components/SessionPanel', 'components/MessageContent', 'components/RequestGatePanel'], '/workboard') },
   render: renderPage(ChatPage),
   play: async ({ canvasElement }) => { await element(canvasElement, '#chat-task-title'); await element(canvasElement, '#request-gate-title'); await ready(canvasElement); },
 };
@@ -218,9 +223,9 @@ export const DiagnosticExport: Story = {
 };
 export const OriginalAssignmentEvidence: Story = {
   name: '22 · Inspect an original orchestrator assignment',
-  parameters: { storymap: storymap('Original remote assignments keep their own journal snapshots. Simulated attempts remain explicitly distinct from implemented changes and human-reviewed patches.', ['components/WorkerShell', 'pages/HistoryPage', 'components/Taskboard'], '/history') },
+  parameters: { storymap: storymap('Original remote assignments keep their own journal snapshots. Simulated attempts remain explicitly distinct from implemented changes and human-reviewed patches.', ['components/WorkerShell','pages/HistoryPage','components/AssignedAttemptHistory'], '/history?view=assigned') },
   render: renderPage(HistoryPage),
-  play: async ({ canvasElement }) => { (await element(canvasElement, '[data-attempt="pair-simulated"]')).click(); await element(canvasElement, '#evidence-title'); await ready(canvasElement); },
+  play: async ({canvasElement})=>{await element(canvasElement,'[data-attempt="pair-simulated"]');const trigger=[...canvasElement.querySelectorAll<HTMLElement>('[data-attempt="pair-simulated"]')].find(item=>item.checkVisibility());if(!trigger)throw Error('No accessible assigned-attempt inspector.');await userEvent.click(trigger);await element(canvasElement,'#evidence-title');await ready(canvasElement);},
 };
 
 export const RepositoryAssignments: Story = {
@@ -236,7 +241,7 @@ export const RepositoryAssignments: Story = {
 export const RepositoryConsent: Story = {
   name: '24 · Choose the detected repository',
   parameters: { storymap: storymap('The first unlocked taskboard asks before adding its local Git checkout. The full path, watching permission and a durable decline are visible without blocking tasks.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/RepositoryDiscovery'], '/workboard') },
-  render: renderPage(TaskboardPage, 'repository-pending'), play: settled,
+  render: renderPage(TaskboardPage, 'repository-pending'), play: async ({canvasElement}) => { (await element(canvasElement,'.worker-conditions > summary')).click(); await ready(canvasElement); },
 };
 export const ReconsiderRepository: Story = {
   name: '25 · Reconsider a skipped repository',
@@ -286,10 +291,16 @@ export const WorkerSettings: Story = {
   play: async ({ canvasElement }) => { await element(canvasElement, '#provider-path'); await ready(canvasElement); },
 };
 export const QueueAndDurationSettings: Story = {
-  name: '29 · Configure queue and duration',
-  parameters: { storymap: storymap('Queue admission is separate from the single execution slot. Warning and maximum duration have explicit independent save controls.', ['components/WorkerShell', 'pages/SettingsPage', 'components/QueueSettingsPanel', 'components/DurationSettingsPanel'], '/settings#queue') },
-  render: renderPage(SettingsPage, 'settings-ready'),
-  play: async ({ canvasElement }) => { await element(canvasElement, '#queue-settings-title'); await element(canvasElement, '#duration-settings-title'); await ready(canvasElement); },
+  name:'29 · Set queue capacity',parameters:{storymap:storymap('Capacity has one independently saved editor. Execution time limits remain at a separate bookmarked destination.',['components/WorkerShell','pages/SettingsPage','components/QueueSettingsPanel'],'/settings#queue')},render:renderPage(SettingsPage,'settings-ready'),play:async({canvasElement})=>{await element(canvasElement,'#queue-settings-title');if(canvasElement.querySelector('#duration-settings-title'))throw Error('Queue capacity must not include a second independently saved duration editor.');await ready(canvasElement);},
+};
+export const ExecutionTimeLimits: Story = {
+  name:'Set execution time limits',parameters:{storymap:storymap('The old duration-policy anchor opens only the duration editor and preserves its own draft and save contract.',['pages/SettingsPage','components/DurationSettingsPanel'],'/settings#duration-policy')},render:renderPage(SettingsPage,'settings-ready'),play:async({canvasElement})=>{await element(canvasElement,'#duration-settings-title');if(canvasElement.querySelector('#queue-settings-title'))throw Error('Time limits must not mount capacity controls.');await ready(canvasElement);},
+};
+export const DefaultProvider: Story = {
+  name:'Choose the default provider',parameters:{storymap:storymap('The default provider has its own saved baseline, separate from changing credentials for a connection.',['pages/SettingsPage','components/SettingsPanel'],'/settings#default-provider')},render:renderPage(SettingsPage,'settings-ready'),play:async({canvasElement})=>{await element(canvasElement,'#worker-default-provider');if(canvasElement.querySelector('#provider-connection'))throw Error('The default view must not configure a second account.');await ready(canvasElement);},
+};
+export const SettingsDirectory: Story = {
+  name:'Choose one worker setting',parameters:{storymap:storymap('Settings opens as a grouped task directory. No settings form or save is active until an operator chooses a goal.',['pages/SettingsPage'],'/settings')},render:renderPage(SettingsPage,'settings-ready'),play:async({canvasElement})=>{const q=within(canvasElement);await q.findByRole('heading',{name:'Worker settings'});if(canvasElement.querySelector('form'))throw Error('Settings directory must not mount unrelated editors.');await ready(canvasElement);},
 };
 export const ToolAccessSettings: Story = {
   name: '30 · Configure tools and MCP',
@@ -303,9 +314,9 @@ export const ProjectIntegrationSettings: Story = {
   play: async ({ canvasElement }) => { await element(canvasElement, '#integrations-title'); await ready(canvasElement); },
 };
 export const FullLocalCapacity: Story = {
-  name: '32 · Keep a draft while local admission is full',
-  parameters: { storymap: storymap('One active task plus two queued tasks fills three local admission places. The execution slot remains one, and new instructions cannot be submitted until space is free.', boardCovers, '/workboard') },
-  render: renderPage(TaskboardPage, 'capacity-full'),
+  name: '32 · Retained legacy intake respects full admission capacity',
+  parameters: { storymap: storymap('One active task plus two queued tasks fills three local admission places. The retained legacy intake cannot submit until space is free; canonical Git publication has its separate request page.', ['components/TaskInteraction','components/TaskIntake'], '/workboard') },
+  render: renderComponent(TaskInteraction, 'capacity-full'),
   play: async ({ canvasElement }) => {
     await followUp({ canvasElement });
     (await element(canvasElement, '#new-task-tab')).click();
@@ -386,8 +397,8 @@ export const FeatureRequestSaveFailure: Story = {
 
 export const InterruptedRequestPreparation: Story = {
   name: '40 · Recover a request with a changed worktree',
-  parameters: { storymap: storymap('Interrupted file preparation retains its request and changed worktree for inspection. Without accepted file snapshots, the worker requires a new request and offers no resume, retry or follow-up on the failed admission.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/TaskInteraction', 'components/FeatureRequestNote'], '/workboard') },
-  render: renderPage(TaskboardPage, 'admission-failed'),
+  parameters: { storymap: storymap('Interrupted file preparation retains its request and changed worktree for inspection. Without accepted file snapshots, the worker requires a new request and offers no resume, retry or follow-up on the failed admission.', ['components/WorkerShell', 'pages/RequestPage', 'components/TaskInteraction', 'components/FeatureRequestNote'], '/request?session=file') },
+  render: renderPage(RequestPage, 'admission-failed'),
   play: async context => {
     await selectConversation(context.canvasElement);
     const recovery = await element(context.canvasElement, '.admission-recovery[aria-label="Request recovery"]');

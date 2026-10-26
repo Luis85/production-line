@@ -28,7 +28,8 @@ candidate evidence determine which implementation can be reviewed.
 
 ## 4. Create and submit the Feature Request
 
-Use **Workboard → New Feature Request** for new work. Inspect/edit the prepared
+Use **Workboard → New Feature Request** (`/requests/new`) for new work. Workboard
+chooses the next request; authoring and existing conversation are separate views. Inspect/edit the prepared
 draft, check readiness and publish the ready note to Git. Local saves or commits
 without push do not dispatch shared work. Do not strip shared identity fields to
 feed the request into an old local watcher.
@@ -48,6 +49,9 @@ Unknown outcomes reconcile with their saved identity rather than dispatch again.
 
 ## 6. Inspect the before/after pair
 
+History opens mutually exclusive read-only evidence views. Browsing does not
+select another session, restore archives or control the queue. Explicit links
+open the exact request, Review or retained file-task maintenance.
 History retains per-invocation evidence: task/session/run identity, lifecycle,
 measurement timestamps, worker resources and reported usage. Original orchestrator
 assignment snapshots retain their separate source contract. An older record with
@@ -55,8 +59,9 @@ missing measurements is unknown; it is not zero and does not imply no work ran.
 
 ## 7. Compare many runs and export them
 
-Use History for retained attempts and exports, Metrics for resource/consumption
-observations, and Workflow for confirmed-increment completion windows. Multiple
+Use History for retained attempts and exports, Worker health for resource/consumption
+observations, Workflow health for confirmed-increment completion windows, and
+Workflow's Delivery quality evidence view for request outcome cohorts. Multiple
 retries/reviews can belong to one Feature Request; they are not multiple delivered
 increments. See [workflow and run metrics](../reference/worker-run-metrics.md).
 

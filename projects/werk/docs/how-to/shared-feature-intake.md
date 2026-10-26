@@ -41,7 +41,10 @@ Start `node /path/to/WerkHome/worker.mjs`. In Settings, configure and check the
 provider under the same OS account. In Projects, register the remote/branch,
 choose the watched Feature Request folder and poll interval, preview workflow
 setup and approve its Git commit/push. Separately approve the exact committed
-policy and recheck setup. New project registration is remote-clone only.
+policy and recheck setup. Projects chooses the project; Workflow files, Policy
+approval and Enable requests each open one focused project stage. Configure
+request polling opens that selected project's `step=intake` editor. New project
+registration is remote-clone only.
 
 New clones are `Home/projects/<id>`; the default folder is `features` and poll
 interval is 30 seconds (allowed 1–300 seconds; stored as milliseconds). Provider login, setup publication
@@ -111,7 +114,7 @@ next successful poll. Keep requests as drafts until the team wants work to start
    and local commits alone do not dispatch work. Leave unfinished requests draft.
 4. Confirm shared intake is enabled and new execution is resumed. Queue pause
    holds starts even when the notes are ready; the worker's read-only status and
-   Metrics view can help inspect capacity and allowance before leaving.
+   Worker health view can help inspect capacity and allowance before leaving.
 
 ### Overnight
 
@@ -146,7 +149,7 @@ configured worker until an explicit archival workflow is available.
 
 ## Submit through the worker webview
 
-Open **Workboard → New Feature Request** and describe the outcome in **Request instructions**.
+Open **Workboard → New Feature Request** (`/requests/new`) and describe the outcome in **Request instructions**.
 Choose **Prepare request** to create a draft from the committed project template.
 This is guided authoring, not a model invocation. Complete the request details,
 approved paths and project-specific sections; **Check readiness** reports the

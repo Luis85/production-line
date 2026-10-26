@@ -10,7 +10,7 @@ export function workboardLane(item: TaskOverviewItem): WorkboardLane {
 export function workboardAction(item: TaskOverviewItem): TaskOverviewItem {
   if (item.primaryAction.kind === 'feature' && item.projectId) {
     const query = new URLSearchParams({ project: item.projectId, ...(item.featureName ? { request: item.featureName } : {}) });
-    return { ...item, primaryAction: { ...item.primaryAction, href: '/projects?' + query + '#shared-progress' } };
+    return { ...item, primaryAction: { ...item.primaryAction, href: '/request?' + query } };
   }
   if (item.primaryAction.kind !== 'review') return item;
   return { ...item, ...(item.deliveryRunId ? { sourceLabel: 'Feature Request' } : {}), primaryAction: { ...item.primaryAction, label: workboardLane(item) === 'review' ? 'Review increment' : 'Open progress' } };

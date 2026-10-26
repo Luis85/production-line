@@ -24,7 +24,7 @@ export function installWorkboardFixture(variant: 'setup' | 'ready' | 'review' = 
     if (url.pathname === '/api/features/templates') return Response.json({ projectId: 'web', configured: true, defaultTemplateId: 'default', templates: [{ id: 'default', label: 'Feature Request', path: 'features/_templates/feature-request.md', default: true }] });
     if (url.pathname === '/api/features' && init.method === 'POST' && ['prepare', 'publish'].includes(body.action)) {
       commands.push(body);
-      return Response.json({ ...result, markdown: body.markdown ?? result.markdown, ...(body.action === 'publish' ? { revision: 'published-example', status: body.status, publication: { commit: 'a'.repeat(40), branch: 'main' } } : {}) });
+      return Response.json({ ...result, ...(body.action === 'prepare' && body.name && body.markdown === undefined ? { revision: 'saved-draft-revision' } : {}), markdown: body.markdown ?? result.markdown, ...(body.action === 'publish' ? { revision: 'published-example', status: body.status, publication: { commit: 'a'.repeat(40), branch: 'main' } } : {}) });
     }
     if (variant !== 'review' && url.pathname === '/api/features' && init.method !== 'POST') return Response.json({ enabled: false, tasks: [] });
     return original(input, init);

@@ -74,15 +74,21 @@ Operational surfaces: background #111b22, text #edf4f7, secondary #b5c4cd,
 borders #3b4b56, action mint #8be0b8; system sans-serif 16px/1.6. Runtime controls
 have a 44px minimum height. At desktop widths of at least 1100px, the shared
 spatial layout expands orchestrator content to 1540px and Factory content to
-1760px. The worker has four primary pages: Workboard (default at `/workboard`),
-Projects (`/projects`), Workflow (`/workflow`) and Settings (`/settings`). Metrics
-and History remain secondary evidence links. Workboard leads with Feature Request
-stages, live progress and review; New Feature Request opens the guarded project
-Git-authoring flow on demand. Projects exposes visible Home repositories and
-setup status. Request Review leads with diff, checks and the current decision;
-detailed identities disclose progressively. Workflow presents recorded delivery
-and coverage. Existing `/taskboard` and `/chat` links redirect to Workboard with
-their queries intact. Tables scroll rather than compressing evidence identities.
+1760px. The worker has four primary navigation destinations: Workboard (`/workboard`),
+Projects (`/projects`), Workflow (`/workflow`) and Settings (`/settings`). Every
+focused view has one user goal. Workboard chooses the next request, with Needs
+you first. `/requests/new` authors and publishes one ready request; `/request`
+opens an exact existing conversation or pre-admission shared request. Projects
+chooses a project; `/projects/new` clones one; `/project` scopes one setup,
+policy-approval, readiness, policy-draft or request-polling goal to that project. Settings is a
+grouped directory of independently saved editors. Review leads with the exact
+candidate, required checks and current human decision, naming pending acceptance
+separately from failed checks. Workflow summarizes flow/velocity; its evidence
+view owns delivery-quality analysis. Worker health (`/dashboard`) owns resources
+and consumption. History provides mutually exclusive read-only evidence views;
+request actions and retained file maintenance open dedicated workflows. Existing
+taskboard/chat/session links retain exact identity when opening `/request`.
+Unscoped legacy bookmarks open Workboard. Tables scroll rather than compressing evidence identities.
 The worker surface is recorded in `src/worker/webview/DESIGN.md`.
 
 Concept surfaces: background #10191e, panels #17232b, lines #30404a,
@@ -144,9 +150,9 @@ read-only configuration context. Opening a saved task clears
 filters that could hide it. The concept also supports weekly ready-import and
 keeps unsent feature drafts scoped to the selected production line. Factory
 management shows portfolio context; line operations show the selected line.
-Worker Workboard is the first work surface after unlock/setup. Its full-width
-stages keep request identity, live progress, questions, holds and review actions
-visible. New Feature Request opens project Git authoring on demand. Projects and
+Worker Workboard is the first work surface after unlock/setup. Its stages keep request identity, live progress, questions, holds and review
+actions visible, prioritizing the operator's next action. New Feature Request
+opens its own focused project Git-authoring view. Projects and
 Workflow health remain one click away; Metrics and History retain secondary
 evidence. The primary flow does not submit generic chat or install a worker in a
 project. Review prioritizes diff, checks and the current human decision while
@@ -164,9 +170,12 @@ identity and immutable operation keys. Uncertain acknowledgements reconcile befo
 new mutations. Source Markdown remains authoritative; generated progress is
 labelled with saved/error state. Legacy conversation/file-task records keep their
 history without becoming the primary creation flow.
-History retains task management and execution evidence without taking authority
-over orchestrator-owned assignments. Settings holds provider and agent setup,
-queue/duration policy, tools, repositories and enrollment. Metrics holds observed
+History retains read-only task and execution evidence without selecting another
+session, restoring archived work, changing queues or taking authority over
+orchestrator-owned assignments. Explicit links open the exact request, Review
+or retained file-task maintenance. Settings holds independent provider/default,
+agent, queue, duration, consumption, tool, connection and request-policy editors;
+project configuration and exact-policy approval belong to the selected project. Metrics holds observed
 consumption, process health and diagnostics; Workboard owns capacity and new-start
 controls. Settings sections preserve unsubmitted drafts in the current tab; guarded policy saves detect stale baselines.
 
