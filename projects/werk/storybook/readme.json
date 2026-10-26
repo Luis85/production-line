@@ -4,17 +4,24 @@
   "screenshots": [
     {
       "file": "worker-taskboard.png",
-      "story": "worker-workspace--populated-taskboard",
+      "story": "worker-workboard-journey--review-lane",
       "viewport": "desktop",
-      "alt": "Worker taskboard showing capacity and requests grouped by their current state.",
+      "alt": "Workboard prioritizing requests that need input and increments ready for review.",
       "caption": "Workboard with deterministic sample requests. Choose the next request to advance; authoring, conversation and review have separate focused views."
     },
     {
-      "file": "worker-create-request.png",
-      "story": "worker-shared-feature-requests--describe-request",
+      "file": "worker-projects.png",
+      "story": "worker-workboard-journey--visible-home-projects",
       "viewport": "desktop",
-      "alt": "Shared Feature Request authoring in the worker, with request instructions and the Prepare request action.",
-      "caption": "The shared-request entry screen with example instructions. The next step lets you review the template, approved scope and readiness before publishing."
+      "alt": "Project directory showing isolated Home checkout paths and an explicit Add a project action.",
+      "caption": "Choose a registered project. Cloning, workflow publication, exact policy approval and intake recheck are separate explicit steps."
+    },
+    {
+      "file": "worker-create-request.png",
+      "story": "worker-workboard-journey--canonical-request",
+      "viewport": "desktop",
+      "alt": "Focused New Feature Request view with project, goal, acceptance criteria and explicit Git publication.",
+      "caption": "One project request, from its committed template to an explicit publication decision. Draft preparation does not invoke a model or commit to Git."
     },
     {
       "file": "worker-metrics.png",
@@ -22,6 +29,13 @@
       "viewport": "desktop",
       "alt": "Worker health with resources, measured consumption and execution activity.",
       "caption": "Worker health with deterministic sample measurements. Resource use and allowance are separate from delivery quality and live provider account balances."
+    },
+    {
+      "file": "worker-workflow.png",
+      "story": "worker-workflow--observed-delivery",
+      "viewport": "desktop",
+      "alt": "Workflow health with recorded stage pressure, confirmed-increment velocity and measurement coverage.",
+      "caption": "Recorded delivery health and operational EBM proxies. Unmeasured customer or business outcomes remain unavailable rather than being inferred."
     },
     {
       "file": "worker-review.png",
@@ -32,10 +46,10 @@
     },
     {
       "file": "worker-settings.png",
-      "story": "worker-workspace--worker-settings",
+      "story": "worker-workspace--settings-directory",
       "viewport": "desktop",
-      "alt": "Focused provider connection settings with navigation to other independent setting editors.",
-      "caption": "One provider connection editor with sample configuration. Default provider, capacity and time limits have separate saves. Keep credentials local to the worker machine."
+      "alt": "Settings directory grouping independent worker settings by the task to perform.",
+      "caption": "Choose one setting, then edit it on its own focused view. Provider connection, default provider, capacity and time limits have independent saves."
     }
   ]
 }

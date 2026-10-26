@@ -39,8 +39,8 @@ Interrupted repository preparation retries the same frozen submission identity. 
 
 | Before | After |
 | --- | --- |
-| ![Worker taskboard before, desktop](../evidence/worker-experience-before-taskboard-desktop-viewport.png) | ![Worker taskboard after, desktop](../evidence/worker-experience-after-taskboard-desktop-viewport.png) |
-| ![Worker taskboard before, mobile](../evidence/worker-experience-before-taskboard-mobile-viewport.png) | ![Worker taskboard after, mobile](../evidence/worker-experience-after-taskboard-mobile-viewport.png) |
+| ![Worker taskboard before, desktop](../evidence/archive/worker-experience-before-taskboard-desktop-viewport.png) | ![Worker taskboard after, desktop](../evidence/archive/worker-experience-after-taskboard-desktop-viewport.png) |
+| ![Worker taskboard before, mobile](../evidence/archive/worker-experience-before-taskboard-mobile-viewport.png) | ![Worker taskboard after, mobile](../evidence/archive/worker-experience-after-taskboard-mobile-viewport.png) |
 
 On desktop, the instructions field is now near the top of the interaction column. Mobile still stacks the queue and composer; the New request and Continue selected task controls provide direct focus and scroll navigation. This is not a claim that the entire mobile taskboard became shorter.
 
@@ -48,20 +48,20 @@ On desktop, the instructions field is now near the top of the interaction column
 
 | Before: combined dashboard | After: Metrics |
 | --- | --- |
-| ![Combined dashboard before, desktop](../evidence/worker-experience-before-dashboard-desktop-viewport.png) | ![Metrics after, desktop](../evidence/worker-experience-after-metrics-desktop-viewport.png) |
-| ![Combined dashboard before, mobile](../evidence/worker-experience-before-dashboard-mobile-viewport.png) | ![Metrics after, mobile](../evidence/worker-experience-after-metrics-mobile-viewport.png) |
+| ![Combined dashboard before, desktop](../evidence/archive/worker-experience-before-dashboard-desktop-viewport.png) | ![Metrics after, desktop](../evidence/archive/worker-experience-after-metrics-desktop-viewport.png) |
+| ![Combined dashboard before, mobile](../evidence/archive/worker-experience-before-dashboard-mobile-viewport.png) | ![Metrics after, mobile](../evidence/archive/worker-experience-after-metrics-mobile-viewport.png) |
 
 With equivalent fixture tasks, the first implementation capture measured Metrics at 2,214 pixels on desktop and 3,485 on mobile, down from the combined dashboard's 3,699 and 5,151. Configuration moved into dedicated sections rather than being removed.
 
 | Providers and accounts | Queue settings on mobile |
 | --- | --- |
-| ![Settings providers after, desktop](../evidence/worker-experience-after-settings-providers-desktop-viewport.png) | ![Queue settings after, mobile](../evidence/worker-experience-after-settings-queue-mobile-viewport.png) |
+| ![Settings providers after, desktop](../evidence/archive/worker-experience-after-settings-providers-desktop-viewport.png) | ![Queue settings after, mobile](../evidence/archive/worker-experience-after-settings-queue-mobile-viewport.png) |
 
 ### Readable request record
 
 | Desktop interaction column | Mobile |
 | --- | --- |
-| ![Saved request Markdown, desktop](../evidence/worker-experience-after-request-note-desktop.png) | ![Saved request Markdown, mobile](../evidence/worker-experience-after-request-note-mobile.png) |
+| ![Saved request Markdown, desktop](../evidence/archive/worker-experience-after-request-note-desktop.png) | ![Saved request Markdown, mobile](../evidence/archive/worker-experience-after-request-note-mobile.png) |
 
 The readable body stays open across background updates. Obsidian frontmatter remains available in Record metadata, and Download Markdown returns the exact saved file.
 

@@ -1,0 +1,1002 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-26",
+  "recoveryCommit": "46682ee5c23e133731f1f37477d550925073f877",
+  "policy": "Remove only PNGs whose complete filename stem is absent from all tracked text. Retain all structured receipts, mutation raw results, linked captures and explicit historical comparisons. Move history with guarded link updates. Current screenshots are generated separately.",
+  "removed": [
+    {
+      "path": "docs/evidence/journey-evidence-desktop-after.png",
+      "bytes": 126701,
+      "sha256": "e4499f9a883d02e3dc8e215dbbf6eca7ee787092ccded621f89f550e1a95976f"
+    },
+    {
+      "path": "docs/evidence/journey-evidence-mobile-after.png",
+      "bytes": 59494,
+      "sha256": "ade2d50e36db554c75c7ff7bcf22dac83713b8bd260aa220e74c23e2c5937094"
+    },
+    {
+      "path": "docs/evidence/journey-intake-empty-desktop-after.png",
+      "bytes": 133732,
+      "sha256": "351088c26f36344004f81225b50d1d0eda10002924a6d0bacd54fe42e52337a5"
+    },
+    {
+      "path": "docs/evidence/journey-intake-empty-mobile-after.png",
+      "bytes": 62344,
+      "sha256": "e785f1312cc814c5834437ed29fcf18f861d42843140b90cbe53479334df9472"
+    },
+    {
+      "path": "docs/evidence/journey-login-desktop-after.png",
+      "bytes": 79161,
+      "sha256": "3f9d9cf327382d355a50bb7eb14e961e205c6bccc766cbacd4753a5f576649f7"
+    },
+    {
+      "path": "docs/evidence/journey-login-desktop-before.png",
+      "bytes": 153797,
+      "sha256": "b3c4a194ee3f65c3f6319201b9601d8dd71dffe211657eafa56891f4133835c9"
+    },
+    {
+      "path": "docs/evidence/journey-login-mobile-after.png",
+      "bytes": 69170,
+      "sha256": "00273d8a7d3c9b1b74b79d77ad5d6c23cee14d1e6bf5200fbb49f02bafbe6173"
+    },
+    {
+      "path": "docs/evidence/journey-login-mobile-before.png",
+      "bytes": 64549,
+      "sha256": "602ca157671a2ef6bd251774a36c94ecaafe9ac44f3993a9417cceb38dbf1140"
+    },
+    {
+      "path": "docs/evidence/journey-package-evidence-desktop.png",
+      "bytes": 128189,
+      "sha256": "5593c79c5c0568c919d469d0019678a4bf48d01fff05b2edd5c122a3ff3fcc60"
+    },
+    {
+      "path": "docs/evidence/journey-package-login-mobile.png",
+      "bytes": 69178,
+      "sha256": "6fddb931daac73df3029dcbe2c30352982e4ebb7a344e572b0bc03585fd3f839"
+    },
+    {
+      "path": "docs/evidence/journey-result-desktop-after.png",
+      "bytes": 114187,
+      "sha256": "cf294446202ddcf9f0dde7f0e7cdcc7c14ae41b5c01a3760a373f7038a132c5e"
+    },
+    {
+      "path": "docs/evidence/journey-result-mobile-after.png",
+      "bytes": 61663,
+      "sha256": "95d3045f84722974fc2012b142addaa31f0ee5ccd9b53672dc5f34b87b6f199d"
+    },
+    {
+      "path": "docs/evidence/journey-workers-mobile-before.png",
+      "bytes": 63557,
+      "sha256": "a6ef31ce2105b38a5bf80427c4e95a951e2ca4e3c0021c360c5ef2b400e58aa1"
+    },
+    {
+      "path": "docs/evidence/model-interaction-consumption-analysis-1440.png",
+      "bytes": 200428,
+      "sha256": "657c78559cb520556546fc2dc2c6c0d79c5d595489ccd8fb73269453c5d8b652"
+    },
+    {
+      "path": "docs/evidence/model-interaction-question-390.png",
+      "bytes": 180656,
+      "sha256": "ab7924f687b918b7a6c2945256f09efafa41eca0639cf86b23e00233c944c495"
+    },
+    {
+      "path": "docs/evidence/model-interaction-reopened-question-390.png",
+      "bytes": 176386,
+      "sha256": "704892400a9709d526e82b35e2c6861a52f908bddbb6626b9d7625aba76f4fe3"
+    },
+    {
+      "path": "docs/evidence/model-interaction-resumed-checkpoint-1440.png",
+      "bytes": 330874,
+      "sha256": "73d03a3d2975a5a3fe4011a68ae79c838774bb8e25ccd749dc6bc7cfb6a9a09b"
+    },
+    {
+      "path": "docs/evidence/model-interaction-resumed-checkpoint-320.png",
+      "bytes": 101351,
+      "sha256": "5b624d7ebbdd571b35f3b1056972dfd99c5f82af9cf19de6f44f76f590aa6800"
+    },
+    {
+      "path": "docs/evidence/model-interaction-stopped-390.png",
+      "bytes": 167025,
+      "sha256": "8ab410de93deeb31344ca56d2eaa65ba05655f72ed7f827c296dd53e5e1a5aa1"
+    },
+    {
+      "path": "docs/evidence/readable-file-task-reply-desktop.png",
+      "bytes": 62050,
+      "sha256": "29d4bbdf71856cd5aef75a58e8f7f658e85d868931e48c64ad0405863a1c29fb"
+    },
+    {
+      "path": "docs/evidence/readable-file-task-reply-mobile.png",
+      "bytes": 55260,
+      "sha256": "1d2efbc3e11281960f73f25ef995576c1f6c77d006ef0dd6e77132f39d7d4b8a"
+    },
+    {
+      "path": "docs/evidence/resources-integrations-actual-chat-warning-390.png",
+      "bytes": 30938,
+      "sha256": "58ea5bc2b827efd76ea7b811ae4ff5f065b593d31f76ed92016dfb93b90401d3"
+    },
+    {
+      "path": "docs/evidence/resources-integrations-actual-resource-resolved-390.png",
+      "bytes": 148472,
+      "sha256": "669a7ab0185e06f9b697744df69d6a277a563f744dccae8163efb9819c2a815a"
+    },
+    {
+      "path": "docs/evidence/resources-integrations-actual-resource-warning-1440.png",
+      "bytes": 169538,
+      "sha256": "804f0d083cdf2dd28216012373b0907961d9621a856c0995d405f46282829eb0"
+    },
+    {
+      "path": "docs/evidence/resources-integrations-actual-resource-warning-320.png",
+      "bytes": 158016,
+      "sha256": "e79bda43f9e598d36c2e7f74768771362e58d65e9819603cbdcc17e4b1eeff1c"
+    },
+    {
+      "path": "docs/evidence/resources-integrations-integration-plan-390.png",
+      "bytes": 74246,
+      "sha256": "05406bf23327606f3c58deca4ae0a1bd44091c9c931ab59bbbe93e247774e750"
+    },
+    {
+      "path": "docs/evidence/resources-integrations-integration-protected-conflict-390.png",
+      "bytes": 86271,
+      "sha256": "9feca202b3b369873a1752e59b486f7fd04b2608445ea9ce163c69ff9d30dea9"
+    },
+    {
+      "path": "docs/evidence/system-factory-capabilities-mobile-after.png",
+      "bytes": 58289,
+      "sha256": "1d17ae077c10ad6720d5c0f08618798c345ea453e0a8656c79c0e56aa3864d0e"
+    },
+    {
+      "path": "docs/evidence/system-factory-desktop-after.png",
+      "bytes": 112159,
+      "sha256": "def9348fe6e455c74648cbd18d4266146e882dfca12244ebbcfc234f7168cc36"
+    },
+    {
+      "path": "docs/evidence/system-factory-desktop-before.png",
+      "bytes": 109530,
+      "sha256": "bbc02c5e8a0bfbe3af4ce8979a09496058b27d608e13391b17088109839ccad4"
+    },
+    {
+      "path": "docs/evidence/system-factory-mobile-after.png",
+      "bytes": 55929,
+      "sha256": "49006516b332272087fb95b3ecd590a9dd484ee78557128b94313a923b5c0229"
+    },
+    {
+      "path": "docs/evidence/system-factory-mobile-before.png",
+      "bytes": 41929,
+      "sha256": "f850d6a97599483cdf5d37e575137f8d870cb5006b1fb5d7708f17fe2ae4fc5a"
+    },
+    {
+      "path": "docs/evidence/system-guide-desktop-before.png",
+      "bytes": 120283,
+      "sha256": "ab3a8d94e697b7be96bf3be8476ac5d88eb785cdb9c0a145048930a82d300b41"
+    },
+    {
+      "path": "docs/evidence/system-guide-mobile-after.png",
+      "bytes": 58418,
+      "sha256": "5283753373e2141c3098735c521c3ee5294fc297390a5281811ee08db4ce828a"
+    },
+    {
+      "path": "docs/evidence/system-guide-mobile-before.png",
+      "bytes": 72442,
+      "sha256": "79ce31b840206b49cbadea850d98ad813dae57ba9bdf11b5aab74d66ec522bc7"
+    },
+    {
+      "path": "docs/evidence/system-orchestrator-desktop-before.png",
+      "bytes": 114523,
+      "sha256": "09931c67992ea10c086b5494b73ebfd79687b51c70a31e7f3702e7df5f5d49ad"
+    },
+    {
+      "path": "docs/evidence/system-orchestrator-mobile-before.png",
+      "bytes": 62829,
+      "sha256": "dfba23cb16b710c30646499bc508fe05ad6bff603505a948ebba8751d82f21fc"
+    },
+    {
+      "path": "docs/evidence/system-orchestrator-workers-desktop-after.png",
+      "bytes": 120550,
+      "sha256": "d2c40fe084c14cccacf4e46c0f3bbc089fee38af65bbf0fe0dc01a8738c15d06"
+    },
+    {
+      "path": "docs/evidence/system-orchestrator-workers-mobile-after.png",
+      "bytes": 71145,
+      "sha256": "794029036deaedd4367a737f276d6cb77b67f22a9ee25a1a1dfb7a88f0b95c61"
+    },
+    {
+      "path": "docs/evidence/system-worker-detail-mobile-after.png",
+      "bytes": 53089,
+      "sha256": "6a1a2fbb4158e6e5467a76be37908bdfbb0060d2adedb3181574e483cede196d"
+    },
+    {
+      "path": "docs/evidence/worker-lifecycle-analysis-desktop.png",
+      "bytes": 118330,
+      "sha256": "870ccb3e60edf20dc6a45576d3828b2097c77341c04e0f2aadd24b38b8df05c7"
+    },
+    {
+      "path": "docs/evidence/worker-lifecycle-analysis-mobile.png",
+      "bytes": 114900,
+      "sha256": "695bafcc26049e5598621bc5d5a1c4add220c734822cd4c66f243589d9945c7a"
+    },
+    {
+      "path": "docs/evidence/worker-lifecycle-partial-320.png",
+      "bytes": 205686,
+      "sha256": "c9259e58566b08382555b81af5ae280ae7aa5ce4f62c3d9a2d5c687b1bc472a6"
+    },
+    {
+      "path": "docs/evidence/worker-lifecycle-request-mobile.png",
+      "bytes": 128880,
+      "sha256": "15e1761b8ac391b981157184ffbd6d27144f7ab5b83235630052aebf58254431"
+    },
+    {
+      "path": "docs/evidence/worker-lifecycle-requests-desktop.png",
+      "bytes": 100561,
+      "sha256": "0101d9445001e0e39ca6b3a83b1778fd593afa6ce5d056b45a2fa126108219aa"
+    },
+    {
+      "path": "docs/evidence/worker-lifecycle-run-mobile.png",
+      "bytes": 50002,
+      "sha256": "b873a14499376fa54698b688967dd11308c3cbc189aa5cb01191f38a16e4855e"
+    },
+    {
+      "path": "docs/evidence/central-feature/desktop-details.png",
+      "bytes": 136241,
+      "sha256": "844a50d6a8ad4fcc22c701e21abc0c6877dc079d20184fe80abf699e0244c1af"
+    },
+    {
+      "path": "docs/evidence/central-feature/desktop-instructions.png",
+      "bytes": 52145,
+      "sha256": "21340ec0f863b047e9e496e0bb3fba4acd08ef67b3ecddcf8d63b985eef9c382"
+    },
+    {
+      "path": "docs/evidence/central-feature/mobile-details.png",
+      "bytes": 125259,
+      "sha256": "97c0de0b0533488928a195fd5780774ee776bbb5670eb9c80ffe0d986970009e"
+    },
+    {
+      "path": "docs/evidence/central-feature/mobile-instructions.png",
+      "bytes": 44897,
+      "sha256": "106bbd774b5716865fa0dbfb99e107be09a5d3a823a337e3b61ed0be79f2b082"
+    },
+    {
+      "path": "docs/evidence/central-feature/mobile-published.png",
+      "bytes": 49788,
+      "sha256": "340d27599e5e6a40c91a5424f7ad0ac27aa3aa98f31c1065a96ba4013b431800"
+    },
+    {
+      "path": "docs/evidence/central-feature/mobile-retry.png",
+      "bytes": 132128,
+      "sha256": "bb4b1d06e020b4def533927a736f0db6f9df99cc734af399ba18c95b39baa2c1"
+    },
+    {
+      "path": "docs/evidence/2026-10-14-system-polish/factory/after-1440-handoff.png",
+      "bytes": 265299,
+      "sha256": "e8cee33807dfc14e00e4eccfdff2655aebe8ca70ea567a6b4d9b81b77dc55c61"
+    },
+    {
+      "path": "docs/evidence/2026-10-14-system-polish/factory/after-390-aggregate.png",
+      "bytes": 187745,
+      "sha256": "78920572086d8cb8e90bd0b5bd5028671a6b4c2885eda14cc12aec11dedb0e08"
+    },
+    {
+      "path": "docs/evidence/2026-10-14-system-polish/factory/before-390-aggregate.png",
+      "bytes": 189267,
+      "sha256": "a0641efe965f829a61e2012d456dcb90b81677d40f916afc4f12f03ee8c99bc7"
+    }
+  ],
+  "removedBytes": 6079476,
+  "archiveMoves": [
+    {
+      "from": "docs/evidence/2026-10-14-orchestrator-journey-polish",
+      "to": "docs/evidence/archive/2026-10-14-orchestrator-journey-polish"
+    },
+    {
+      "from": "docs/evidence/2026-10-14-system-polish",
+      "to": "docs/evidence/archive/2026-10-14-system-polish"
+    },
+    {
+      "from": "docs/evidence/2026-10-14-worker-lifecycle",
+      "to": "docs/evidence/archive/2026-10-14-worker-lifecycle"
+    },
+    {
+      "from": "docs/evidence/2026-10-14-worker-lifecycle-cli",
+      "to": "docs/evidence/archive/2026-10-14-worker-lifecycle-cli"
+    },
+    {
+      "from": "docs/evidence/2026-10-14-worker-lifecycle-package",
+      "to": "docs/evidence/archive/2026-10-14-worker-lifecycle-package"
+    },
+    {
+      "from": "docs/evidence/2026-10-15-repository-review",
+      "to": "docs/evidence/archive/2026-10-15-repository-review"
+    },
+    {
+      "from": "docs/evidence/central-feature",
+      "to": "docs/evidence/archive/central-feature"
+    },
+    {
+      "from": "docs/evidence/ci-recovery-browser.json",
+      "to": "docs/evidence/archive/ci-recovery-browser.json"
+    },
+    {
+      "from": "docs/evidence/ci-recovery-validation.json",
+      "to": "docs/evidence/archive/ci-recovery-validation.json"
+    },
+    {
+      "from": "docs/evidence/continuation-factory-desktop.png",
+      "to": "docs/evidence/archive/continuation-factory-desktop.png"
+    },
+    {
+      "from": "docs/evidence/continuation-factory-mobile.png",
+      "to": "docs/evidence/archive/continuation-factory-mobile.png"
+    },
+    {
+      "from": "docs/evidence/continuation-orchestrator-desktop.png",
+      "to": "docs/evidence/archive/continuation-orchestrator-desktop.png"
+    },
+    {
+      "from": "docs/evidence/continuation-orchestrator-mobile.png",
+      "to": "docs/evidence/archive/continuation-orchestrator-mobile.png"
+    },
+    {
+      "from": "docs/evidence/continuation-worker-desktop.png",
+      "to": "docs/evidence/archive/continuation-worker-desktop.png"
+    },
+    {
+      "from": "docs/evidence/continuation-worker-mobile.png",
+      "to": "docs/evidence/archive/continuation-worker-mobile.png"
+    },
+    {
+      "from": "docs/evidence/factory-desktop-after.png",
+      "to": "docs/evidence/archive/factory-desktop-after.png"
+    },
+    {
+      "from": "docs/evidence/factory-mobile-after.png",
+      "to": "docs/evidence/archive/factory-mobile-after.png"
+    },
+    {
+      "from": "docs/evidence/first-release-factory-managed-1440.png",
+      "to": "docs/evidence/archive/first-release-factory-managed-1440.png"
+    },
+    {
+      "from": "docs/evidence/first-release-factory-managed-390.png",
+      "to": "docs/evidence/archive/first-release-factory-managed-390.png"
+    },
+    {
+      "from": "docs/evidence/first-release-factory-managed-line-1440.png",
+      "to": "docs/evidence/archive/first-release-factory-managed-line-1440.png"
+    },
+    {
+      "from": "docs/evidence/first-release-factory-managed-line-390.png",
+      "to": "docs/evidence/archive/first-release-factory-managed-line-390.png"
+    },
+    {
+      "from": "docs/evidence/first-release-iteration-command-1440.png",
+      "to": "docs/evidence/archive/first-release-iteration-command-1440.png"
+    },
+    {
+      "from": "docs/evidence/first-release-iteration-command-390.png",
+      "to": "docs/evidence/archive/first-release-iteration-command-390.png"
+    },
+    {
+      "from": "docs/evidence/first-release-snapshot-coverage-1440.png",
+      "to": "docs/evidence/archive/first-release-snapshot-coverage-1440.png"
+    },
+    {
+      "from": "docs/evidence/first-release-snapshot-coverage-390.png",
+      "to": "docs/evidence/archive/first-release-snapshot-coverage-390.png"
+    },
+    {
+      "from": "docs/evidence/first-release-validation.json",
+      "to": "docs/evidence/archive/first-release-validation.json"
+    },
+    {
+      "from": "docs/evidence/first-release-viewer-taskboard-1440.png",
+      "to": "docs/evidence/archive/first-release-viewer-taskboard-1440.png"
+    },
+    {
+      "from": "docs/evidence/first-release-viewer-taskboard-390.png",
+      "to": "docs/evidence/archive/first-release-viewer-taskboard-390.png"
+    },
+    {
+      "from": "docs/evidence/journey-package-browser.json",
+      "to": "docs/evidence/archive/journey-package-browser.json"
+    },
+    {
+      "from": "docs/evidence/journey-shared-after-chat.png",
+      "to": "docs/evidence/archive/journey-shared-after-chat.png"
+    },
+    {
+      "from": "docs/evidence/journey-shared-after-submission.png",
+      "to": "docs/evidence/archive/journey-shared-after-submission.png"
+    },
+    {
+      "from": "docs/evidence/journey-shared-after-tour-mobile.png",
+      "to": "docs/evidence/archive/journey-shared-after-tour-mobile.png"
+    },
+    {
+      "from": "docs/evidence/journey-shared-before-chat.png",
+      "to": "docs/evidence/archive/journey-shared-before-chat.png"
+    },
+    {
+      "from": "docs/evidence/journey-shared-before-submission.png",
+      "to": "docs/evidence/archive/journey-shared-before-submission.png"
+    },
+    {
+      "from": "docs/evidence/journey-shared-before-tour-mobile.png",
+      "to": "docs/evidence/archive/journey-shared-before-tour-mobile.png"
+    },
+    {
+      "from": "docs/evidence/journey-shared-results.json",
+      "to": "docs/evidence/archive/journey-shared-results.json"
+    },
+    {
+      "from": "docs/evidence/local-delivery",
+      "to": "docs/evidence/archive/local-delivery"
+    },
+    {
+      "from": "docs/evidence/orchestrator-desktop-after.png",
+      "to": "docs/evidence/archive/orchestrator-desktop-after.png"
+    },
+    {
+      "from": "docs/evidence/orchestrator-mobile-after.png",
+      "to": "docs/evidence/archive/orchestrator-mobile-after.png"
+    },
+    {
+      "from": "docs/evidence/pagination-desktop.png",
+      "to": "docs/evidence/archive/pagination-desktop.png"
+    },
+    {
+      "from": "docs/evidence/pagination-mobile.png",
+      "to": "docs/evidence/archive/pagination-mobile.png"
+    },
+    {
+      "from": "docs/evidence/pass4-factory-desktop-after.png",
+      "to": "docs/evidence/archive/pass4-factory-desktop-after.png"
+    },
+    {
+      "from": "docs/evidence/pass4-factory-desktop-before.png",
+      "to": "docs/evidence/archive/pass4-factory-desktop-before.png"
+    },
+    {
+      "from": "docs/evidence/pass4-factory-login.png",
+      "to": "docs/evidence/archive/pass4-factory-login.png"
+    },
+    {
+      "from": "docs/evidence/pass4-factory-mobile-after.png",
+      "to": "docs/evidence/archive/pass4-factory-mobile-after.png"
+    },
+    {
+      "from": "docs/evidence/pass4-factory-mobile-before.png",
+      "to": "docs/evidence/archive/pass4-factory-mobile-before.png"
+    },
+    {
+      "from": "docs/evidence/pass4-factory-response-loss.png",
+      "to": "docs/evidence/archive/pass4-factory-response-loss.png"
+    },
+    {
+      "from": "docs/evidence/pass4-orchestrator-desktop-after.png",
+      "to": "docs/evidence/archive/pass4-orchestrator-desktop-after.png"
+    },
+    {
+      "from": "docs/evidence/pass4-orchestrator-desktop-before.png",
+      "to": "docs/evidence/archive/pass4-orchestrator-desktop-before.png"
+    },
+    {
+      "from": "docs/evidence/pass4-orchestrator-mobile-after.png",
+      "to": "docs/evidence/archive/pass4-orchestrator-mobile-after.png"
+    },
+    {
+      "from": "docs/evidence/pass4-orchestrator-mobile-before.png",
+      "to": "docs/evidence/archive/pass4-orchestrator-mobile-before.png"
+    },
+    {
+      "from": "docs/evidence/release-validation.json",
+      "to": "docs/evidence/archive/release-validation.json"
+    },
+    {
+      "from": "docs/evidence/six-improvements.json",
+      "to": "docs/evidence/archive/six-improvements.json"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-factory-1440.png",
+      "to": "docs/evidence/archive/spatial-polish-factory-1440.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-factory-2d-1440.png",
+      "to": "docs/evidence/archive/spatial-polish-factory-2d-1440.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-factory-2d-390.png",
+      "to": "docs/evidence/archive/spatial-polish-factory-2d-390.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-factory-390.png",
+      "to": "docs/evidence/archive/spatial-polish-factory-390.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-factory-rotated-1440.png",
+      "to": "docs/evidence/archive/spatial-polish-factory-rotated-1440.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-factory-rotated-390.png",
+      "to": "docs/evidence/archive/spatial-polish-factory-rotated-390.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-guide-1440.png",
+      "to": "docs/evidence/archive/spatial-polish-guide-1440.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-guide-390.png",
+      "to": "docs/evidence/archive/spatial-polish-guide-390.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-line-1440.png",
+      "to": "docs/evidence/archive/spatial-polish-line-1440.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-line-390.png",
+      "to": "docs/evidence/archive/spatial-polish-line-390.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-validation.json",
+      "to": "docs/evidence/archive/spatial-polish-validation.json"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-worker-1440.png",
+      "to": "docs/evidence/archive/spatial-polish-worker-1440.png"
+    },
+    {
+      "from": "docs/evidence/spatial-polish-worker-390.png",
+      "to": "docs/evidence/archive/spatial-polish-worker-390.png"
+    },
+    {
+      "from": "docs/evidence/system-factory-capabilities-desktop-after.png",
+      "to": "docs/evidence/archive/system-factory-capabilities-desktop-after.png"
+    },
+    {
+      "from": "docs/evidence/system-guide-browser.json",
+      "to": "docs/evidence/archive/system-guide-browser.json"
+    },
+    {
+      "from": "docs/evidence/system-guide-desktop-after.png",
+      "to": "docs/evidence/archive/system-guide-desktop-after.png"
+    },
+    {
+      "from": "docs/evidence/system-guide-narrow-after.png",
+      "to": "docs/evidence/archive/system-guide-narrow-after.png"
+    },
+    {
+      "from": "docs/evidence/system-ui-browser.json",
+      "to": "docs/evidence/archive/system-ui-browser.json"
+    },
+    {
+      "from": "docs/evidence/system-worker-detail-desktop-after.png",
+      "to": "docs/evidence/archive/system-worker-detail-desktop-after.png"
+    },
+    {
+      "from": "docs/evidence/ui-before.png",
+      "to": "docs/evidence/archive/ui-before.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-composer-1440.png",
+      "to": "docs/evidence/archive/visual-system-composer-1440.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-composer-390.png",
+      "to": "docs/evidence/archive/visual-system-composer-390.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-factory-1440.png",
+      "to": "docs/evidence/archive/visual-system-factory-1440.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-factory-390.png",
+      "to": "docs/evidence/archive/visual-system-factory-390.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-intake-1440.png",
+      "to": "docs/evidence/archive/visual-system-intake-1440.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-intake-390.png",
+      "to": "docs/evidence/archive/visual-system-intake-390.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-line-1440.png",
+      "to": "docs/evidence/archive/visual-system-line-1440.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-line-390.png",
+      "to": "docs/evidence/archive/visual-system-line-390.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-tasks-1440.png",
+      "to": "docs/evidence/archive/visual-system-tasks-1440.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-tasks-390.png",
+      "to": "docs/evidence/archive/visual-system-tasks-390.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-validation.json",
+      "to": "docs/evidence/archive/visual-system-validation.json"
+    },
+    {
+      "from": "docs/evidence/visual-system-worker-detail-1440.png",
+      "to": "docs/evidence/archive/visual-system-worker-detail-1440.png"
+    },
+    {
+      "from": "docs/evidence/visual-system-worker-detail-390.png",
+      "to": "docs/evidence/archive/visual-system-worker-detail-390.png"
+    },
+    {
+      "from": "docs/evidence/werk-home-2026-10-26",
+      "to": "docs/evidence/archive/werk-home-2026-10-26"
+    },
+    {
+      "from": "docs/evidence/werk-unified-views-browser-results.json",
+      "to": "docs/evidence/archive/werk-unified-views-browser-results.json"
+    },
+    {
+      "from": "docs/evidence/werk-unified-worker-validation.json",
+      "to": "docs/evidence/archive/werk-unified-worker-validation.json"
+    },
+    {
+      "from": "docs/evidence/worker-deeper-before-chat-mobile.png",
+      "to": "docs/evidence/archive/worker-deeper-before-chat-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-deeper-before-dashboard-mobile.png",
+      "to": "docs/evidence/archive/worker-deeper-before-dashboard-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-deeper-browser-results.json",
+      "to": "docs/evidence/archive/worker-deeper-browser-results.json"
+    },
+    {
+      "from": "docs/evidence/worker-deeper-chat-mobile.png",
+      "to": "docs/evidence/archive/worker-deeper-chat-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-deeper-dashboard-mobile.png",
+      "to": "docs/evidence/archive/worker-deeper-dashboard-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-deeper-file-editor-320.png",
+      "to": "docs/evidence/archive/worker-deeper-file-editor-320.png"
+    },
+    {
+      "from": "docs/evidence/worker-deeper-history-desktop.png",
+      "to": "docs/evidence/archive/worker-deeper-history-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-deeper-mocked-patch-mobile.png",
+      "to": "docs/evidence/archive/worker-deeper-mocked-patch-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-desktop-after.png",
+      "to": "docs/evidence/archive/worker-desktop-after.png"
+    },
+    {
+      "from": "docs/evidence/worker-e2e-release",
+      "to": "docs/evidence/archive/worker-e2e-release"
+    },
+    {
+      "from": "docs/evidence/worker-experience-after-metrics-desktop-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-after-metrics-desktop-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-after-metrics-mobile-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-after-metrics-mobile-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-after-request-note-desktop.png",
+      "to": "docs/evidence/archive/worker-experience-after-request-note-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-after-request-note-mobile.png",
+      "to": "docs/evidence/archive/worker-experience-after-request-note-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-after-settings-providers-desktop-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-after-settings-providers-desktop-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-after-settings-queue-mobile-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-after-settings-queue-mobile-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-after-taskboard-desktop-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-after-taskboard-desktop-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-after-taskboard-mobile-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-after-taskboard-mobile-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-before-dashboard-desktop-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-before-dashboard-desktop-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-before-dashboard-mobile-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-before-dashboard-mobile-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-before-taskboard-desktop-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-before-taskboard-desktop-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-experience-before-taskboard-mobile-viewport.png",
+      "to": "docs/evidence/archive/worker-experience-before-taskboard-mobile-viewport.png"
+    },
+    {
+      "from": "docs/evidence/worker-iteration-chat-mobile.png",
+      "to": "docs/evidence/archive/worker-iteration-chat-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-iteration-dashboard-desktop.png",
+      "to": "docs/evidence/archive/worker-iteration-dashboard-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-iteration-file-editor-320.png",
+      "to": "docs/evidence/archive/worker-iteration-file-editor-320.png"
+    },
+    {
+      "from": "docs/evidence/worker-iteration-history-desktop.png",
+      "to": "docs/evidence/archive/worker-iteration-history-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-journey-before-running-mobile.png",
+      "to": "docs/evidence/archive/worker-journey-before-running-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-journey-composer-mobile.png",
+      "to": "docs/evidence/archive/worker-journey-composer-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-journey-results.json",
+      "to": "docs/evidence/archive/worker-journey-results.json"
+    },
+    {
+      "from": "docs/evidence/worker-journey-review-mobile.png",
+      "to": "docs/evidence/archive/worker-journey-review-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-journey-running-320.png",
+      "to": "docs/evidence/archive/worker-journey-running-320.png"
+    },
+    {
+      "from": "docs/evidence/worker-journey-running-mobile.png",
+      "to": "docs/evidence/archive/worker-journey-running-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-lifecycle-browser-results.json",
+      "to": "docs/evidence/archive/worker-lifecycle-browser-results.json"
+    },
+    {
+      "from": "docs/evidence/worker-lifecycle-gallery-results.json",
+      "to": "docs/evidence/archive/worker-lifecycle-gallery-results.json"
+    },
+    {
+      "from": "docs/evidence/worker-mobile-after.png",
+      "to": "docs/evidence/archive/worker-mobile-after.png"
+    },
+    {
+      "from": "docs/evidence/worker-model-interaction-browser-results.json",
+      "to": "docs/evidence/archive/worker-model-interaction-browser-results.json"
+    },
+    {
+      "from": "docs/evidence/worker-model-operations-qualification.json",
+      "to": "docs/evidence/archive/worker-model-operations-qualification.json"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-browser.json",
+      "to": "docs/evidence/archive/worker-overhaul-browser.json"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-chat-desktop.png",
+      "to": "docs/evidence/archive/worker-overhaul-chat-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-chat-mobile.png",
+      "to": "docs/evidence/archive/worker-overhaul-chat-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-chat-tablet.png",
+      "to": "docs/evidence/archive/worker-overhaul-chat-tablet.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-connection-desktop.png",
+      "to": "docs/evidence/archive/worker-overhaul-connection-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-dashboard-desktop.png",
+      "to": "docs/evidence/archive/worker-overhaul-dashboard-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-definition-preview-desktop.png",
+      "to": "docs/evidence/archive/worker-overhaul-definition-preview-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-history-desktop.png",
+      "to": "docs/evidence/archive/worker-overhaul-history-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-login-desktop.png",
+      "to": "docs/evidence/archive/worker-overhaul-login-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-login-mobile.png",
+      "to": "docs/evidence/archive/worker-overhaul-login-mobile.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-new-task-desktop.png",
+      "to": "docs/evidence/archive/worker-overhaul-new-task-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-queued-desktop.png",
+      "to": "docs/evidence/archive/worker-overhaul-queued-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-overhaul-tour-desktop.png",
+      "to": "docs/evidence/archive/worker-overhaul-tour-desktop.png"
+    },
+    {
+      "from": "docs/evidence/worker-resources-integrations-browser-results.json",
+      "to": "docs/evidence/archive/worker-resources-integrations-browser-results.json"
+    },
+    {
+      "from": "docs/evidence/worker-system-factory-dashboard-1440.png",
+      "to": "docs/evidence/archive/worker-system-factory-dashboard-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-factory-dashboard-390.png",
+      "to": "docs/evidence/archive/worker-system-factory-dashboard-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-factory-intake-1440.png",
+      "to": "docs/evidence/archive/worker-system-factory-intake-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-factory-intake-390.png",
+      "to": "docs/evidence/archive/worker-system-factory-intake-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-factory-tour-1440.png",
+      "to": "docs/evidence/archive/worker-system-factory-tour-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-factory-tour-390.png",
+      "to": "docs/evidence/archive/worker-system-factory-tour-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-line-dashboard-1440.png",
+      "to": "docs/evidence/archive/worker-system-line-dashboard-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-line-dashboard-390.png",
+      "to": "docs/evidence/archive/worker-system-line-dashboard-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-line-interaction-1440.png",
+      "to": "docs/evidence/archive/worker-system-line-interaction-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-line-interaction-390.png",
+      "to": "docs/evidence/archive/worker-system-line-interaction-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-line-tour-1440.png",
+      "to": "docs/evidence/archive/worker-system-line-tour-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-line-tour-390.png",
+      "to": "docs/evidence/archive/worker-system-line-tour-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-orchestrator-chat-1440.png",
+      "to": "docs/evidence/archive/worker-system-orchestrator-chat-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-orchestrator-chat-390.png",
+      "to": "docs/evidence/archive/worker-system-orchestrator-chat-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-orchestrator-dashboard-1440.png",
+      "to": "docs/evidence/archive/worker-system-orchestrator-dashboard-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-orchestrator-dashboard-390.png",
+      "to": "docs/evidence/archive/worker-system-orchestrator-dashboard-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-orchestrator-routing-1440.png",
+      "to": "docs/evidence/archive/worker-system-orchestrator-routing-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-orchestrator-routing-390.png",
+      "to": "docs/evidence/archive/worker-system-orchestrator-routing-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-orchestrator-tour-1440.png",
+      "to": "docs/evidence/archive/worker-system-orchestrator-tour-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-orchestrator-tour-390.png",
+      "to": "docs/evidence/archive/worker-system-orchestrator-tour-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-validation.json",
+      "to": "docs/evidence/archive/worker-system-validation.json"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-chat-1440.png",
+      "to": "docs/evidence/archive/worker-system-worker-chat-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-chat-390.png",
+      "to": "docs/evidence/archive/worker-system-worker-chat-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-connections-1440.png",
+      "to": "docs/evidence/archive/worker-system-worker-connections-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-connections-390.png",
+      "to": "docs/evidence/archive/worker-system-worker-connections-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-dashboard-1440.png",
+      "to": "docs/evidence/archive/worker-system-worker-dashboard-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-dashboard-390.png",
+      "to": "docs/evidence/archive/worker-system-worker-dashboard-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-history-1440.png",
+      "to": "docs/evidence/archive/worker-system-worker-history-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-history-390.png",
+      "to": "docs/evidence/archive/worker-system-worker-history-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-patch-review-1440.png",
+      "to": "docs/evidence/archive/worker-system-worker-patch-review-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-patch-review-390.png",
+      "to": "docs/evidence/archive/worker-system-worker-patch-review-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-run-task-1440.png",
+      "to": "docs/evidence/archive/worker-system-worker-run-task-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-run-task-390.png",
+      "to": "docs/evidence/archive/worker-system-worker-run-task-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-tour-1440.png",
+      "to": "docs/evidence/archive/worker-system-worker-tour-1440.png"
+    },
+    {
+      "from": "docs/evidence/worker-system-worker-tour-390.png",
+      "to": "docs/evidence/archive/worker-system-worker-tour-390.png"
+    },
+    {
+      "from": "docs/evidence/worker-ui-goals-2026-10-26",
+      "to": "docs/evidence/archive/worker-ui-goals-2026-10-26"
+    },
+    {
+      "from": "docs/evidence/worker-view-atlas-validation.json",
+      "to": "docs/evidence/archive/worker-view-atlas-validation.json"
+    },
+    {
+      "from": "docs/evidence/worker-view-sitemap.json",
+      "to": "docs/evidence/archive/worker-view-sitemap.json"
+    },
+    {
+      "from": "docs/evidence/workflow-dashboard-2026-10-26",
+      "to": "docs/evidence/archive/workflow-dashboard-2026-10-26"
+    }
+  ]
+}

@@ -38,7 +38,7 @@ A fresh reviewer inspected all twelve final captures and the relevant source and
 - `npm run check`: TypeScript/Vue checks, all application builds and **569 tests: 568 passed, one platform skip, zero failures**.
 - A final worker rebuild and `npm run typecheck` passed after the import-confirmation correction.
 - The independent security reviewer reran the 22 access/provider/definition tests successfully, including actual HTTP cookies/Origin/bearer behavior, parser rejection, bounded subprocesses, provider payload fixtures, immutable snapshots and deleted-definition replay.
-- The real built-worker [browser walkthrough](../evidence/worker-overhaul-browser.json) passed at 1440px, 900px and 390px widths. It exercised invalid-token recovery, unlock/reload, provider configuration and sign-in check, definition preview/import, required adaptation acceptance, task queueing, drafting while busy, escaped model HTML, code copy, same-session follow-up, History, Dashboard, Tour, worker restart/relock, transcript/draft recovery and explicit Lock. Twelve captures had no document-level horizontal overflow and no page errors.
+- The real built-worker [browser walkthrough](../evidence/archive/worker-overhaul-browser.json) passed at 1440px, 900px and 390px widths. It exercised invalid-token recovery, unlock/reload, provider configuration and sign-in check, definition preview/import, required adaptation acceptance, task queueing, drafting while busy, escaped model HTML, code copy, same-session follow-up, History, Dashboard, Tour, worker restart/relock, transcript/draft recovery and explicit Lock. Twelve captures had no document-level horizontal overflow and no page errors.
 - The retained [browser qualification script](../../tests/worker/webview-smoke.mjs) was rerun successfully from its repository location; setup is documented in [the test guide](../../tests/README.md#worker-access-and-taskboard-browser-qualification).
 - Portable-app integration tests copied the independent apps into a separate project and verified definition import/list, configuration-only provider check, profile-bearing tasks and persistence across restart. No npm/source checkout is needed by those copies.
 - Both archive formats packaged and extracted with manifest verification. Extracted native lifecycle smoke passed with persisted task evidence and worker identity.
@@ -57,45 +57,45 @@ These are actual built-worker captures, not mockups. The model reply is explicit
 
 One access task with local credential guidance; model authentication is explained separately.
 
-![Worker unlock on desktop](../evidence/worker-overhaul-login-desktop.png)
+![Worker unlock on desktop](../evidence/archive/worker-overhaul-login-desktop.png)
 
-[Mobile unlock](../evidence/worker-overhaul-login-mobile.png)
+[Mobile unlock](../evidence/archive/worker-overhaul-login-mobile.png)
 
 ### 2. Connect a provider and inspect sign-in
 
 Save the connection and run a bounded authentication-status check without a model prompt.
 
-![Provider connection editor](../evidence/worker-overhaul-connection-desktop.png)
+![Provider connection editor](../evidence/archive/worker-overhaul-connection-desktop.png)
 
 ### 3. Preview a Docker Agent definition
 
 Review the imported agents and omitted capabilities before saving the definition.
 
-![Definition compatibility preview](../evidence/worker-overhaul-definition-preview-desktop.png)
+![Definition compatibility preview](../evidence/archive/worker-overhaul-definition-preview-desktop.png)
 
 ### 4. Choose an agent for a task
 
 The task editor pairs a provider with the selected definition. Unsupported behavior requires an explicit acknowledgement.
 
-![New task and agent selection](../evidence/worker-overhaul-new-task-desktop.png)
+![New task and agent selection](../evidence/archive/worker-overhaul-new-task-desktop.png)
 
 ### 5. Observe queued work
 
 A paused worker retains accepted work and offers cancellation. The composer remains available for drafting.
 
-![Queued task](../evidence/worker-overhaul-queued-desktop.png)
+![Queued task](../evidence/archive/worker-overhaul-queued-desktop.png)
 
 ### 6. Read the result and continue the same task
 
 Task identity, selected agent, readable output, code copying and the follow-up composer remain together.
 
-![Desktop task chat](../evidence/worker-overhaul-chat-desktop.png)
+![Desktop task chat](../evidence/archive/worker-overhaul-chat-desktop.png)
 
-[Tablet Chat](../evidence/worker-overhaul-chat-tablet.png) · [Mobile Chat](../evidence/worker-overhaul-chat-mobile.png)
+[Tablet Chat](../evidence/archive/worker-overhaul-chat-tablet.png) · [Mobile Chat](../evidence/archive/worker-overhaul-chat-mobile.png)
 
 ### 7. Inspect history, environment and guidance
 
-[Task history](../evidence/worker-overhaul-history-desktop.png) · [Worker Dashboard](../evidence/worker-overhaul-dashboard-desktop.png) · [Guided tour](../evidence/worker-overhaul-tour-desktop.png)
+[Task history](../evidence/archive/worker-overhaul-history-desktop.png) · [Worker Dashboard](../evidence/archive/worker-overhaul-dashboard-desktop.png) · [Guided tour](../evidence/archive/worker-overhaul-tour-desktop.png)
 
 ## Qualification limits
 

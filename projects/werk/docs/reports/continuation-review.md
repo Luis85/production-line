@@ -39,9 +39,9 @@ The context command is a completed foundation slice, not all of P0-01. That back
 
 ## Browser evidence
 
-- Factory: [desktop](../evidence/continuation-factory-desktop.png), [mobile](../evidence/continuation-factory-mobile.png).
-- Orchestrator: [desktop](../evidence/continuation-orchestrator-desktop.png), [mobile](../evidence/continuation-orchestrator-mobile.png).
-- Worker: [desktop](../evidence/continuation-worker-desktop.png), [mobile](../evidence/continuation-worker-mobile.png).
+- Factory: [desktop](../evidence/archive/continuation-factory-desktop.png), [mobile](../evidence/archive/continuation-factory-mobile.png).
+- Orchestrator: [desktop](../evidence/archive/continuation-orchestrator-desktop.png), [mobile](../evidence/archive/continuation-orchestrator-mobile.png).
+- Worker: [desktop](../evidence/archive/continuation-worker-desktop.png), [mobile](../evidence/archive/continuation-worker-mobile.png).
 
 ## Remaining gaps
 

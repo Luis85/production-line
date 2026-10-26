@@ -40,19 +40,19 @@ Final screenshots were taken against the freshly packaged native runtime at desk
 
 ## Final interface evidence
 
-Capture metadata and browser assertions: [validation record](../evidence/first-release-validation.json). URLs identify local demo services; no credentials are embedded.
+Capture metadata and browser assertions: [validation record](../evidence/archive/first-release-validation.json). URLs identify local demo services; no credentials are embedded.
 
 | Feature | Desktop | Mobile |
 | --- | --- | --- |
-| Managed Factory | [1440px](../evidence/first-release-factory-managed-1440.png) | [390px](../evidence/first-release-factory-managed-390.png) |
-| Managed line | [1440px](../evidence/first-release-factory-managed-line-1440.png) | [390px](../evidence/first-release-factory-managed-line-390.png) |
-| Viewer taskboard | [1440px](../evidence/first-release-viewer-taskboard-1440.png) | [390px](../evidence/first-release-viewer-taskboard-390.png) |
-| Import command | [1440px](../evidence/first-release-iteration-command-1440.png) | [390px](../evidence/first-release-iteration-command-390.png) |
-| Snapshot coverage | [1440px](../evidence/first-release-snapshot-coverage-1440.png) | [390px](../evidence/first-release-snapshot-coverage-390.png) |
+| Managed Factory | [1440px](../evidence/archive/first-release-factory-managed-1440.png) | [390px](../evidence/archive/first-release-factory-managed-390.png) |
+| Managed line | [1440px](../evidence/archive/first-release-factory-managed-line-1440.png) | [390px](../evidence/archive/first-release-factory-managed-line-390.png) |
+| Viewer taskboard | [1440px](../evidence/archive/first-release-viewer-taskboard-1440.png) | [390px](../evidence/archive/first-release-viewer-taskboard-390.png) |
+| Import command | [1440px](../evidence/archive/first-release-iteration-command-1440.png) | [390px](../evidence/archive/first-release-iteration-command-390.png) |
+| Snapshot coverage | [1440px](../evidence/archive/first-release-snapshot-coverage-1440.png) | [390px](../evidence/archive/first-release-snapshot-coverage-390.png) |
 
-![YAML-owned Factory resources remain inspectable while destructive controls are unavailable](../evidence/first-release-factory-managed-1440.png)
+![YAML-owned Factory resources remain inspectable while destructive controls are unavailable](../evidence/archive/first-release-factory-managed-1440.png)
 
-![Read-only users arrive at the taskboard on mobile](../evidence/first-release-viewer-taskboard-390.png)
+![Read-only users arrive at the taskboard on mobile](../evidence/archive/first-release-viewer-taskboard-390.png)
 
 ## Product boundary
 

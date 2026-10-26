@@ -4,17 +4,17 @@
 
 **Turn a shared Feature Request into an implementation your team can review.**
 
-Werk runs a worker on your machine, connects it to your project's Git repository
-and dispatches approved work to a configured model. Your team collaborates through
-Obsidian-compatible Markdown notes; the worker webview offers chat-based request
-creation, progress, metrics and configuration. A person reviews the result before
-merging.
+Werk runs from one dedicated Home on your machine. It clones project repositories
+into isolated worker-owned checkouts and executes approved Feature Requests with
+your configured model. Create a request in the webview or collaborate through
+Obsidian-compatible Markdown notes, follow its progress and Git activity, then
+review the increment and explicitly approve its merge.
 
 [Documentation](https://luis85.github.io/production-line/) ·
 [Download](https://github.com/Luis85/production-line/releases/latest) ·
 [Changelog](CHANGELOG.md) · [Source documentation](docs/index.md)
 
-![Worker taskboard showing capacity and requests grouped by their current state.](docs/evidence/readme/worker-taskboard.png)
+![Workboard prioritizing requests that need input and increments ready for review.](docs/evidence/readme/worker-taskboard.png)
 
 *Workboard with deterministic sample requests. Choose the next request to advance; authoring, conversation and review have separate focused views. [Screenshot provenance](docs/evidence/readme/README.md).*
 
@@ -55,6 +55,9 @@ and replaceable prebuilt files in `<home>/runtime/`. Startup prints the local UR
 file path; unlock locally without putting the token in the URL. This starts the
 standalone worker; no project-local `init`, npm step or Factory fleet is needed.
 
+Use Werk 0.17.0 or later for this Home layout; older archives keep their original
+layout and require the adoption procedure below.
+
 In the webview, configure the provider, clone/register the project, preview its
 workflow setup and approve its Git commit/push. Separately approve the exact
 committed delivery policy and recheck project setup. Then create a Feature Request,
@@ -62,6 +65,10 @@ follow Kanban, Git commits/pushes, activity and updates to that same request,
 review the delivered increment and explicitly allow its merge into the displayed
 main checkout. New web-generated setup includes `localMerge: true`, so delivery
 waits for that merge confirmation after candidate acceptance.
+
+![Project directory showing isolated Home checkout paths and an explicit Add a project action.](docs/evidence/readme/worker-projects.png)
+
+*Choose a registered project. Cloning, workflow publication, exact policy approval and intake recheck are separate explicit steps. [Screenshot provenance](docs/evidence/readme/README.md).*
 
 The [primary tutorial](docs/tutorials/worker-home-to-main.md) follows this literal
 archive-to-main journey. A newly built candidate archive and the currently public
@@ -173,9 +180,9 @@ request**. This prepares the committed template without invoking a model. Fill
 in the request details and use **Check readiness**, then **Save draft to Git** or
 **Mark ready and publish**. Shared intake picks up that same note.
 
-![Shared Feature Request authoring in the worker, with request instructions and the Prepare request action.](docs/evidence/readme/worker-create-request.png)
+![Focused New Feature Request view with project, goal, acceptance criteria and explicit Git publication.](docs/evidence/readme/worker-create-request.png)
 
-*The shared-request entry screen with example instructions. The next step lets you review the template, approved scope and readiness before publishing. [Screenshot provenance](docs/evidence/readme/README.md).*
+*One project request, from its committed template to an explicit publication decision. Draft preparation does not invoke a model or commit to Git. [Screenshot provenance](docs/evidence/readme/README.md).*
 
 Once the worker owns the request, open its conversation to follow execution and
 answer pending questions. Webview answers publish the same Task response that a
@@ -205,6 +212,10 @@ inspects retained evidence without selecting or restoring archived requests.
 **Settings** first helps you choose a setting, then opens one independent editor;
 unsent edits survive navigation within the unlocked tab.
 
+![Workflow health with recorded stage pressure, confirmed-increment velocity and measurement coverage.](docs/evidence/readme/worker-workflow.png)
+
+*Recorded delivery health and operational EBM proxies. Unmeasured customer or business outcomes remain unavailable rather than being inferred. [Screenshot provenance](docs/evidence/readme/README.md).*
+
 ![Worker health with resources, measured consumption and execution activity.](docs/evidence/readme/worker-metrics.png)
 
 *Worker health with deterministic sample measurements. Resource use and allowance are separate from delivery quality and live provider account balances. [Screenshot provenance](docs/evidence/readme/README.md).*
@@ -216,9 +227,9 @@ owned services, observed resource use and stop/restart controls; missing operati
 system measurements stay visible as unavailable. See
 [manage worker processes](docs/how-to/manage-worker-processes.md).
 
-![Focused provider connection settings with navigation to other independent setting editors.](docs/evidence/readme/worker-settings.png)
+![Settings directory grouping independent worker settings by the task to perform.](docs/evidence/readme/worker-settings.png)
 
-*One provider connection editor with sample configuration. Default provider, capacity and time limits have separate saves. Keep credentials local to the worker machine. [Screenshot provenance](docs/evidence/readme/README.md).*
+*Choose one setting, then edit it on its own focused view. Provider connection, default provider, capacity and time limits have independent saves. [Screenshot provenance](docs/evidence/readme/README.md).*
 
 | Configure | Where to learn more |
 | --- | --- |

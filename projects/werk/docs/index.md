@@ -16,6 +16,8 @@ can author requests and answer Task notes without connecting to the worker.
 Configured local providers execute approved work; the Factory/orchestrator's
 default assignments remain simulated. See [execution modes](explanation/modes.md).
 
+Current pictures and capture provenance are indexed in [documentation evidence](evidence/README.md); dated records live in its historical archive.
+
 Tutorials teach a complete example; how-to guides solve a specific operation,
 reference pages define exact contracts, and explanations cover design and limits.
 This organization follows [Diátaxis](https://diataxis.fr/).

@@ -93,7 +93,7 @@ hardcoded port occupied, and a regression retains real occupied-port refusal.
 Duplicate branch and PR check runs are avoided by limiting push checks to main.
 Exact-head source CI status is recorded on [PR 1](https://github.com/Luis85/production-line/pull/1).
 
-The [sanitized evidence manifest](../evidence/six-improvements.json) records
+The [sanitized evidence manifest](../evidence/archive/six-improvements.json) records
 executed browser, recovery, security and monitoring checks and explicit pending
 qualification. Final source and remote CI results are attached to the PR.
 [Acceptance criteria](six-improvements-acceptance.md) define the six workstreams;

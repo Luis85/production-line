@@ -23,7 +23,7 @@ No new public release or live-provider qualification is implied.
 | Native execution | Same new Home journey on Windows with real authenticated Claude Code CLI | Pending until directly observed; deterministic protocol fixtures remain separate |
 
 Initial observed results and two unmodified Workboard screenshots are retained
-in the [flat Home proof](../evidence/werk-home-2026-10-26/README.md). The exact ZIP
+in the [flat Home proof](../evidence/archive/werk-home-2026-10-26/README.md). The exact ZIP
 SHA-256 is `8e6b9759aa7eaee019e0f4dd69e88b36bc78e0e434d3e967b710e52f8e93de3e`.
 These Linux/Chromium protocol fixtures do not qualify live Claude or Windows.
 Record final committed-artifact and latest hardening results on the implementation
@@ -126,24 +126,24 @@ Implementation PR: [#54](https://github.com/Luis85/production-line/pull/54), inc
 
 Focused checks included 32 release-engine regressions, 49 managed-project/template regressions, 58 shared-intake/feedback regressions, 15 latest-source release-projection/recovery regressions, and 22 composer regressions. These groups overlap existing regression suites and must not be added together as a unique test total. Full unified source and cross-platform CI results are recorded on the implementation PR.
 
-[Browser qualification](../evidence/worker-e2e-release/browser-qualification.json) records 22 desktop/mobile checks with no page errors or overflow. Its screenshots use explicit synthetic project, provider and GitHub data; no live model or host mutation was performed.
+[Browser qualification](../evidence/archive/worker-e2e-release/browser-qualification.json) records 22 desktop/mobile checks with no page errors or overflow. Its screenshots use explicit synthetic project, provider and GitHub data; no live model or host mutation was performed.
 
-![Reviewed candidate and release workflow](../evidence/worker-e2e-release/worker-end-to-end-delivery--merge-reviewed-candidate-1440.png)
+![Reviewed candidate and release workflow](../evidence/archive/worker-e2e-release/worker-end-to-end-delivery--merge-reviewed-candidate-1440.png)
 
-![Mobile release publication controls](../evidence/worker-e2e-release/worker-end-to-end-delivery--publish-verified-build-390.png)
+![Mobile release publication controls](../evidence/archive/worker-e2e-release/worker-end-to-end-delivery--publish-verified-build-390.png)
 
 The extracted native and Docker archives each completed the existing simulated runtime smoke, persisted evidence and restart checks. The Docker wrapper smoke ran without host Node on its wrapper PATH. These validate packaging and startup compatibility; they do not qualify a Windows Claude account or a worker-managed live release.
 
 
 ## Improvement and polish qualification
 
-The follow-up pass on the same PR clarified project approval/activation holds, restricted setup retry to eligible incomplete clones, added in-place template-read recovery, validated release tags before submission and preserved unsaved build settings when toggling release configuration. Browser confirmation covered desktop, tablet and mobile: [36 checks passed](../evidence/worker-e2e-release/polish-qualification.json) with no page/console errors or horizontal overflow, including interrupted runs whose historical evidence must not complete downstream stages.
+The follow-up pass on the same PR clarified project approval/activation holds, restricted setup retry to eligible incomplete clones, added in-place template-read recovery, validated release tags before submission and preserved unsaved build settings when toggling release configuration. Browser confirmation covered desktop, tablet and mobile: [36 checks passed](../evidence/archive/worker-e2e-release/polish-qualification.json) with no page/console errors or horizontal overflow, including interrupted runs whose historical evidence must not complete downstream stages.
 
 Backend regressions cover completed builds with missing assets as known failures, safe new-tag selection only after persisted preflight evidence proves publication never started, native executable discovery, and host directory aliases without permitting links inside private prompt storage. Git fixtures were also verified with `core.autocrlf=true`. These are automated contracts; the native/live acceptance rows remain pending.
 
-![Project policy hold and recovery action](../evidence/worker-e2e-release/worker-workflow-recovery--held-project-setup-1440.png)
+![Project policy hold and recovery action](../evidence/archive/worker-e2e-release/worker-workflow-recovery--held-project-setup-1440.png)
 
-![Retrying a template read on mobile](../evidence/worker-e2e-release/worker-workflow-recovery--retry-template-read-390.png)
+![Retrying a template read on mobile](../evidence/archive/worker-e2e-release/worker-workflow-recovery--retry-template-read-390.png)
 
 ## Primary journey hardening and responsive evidence
 
@@ -157,21 +157,21 @@ The implementation keeps policy orchestration behind injected ports, durable ide
 
 ### Responsive Storybook qualification
 
-The retained [responsive report](../evidence/worker-e2e-release/main-checkout-responsive-qualification.json) contains **33 story/viewport cases**; the [confirmation report](../evidence/worker-e2e-release/main-checkout-confirmation-qualification.json) contains **9 follow-up cases** rechecking onboarding, request progress and retained setup. Each set covers 1440, 768 and 390 pixels, with every case ready, no page/console errors and no horizontal overflow. These are separate capture sets, not a unique backend-test total.
+The retained [responsive report](../evidence/archive/worker-e2e-release/main-checkout-responsive-qualification.json) contains **33 story/viewport cases**; the [confirmation report](../evidence/archive/worker-e2e-release/main-checkout-confirmation-qualification.json) contains **9 follow-up cases** rechecking onboarding, request progress and retained setup. Each set covers 1440, 768 and 390 pixels, with every case ready, no page/console errors and no horizontal overflow. These are separate capture sets, not a unique backend-test total.
 
 All screenshots come from real Vue components with explicit synthetic Storybook project/provider/request/Git data. No model, Git mutation, build or release is performed by those stories. The sanitized reports retain observation fields, source-report hashes and selected PNG hashes/dimensions; full DOM text and temporary absolute paths are omitted. The source reports do not identify an exact source commit, so they are not release-source attestations. Retained PNG bytes match their original captures and have not been retouched.
 
-![Dedicated worker-home onboarding with sample data](../evidence/worker-e2e-release/worker-main-checkout-workflow--first-worker-home-1440.png)
+![Dedicated worker-home onboarding with sample data](../evidence/archive/worker-e2e-release/worker-main-checkout-workflow--first-worker-home-1440.png)
 
-![Explicit main-checkout approval on mobile with sample Git state](../evidence/worker-e2e-release/worker-main-checkout-workflow--approve-main-checkout-merge-390.png)
+![Explicit main-checkout approval on mobile with sample Git state](../evidence/archive/worker-e2e-release/worker-main-checkout-workflow--approve-main-checkout-merge-390.png)
 
-Additional retained captures show [Worker updates and current next action](../evidence/worker-e2e-release/worker-main-checkout-workflow--notify-request-progress-1440.png) and [retained setup recovery on mobile](../evidence/worker-e2e-release/worker-main-checkout-workflow--resume-retained-setup-390.png).
+Additional retained captures show [Worker updates and current next action](../evidence/archive/worker-e2e-release/worker-main-checkout-workflow--notify-request-progress-1440.png) and [retained setup recovery on mobile](../evidence/archive/worker-e2e-release/worker-main-checkout-workflow--resume-retained-setup-390.png).
 
 The maintained `acceptance:worker-home` command has now passed against the exact candidate archive described below. Its real Git/process/browser work remains distinct from the simulated Claude protocol/auth responses and from the Storybook captures. Root full-test totals, live Windows/Claude execution and actual public release publication are not inferred from this fixture.
 
 ## Complete extracted-archive acceptance — passed with a provider fixture
 
-Command: `npm run acceptance:worker-home`. The maintained run completed with every assertion enabled. Its [normalized result](../evidence/worker-e2e-release/archive-acceptance.json) retains the original result identities and selected screenshot hashes. This is a real extracted runtime on Linux/Chromium with a deterministic Claude CLI protocol/auth/version fixture; it is not a real Claude account, model response or native Windows qualification.
+Command: `npm run acceptance:worker-home`. The maintained run completed with every assertion enabled. Its [normalized result](../evidence/archive/worker-e2e-release/archive-acceptance.json) retains the original result identities and selected screenshot hashes. This is a real extracted runtime on Linux/Chromium with a deterministic Claude CLI protocol/auth/version fixture; it is not a real Claude account, model response or native Windows qualification.
 
 | Candidate artifact | Observed identity |
 | --- | --- |
@@ -186,13 +186,13 @@ The run verifies archive checksums/extraction, standalone startup from an empty 
 
 The shared publisher materializes the retained candidate under its own Git commit; the assertion compares the complete Git trees rather than assuming the internal and published commit hashes are identical. The actual main-checkout result matches the reviewed candidate. A local merge is not an automatic main push or a GitHub operation.
 
-![Actual extracted-worker Taskboard and Worker updates while running the deterministic Claude protocol fixture](../evidence/worker-e2e-release/archive-03-taskboard-in-progress.png)
+![Actual extracted-worker Taskboard and Worker updates while running the deterministic Claude protocol fixture](../evidence/archive/worker-e2e-release/archive-03-taskboard-in-progress.png)
 
-![Actual extracted-worker candidate ready for review after real Git/check publication](../evidence/worker-e2e-release/archive-04-taskboard-review-ready.png)
+![Actual extracted-worker candidate ready for review after real Git/check publication](../evidence/archive/worker-e2e-release/archive-04-taskboard-review-ready.png)
 
-The [actual first-use guide capture](../evidence/worker-e2e-release/archive-01-first-worker-home.png) is also retained. These are unmodified compact captures from the running extracted application. The two all-details review/merge screenshots exceeded 14,000 pixels in height and are omitted from the repository; their main-merge assertions and identities remain in the normalized result. No screenshot is retouched.
+The [actual first-use guide capture](../evidence/archive/worker-e2e-release/archive-01-first-worker-home.png) is also retained. These are unmodified compact captures from the running extracted application. The two all-details review/merge screenshots exceeded 14,000 pixels in height and are omitted from the repository; their main-merge assertions and identities remain in the normalized result. No screenshot is retouched.
 
-A separate [nine-case standalone-mode report](../evidence/worker-e2e-release/standalone-mode-qualification.json) covers 1440/768/390-pixel Storybook views: legacy `mode=mock` metadata does not hide the standalone first-use guide or add an orchestrator assignment-mode badge, while actual fleet simulation keeps its label. All nine cases were ready with zero page/console/fixture errors and no horizontal overflow. Those views use synthetic state; the archive run above separately confirms the real startup guide.
+A separate [nine-case standalone-mode report](../evidence/archive/worker-e2e-release/standalone-mode-qualification.json) covers 1440/768/390-pixel Storybook views: legacy `mode=mock` metadata does not hide the standalone first-use guide or add an orchestrator assignment-mode badge, while actual fleet simulation keeps its label. All nine cases were ready with zero page/console/fixture errors and no horizontal overflow. Those views use synthetic state; the archive run above separately confirms the real startup guide.
 
 The ZIP is a locally built candidate, not a newly published release or proof that the existing public binary contains this change. Native Windows/live Claude and worker-managed live GitHub Releases remain pending as separate acceptance targets.
 
@@ -200,13 +200,13 @@ The ZIP is a locally built candidate, not a newly published release or proof tha
 
 Command: `npm run mutation -- --scope workflow`. The actual `worker-workflow-v2` run completed across **19 modules and 2,955 mutants** in **269.345 seconds**, with exit 0 and stable recorded provenance. It killed **2,336** mutants; **529** survived and **90** were uncovered. Timeout, compile/runtime error, ignored and pending counts were all zero. The scoped Stryker and strict assertion-killed scores are both **79.05%**.
 
-The [durable measurement review](../evidence/local-delivery/mutation-workflow-v2-2026-10-25/README.md), [exact receipt](../evidence/local-delivery/mutation-workflow-v2-2026-10-25/receipt.json) and [all 619 remaining findings](../evidence/local-delivery/mutation-workflow-v2-2026-10-25/findings.tsv) retain counts, source/test/configuration hashes, compiled-input and raw-report provenance, reviewed critical guards and prioritized assertion gaps. The recorded source was an explicitly dirty implementation snapshot; this is not a clean-tag attestation.
+The [durable measurement review](../evidence/archive/local-delivery/mutation-workflow-v2-2026-10-25/README.md), [exact receipt](../evidence/archive/local-delivery/mutation-workflow-v2-2026-10-25/receipt.json) and [all 619 remaining findings](../evidence/archive/local-delivery/mutation-workflow-v2-2026-10-25/findings.tsv) retain counts, source/test/configuration hashes, compiled-input and raw-report provenance, reviewed critical guards and prioritized assertion gaps. The recorded source was an explicitly dirty implementation snapshot; this is not a clean-tag attestation.
 
 Mutation remains advisory with its existing limits. No baseline was promoted, survivor was excluded, threshold lowered or timeout increased to obtain this result. The expanded 19-module denominator is not directly comparable with the earlier nine-module workflow measurement or the broader historical authority baseline. The remaining findings are visible quality work; this score does not establish complete application coverage, native Windows/Claude qualification or live GitHub publication. Root full-test and final CI totals are recorded on the implementation PR rather than inferred or added to the fixture counts above.
 
 
 ## Same-scope mutation follow-up
 
-The [completed follow-up](../evidence/local-delivery/mutation-workflow-v2-followup-2026-10-25/README.md) raised the assertion-killed score from **79.05% to 83.72%** across the identical 19 production sources, measurement configuration and **2,955 mutants**. Thirty added contracts brought the selected suite to **103 passing tests**. The new run killed **2,474** mutants: **138 additional assertion kills**, preserving every initial kill. The remaining **401 survivors and 80 uncovered mutants** stay in the [481-finding inventory](../evidence/local-delivery/mutation-workflow-v2-followup-2026-10-25/findings.tsv); [all original finding transitions](../evidence/local-delivery/mutation-workflow-v2-followup-2026-10-25/transitions.tsv) are retained. Timeouts, compile/runtime errors, ignored and pending counts remain zero. The exact receipt confirms stable source/test/configuration fingerprints throughout the completed run.
+The [completed follow-up](../evidence/archive/local-delivery/mutation-workflow-v2-followup-2026-10-25/README.md) raised the assertion-killed score from **79.05% to 83.72%** across the identical 19 production sources, measurement configuration and **2,955 mutants**. Thirty added contracts brought the selected suite to **103 passing tests**. The new run killed **2,474** mutants: **138 additional assertion kills**, preserving every initial kill. The remaining **401 survivors and 80 uncovered mutants** stay in the [481-finding inventory](../evidence/archive/local-delivery/mutation-workflow-v2-followup-2026-10-25/findings.tsv); [all original finding transitions](../evidence/archive/local-delivery/mutation-workflow-v2-followup-2026-10-25/transitions.tsv) are retained. Timeouts, compile/runtime errors, ignored and pending counts remain zero. The exact receipt confirms stable source/test/configuration fingerprints throughout the completed run.
 
 The tests strengthen uncertain checkout outcomes, journal bounds and immutable receipts, ordinary legacy histories, independent completion/attestation states, retained PR ownership, result schemas, retag evidence and historical ordering. Production sources, the mutant deadline and overall measurement budget are unchanged; no survivor exclusion, baseline promotion or threshold reduction was used. The initial 79.05% evidence and its independently verified clean CI reproduction remain separate from the follow-up. Mutation evidence does not complete the pending live Windows/Claude/GitHub qualification.

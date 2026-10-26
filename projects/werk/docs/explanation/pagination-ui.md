@@ -37,7 +37,7 @@ that optional context remains explicitly unresolved. No manifest content is
 fetched by this UI, and pinned context does not imply real provider execution or
 Git publication.
 
-Browser evidence: [desktop](../evidence/pagination-desktop.png) and
-[mobile](../evidence/pagination-mobile.png). These captures use deterministic HTTP
+Browser evidence: [desktop](../evidence/archive/pagination-desktop.png) and
+[mobile](../evidence/archive/pagination-mobile.png). These captures use deterministic HTTP
 fixtures to exercise page navigation, outage recovery and bounded collection
 responses; they are not evidence of a production provider run.

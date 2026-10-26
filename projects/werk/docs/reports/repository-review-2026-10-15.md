@@ -74,10 +74,10 @@ before/after evidence:
 
 | Journey | Before | After | Acceptance |
 | --- | --- | --- | --- |
-| Worker file intake, desktop interaction panel | [Before](../evidence/2026-10-15-repository-review/worker-file-intake-desktop-before.png) | [After](../evidence/2026-10-15-repository-review/worker-file-intake-desktop-after.png) | Full checkout path visible; Close/Escape retains the draft and restores trigger focus. |
-| Worker request rework, mobile | [Before](../evidence/2026-10-15-repository-review/worker-rework-mobile-before.png) | [After](../evidence/2026-10-15-repository-review/worker-rework-mobile-after.png) | All four gate columns fit the 350px interaction panel; operator-review failure stays explicit. |
-| Factory live intake, desktop | [Before](../evidence/2026-10-15-repository-review/fleet-before-factory-live-desktop.png) | [After](../evidence/2026-10-15-repository-review/fleet-after-factory-live-desktop.png) | Live Codex selects the compatible provider and exposes the repository assignment. |
-| Line intake, mobile | [Before](../evidence/2026-10-15-repository-review/fleet-before-line-intake-mobile.png) | [After](../evidence/2026-10-15-repository-review/fleet-after-line-intake-mobile.png) | Repository choice appears in the form and preview without page overflow. |
+| Worker file intake, desktop interaction panel | [Before](../evidence/archive/2026-10-15-repository-review/worker-file-intake-desktop-before.png) | [After](../evidence/archive/2026-10-15-repository-review/worker-file-intake-desktop-after.png) | Full checkout path visible; Close/Escape retains the draft and restores trigger focus. |
+| Worker request rework, mobile | [Before](../evidence/archive/2026-10-15-repository-review/worker-rework-mobile-before.png) | [After](../evidence/archive/2026-10-15-repository-review/worker-rework-mobile-after.png) | All four gate columns fit the 350px interaction panel; operator-review failure stays explicit. |
+| Factory live intake, desktop | [Before](../evidence/archive/2026-10-15-repository-review/fleet-before-factory-live-desktop.png) | [After](../evidence/archive/2026-10-15-repository-review/fleet-after-factory-live-desktop.png) | Live Codex selects the compatible provider and exposes the repository assignment. |
+| Line intake, mobile | [Before](../evidence/archive/2026-10-15-repository-review/fleet-before-line-intake-mobile.png) | [After](../evidence/archive/2026-10-15-repository-review/fleet-after-line-intake-mobile.png) | Repository choice appears in the form and preview without page overflow. |
 
 ## Verification
 

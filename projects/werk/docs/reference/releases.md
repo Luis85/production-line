@@ -2,8 +2,7 @@
 
 The current WerkHome runtime is packaged as `werk-VERSION.tar.gz` and
 `werk-VERSION.zip`. Archive entries extract directly into the chosen Home; there
-is no inner version directory. This is the current candidate layout, not a claim
-that an older published 0.16 archive has changed. Obtain the matching archive and
+is no inner version directory. This layout starts with Werk 0.17.0; the published 0.16 archive retains its original layout. Obtain the matching archive and
 `SHA256SUMS` from a delivery source you trust. Checksums detect corruption or mismatch; an unsigned checksum
 file does not independently authenticate its publisher.
 

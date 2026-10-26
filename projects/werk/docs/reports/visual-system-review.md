@@ -26,12 +26,12 @@ Each pair shows the final desktop (1440px) and mobile (390px) browser capture.
 
 | Step | Desktop | Mobile |
 | --- | --- | --- |
-| Understand Factory ownership and available lines | [Factory](../evidence/visual-system-factory-1440.png) | [Factory](../evidence/visual-system-factory-390.png) |
-| Explore the selected line and choose a workspace | [Line map](../evidence/visual-system-line-1440.png) | [Line map](../evidence/visual-system-line-390.png) |
-| Prepare and preview work | [Intake](../evidence/visual-system-intake-1440.png) | [Intake](../evidence/visual-system-intake-390.png) |
-| Follow saved work by status | [Taskboard](../evidence/visual-system-tasks-1440.png) | [Taskboard](../evidence/visual-system-tasks-390.png) |
-| Inspect a worker and its profiles | [Worker detail](../evidence/visual-system-worker-detail-1440.png) | [Worker detail](../evidence/visual-system-worker-detail-390.png) |
-| Prepare a system definition locally | [Composer](../evidence/visual-system-composer-1440.png) | [Composer](../evidence/visual-system-composer-390.png) |
+| Understand Factory ownership and available lines | [Factory](../evidence/archive/visual-system-factory-1440.png) | [Factory](../evidence/archive/visual-system-factory-390.png) |
+| Explore the selected line and choose a workspace | [Line map](../evidence/archive/visual-system-line-1440.png) | [Line map](../evidence/archive/visual-system-line-390.png) |
+| Prepare and preview work | [Intake](../evidence/archive/visual-system-intake-1440.png) | [Intake](../evidence/archive/visual-system-intake-390.png) |
+| Follow saved work by status | [Taskboard](../evidence/archive/visual-system-tasks-1440.png) | [Taskboard](../evidence/archive/visual-system-tasks-390.png) |
+| Inspect a worker and its profiles | [Worker detail](../evidence/archive/visual-system-worker-detail-1440.png) | [Worker detail](../evidence/archive/visual-system-worker-detail-390.png) |
+| Prepare a system definition locally | [Composer](../evidence/archive/visual-system-composer-1440.png) | [Composer](../evidence/archive/visual-system-composer-390.png) |
 
 ## Review and fixes
 
@@ -64,7 +64,7 @@ agent. This is a focused UI review, not a new all-product security certification
 - Portable `tests/ui/browser/visual-navigation.mjs` rerun passed all seven checks
   with zero page errors. See [test instructions](../../tests/README.md).
 
-Sanitized [validation evidence](../evidence/visual-system-validation.json) records
+Sanitized [validation evidence](../evidence/archive/visual-system-validation.json) records
 viewport observations, interaction checks and qualification limits. Forge guarded
 writes and repository checks are used for the source changes. Impeccable's context
 launcher and detector were absent, so existing design records and rendered browser

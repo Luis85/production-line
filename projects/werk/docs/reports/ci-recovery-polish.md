@@ -32,4 +32,4 @@ The final immutable local archive has 1,504 manifest files and SHA-256 `15d91d80
 
 No paid-provider call, subscription authentication or hours-long soak was added in this pass. Resource measurements cover the Node process, usage remains provider-reported, and request Done retains its configured-fact meaning rather than implying patch application or merge approval.
 
-[Machine-readable local qualification](../evidence/ci-recovery-validation.json).
+[Machine-readable local qualification](../evidence/archive/ci-recovery-validation.json).

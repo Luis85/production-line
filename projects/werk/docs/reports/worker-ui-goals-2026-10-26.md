@@ -173,11 +173,11 @@ preserving the existing visual identity and safety boundaries.
 
 ## Verification and run limits
 
-Retained evidence: [verification receipt](../evidence/worker-ui-goals-2026-10-26/verification.json),
-[mobile Workboard](../evidence/worker-ui-goals-2026-10-26/workboard-mobile.png),
-[request authoring](../evidence/worker-ui-goals-2026-10-26/new-request-desktop.png),
-[exact policy approval](../evidence/worker-ui-goals-2026-10-26/project-policy-desktop.png)
-and [stale Review](../evidence/worker-ui-goals-2026-10-26/review-stale-desktop.png).
+Retained evidence: [verification receipt](../evidence/archive/worker-ui-goals-2026-10-26/verification.json),
+[mobile Workboard](../evidence/archive/worker-ui-goals-2026-10-26/workboard-mobile.png),
+[request authoring](../evidence/archive/worker-ui-goals-2026-10-26/new-request-desktop.png),
+[exact policy approval](../evidence/archive/worker-ui-goals-2026-10-26/project-policy-desktop.png)
+and [stale Review](../evidence/archive/worker-ui-goals-2026-10-26/review-stale-desktop.png).
 
 Documentation validation: `vault check --strict` passed with zero errors and
 zero warnings; informational orphan-attachment findings remain visible and were

@@ -2,11 +2,11 @@
 
 **Turn a shared Feature Request into an implementation your team can review.**
 
-Werk runs a worker on your machine, connects it to your project's Git repository
-and dispatches approved work to a configured model. Your team collaborates through
-Obsidian-compatible Markdown notes; the worker webview offers chat-based request
-creation, progress, metrics and configuration. A person reviews the result before
-merging.
+Werk runs from one dedicated Home on your machine. It clones project repositories
+into isolated worker-owned checkouts and executes approved Feature Requests with
+your configured model. Create a request in the webview or collaborate through
+Obsidian-compatible Markdown notes, follow its progress and Git activity, then
+review the increment and explicitly approve its merge.
 
 [Documentation](https://luis85.github.io/production-line/) ·
 [Download](https://github.com/Luis85/production-line/releases/latest) ·
@@ -51,6 +51,9 @@ and replaceable prebuilt files in `<home>/runtime/`. Startup prints the local UR
 file path; unlock locally without putting the token in the URL. This starts the
 standalone worker; no project-local `init`, npm step or Factory fleet is needed.
 
+Use Werk 0.17.0 or later for this Home layout; older archives keep their original
+layout and require the adoption procedure below.
+
 In the webview, configure the provider, clone/register the project, preview its
 workflow setup and approve its Git commit/push. Separately approve the exact
 committed delivery policy and recheck project setup. Then create a Feature Request,
@@ -58,6 +61,8 @@ follow Kanban, Git commits/pushes, activity and updates to that same request,
 review the delivered increment and explicitly allow its merge into the displayed
 main checkout. New web-generated setup includes `localMerge: true`, so delivery
 waits for that merge confirmation after candidate acceptance.
+
+<!-- readme-image: worker-projects -->
 
 The [primary tutorial](tutorials/worker-home-to-main.md) follows this literal
 archive-to-main journey. A newly built candidate archive and the currently public
@@ -196,6 +201,8 @@ separate view. **Worker health** explains resources and consumption. **History**
 inspects retained evidence without selecting or restoring archived requests.
 **Settings** first helps you choose a setting, then opens one independent editor;
 unsent edits survive navigation within the unlocked tab.
+
+<!-- readme-image: worker-workflow -->
 
 <!-- readme-image: worker-metrics -->
 

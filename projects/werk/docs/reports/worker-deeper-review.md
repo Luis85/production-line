@@ -49,8 +49,8 @@ study or a real-device performance benchmark.
 | Mobile Chat document height, long title | 1,779px | 1,421px |
 | Initial production JavaScript entry | About 502kB | About 350kB (30% smaller, uncompressed) |
 
-Baseline captures: [long-title Chat](../evidence/worker-deeper-before-chat-mobile.png)
-and [Dashboard](../evidence/worker-deeper-before-dashboard-mobile.png).
+Baseline captures: [long-title Chat](../evidence/archive/worker-deeper-before-chat-mobile.png)
+and [Dashboard](../evidence/archive/worker-deeper-before-dashboard-mobile.png).
 
 At 1440, 768, 390 and 320px, Chat, History, Dashboard and the expanded file
 editor have no document-level horizontal overflow or browser page errors.
@@ -120,19 +120,19 @@ public fields identical. No change was committed, published or deployed.
 
 ## Evidence
 
-[Sanitized browser results](../evidence/worker-deeper-browser-results.json) record
+[Sanitized browser results](../evidence/archive/worker-deeper-browser-results.json) record
 the viewport, fixture and final deep-link checks.
 
 The screenshots are captured from the isolated local worker. The patch screenshot
 uses explicitly mocked API responses. Machine identity and task titles are test
 fixtures; credentials are excluded.
 
-![Chat with a long task title on mobile](../evidence/worker-deeper-chat-mobile.png)
+![Chat with a long task title on mobile](../evidence/archive/worker-deeper-chat-mobile.png)
 
-![Dashboard on mobile](../evidence/worker-deeper-dashboard-mobile.png)
+![Dashboard on mobile](../evidence/archive/worker-deeper-dashboard-mobile.png)
 
-![History on desktop](../evidence/worker-deeper-history-desktop.png)
+![History on desktop](../evidence/archive/worker-deeper-history-desktop.png)
 
-![File editor at 320px](../evidence/worker-deeper-file-editor-320.png)
+![File editor at 320px](../evidence/archive/worker-deeper-file-editor-320.png)
 
-![Mocked patch review on mobile](../evidence/worker-deeper-mocked-patch-mobile.png)
+![Mocked patch review on mobile](../evidence/archive/worker-deeper-mocked-patch-mobile.png)

@@ -7,6 +7,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-26
+
+Qualification: native archive, browser, Git, Docker and VM checks use labelled protocol fixtures. Real Windows/Claude-account execution and live worker-managed GitHub Release publication remain separately qualified in the [acceptance ledger](docs/reports/worker-release-workflow-acceptance.md).
+
 ### Added
 
 - WerkHome extracts directly into one transparent workspace with stable root launchers, visible project clones and private worker state separated from replaceable runtime files. Workboard prioritizes project Feature Requests, live delivery and review; Projects and Workflow remain primary navigation, with Worker health and History as secondary evidence.
@@ -15,6 +19,8 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - A dedicated Workflow page shows recorded Feature Request stage pressure, project/time filters, UTC-week confirmed-increment velocity, measured lead/cycle times and explicit evidence coverage. Evidence-based management separates operational delivery proxies from unmeasured business outcomes; Worker health retains host and consumption observations; delivery-quality cohorts have their own Workflow evidence view.
 
 ### Changed
+
+- Documentation follows the released Home workflow, with current qualified screenshots for focused views. Historical evidence is indexed under `docs/evidence/archive`; 55 unreferenced images were removed with recovery hashes, while validation and mutation receipts remain intact.
 
 - Worker pages now follow one user goal per focused view: choose work, author a request, advance its conversation, decide a review, choose/register a project, complete an explicit setup stage, inspect retained evidence or edit one setting. Attention leads mobile Workboard; advanced options and secondary evidence are disclosed progressively. Legacy bookmarks preserve exact project/request identity.
 - History inspection no longer selects or restores archived sessions. Capacity, time limits, provider connections and default provider are independent cached editors with retained drafts and exact conflict/retry protection.

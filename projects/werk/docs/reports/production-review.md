@@ -34,10 +34,10 @@ The imported ZIP and original import manifest remain intact as provenance. Worki
 
 ## Visual evidence
 
-- [Before](../evidence/ui-before.png).
-- Factory: [desktop](../evidence/factory-desktop-after.png), [mobile](../evidence/factory-mobile-after.png).
-- Orchestrator: [desktop](../evidence/orchestrator-desktop-after.png), [mobile](../evidence/orchestrator-mobile-after.png).
-- Worker: [desktop](../evidence/worker-desktop-after.png), [mobile](../evidence/worker-mobile-after.png).
+- [Before](../evidence/archive/ui-before.png).
+- Factory: [desktop](../evidence/archive/factory-desktop-after.png), [mobile](../evidence/archive/factory-mobile-after.png).
+- Orchestrator: [desktop](../evidence/archive/orchestrator-desktop-after.png), [mobile](../evidence/archive/orchestrator-mobile-after.png).
+- Worker: [desktop](../evidence/archive/worker-desktop-after.png), [mobile](../evidence/archive/worker-mobile-after.png).
 
 ## Remaining production blockers
 
