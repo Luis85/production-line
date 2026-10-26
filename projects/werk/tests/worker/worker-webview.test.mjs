@@ -93,7 +93,14 @@ test('history and private environment use worker-scoped auth, preserve snapshots
   assert.equal((await fetch(base+'/api/chat',{...post,headers:{...post.headers,Origin:'https://evil.invalid'}})).status,403);
   assert.equal((await fetch(base+'/api/chat',post)).status,503);
   assert.equal((await fetch(base+'/api/chat',{...post,body:'x'.repeat(70000)})).status,413);
-  for(const path of ['/','/taskboard','/taskboard?session=saved','/chat','/history','/dashboard','/settings','/settings?section=queue','/monitoring-status','/history?taskState=failed','/history?taskState=queued&kind=local','/chat?task=saved']) {const response=await fetch(base+path);assert.equal(response.status,200);const html=await response.text();assert.match(html,/id="app"/);assert.match(html,/assets\/.*\.js/);assert.doesNotMatch(html,new RegExp(token));}
+  const workflow = { ...post, body: JSON.stringify({ action: 'workflow_metrics' }) };
+  assert.equal((await fetch(base+'/api/requests', { ...workflow, headers: { 'Content-Type': 'application/json' } })).status,401);
+  assert.equal((await fetch(base+'/api/requests', { ...workflow, headers: { ...workflow.headers, Origin: 'https://evil.invalid' } })).status,403);
+  const workflowResponse = await fetch(base+'/api/requests',workflow); assert.equal(workflowResponse.status,200);
+  const workflowReport = await workflowResponse.json(); assert.equal(workflowReport.scope,'retained_worker_workflow'); assert.equal(workflowReport.throughput.completed,0);
+  assert.equal((await fetch(base+'/api/requests',{...workflow,body:JSON.stringify({action:'workflow_metrics',since:'not-a-date'})})).status,400);
+
+  for(const path of ['/','/taskboard','/taskboard?session=saved','/chat','/history','/workflow','/workflow?project=alpha&window=4w','/review?request=saved','/dashboard','/settings','/settings?section=queue','/monitoring-status','/history?taskState=failed','/history?taskState=queued&kind=local','/chat?task=saved']) {const response=await fetch(base+path);assert.equal(response.status,200);const html=await response.text();assert.match(html,/id="app"/);assert.match(html,/assets\/.*\.js/);assert.doesNotMatch(html,new RegExp(token));}
   const html=await(await fetch(base+'/taskboard')).text();const asset=/src="([^"]+\.js)"/.exec(html)[1];const js=await fetch(base+asset);assert.equal(js.status,200);assert.match(js.headers.get('content-type'),/javascript/);assert.ok((await js.text()).length>1000);
   assert.equal((await fetch(base+'/unknown?taskState=failed')).status,404);
   assert.equal((await fetch(base+'/api/history?taskState=failed',{headers})).status,404);

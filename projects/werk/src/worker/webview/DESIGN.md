@@ -2,8 +2,9 @@
 
 ## THESIS
 
-Operate mode. One independently runnable worker, four primary pages: Taskboard
-(default at `/taskboard`), Metrics (`/dashboard`), History and Settings (`/settings`).
+Operate mode. One independently runnable worker, five primary pages: Taskboard
+(default at `/taskboard`), Workflow (`/workflow`), Metrics (`/dashboard`), History
+and Settings (`/settings`).
 An attention-first taskboard keeps task instructions and responses on the right.
 Vue with Nuxt UI remains the implementation foundation. Request-scoped Review is
 the delivery workspace reached from these pages. The worker shares a configured
@@ -11,7 +12,8 @@ machine execution ceiling across projects; stricter project limits and exclusive
 unscoped operations govern which work can run concurrently.
 
 The legacy `/chat` route redirects to `/taskboard` while preserving its query.
-Metrics presents observations; Settings owns configuration. `/monitoring-status`
+Workflow presents recorded delivery flow; Metrics presents worker and invocation
+observations; Settings owns configuration. `/monitoring-status`
 continues to open Metrics. Earlier Dashboard setup anchors open the corresponding
 Settings sections. History remains the evidence and management surface.
 
@@ -25,7 +27,7 @@ capacity reservations as running models.
 
 ## STORY
 
-A horizontal WorkerShell keeps identity, Taskboard / Metrics / History / Settings
+A horizontal WorkerShell keeps identity, Taskboard / Workflow / Metrics / History / Settings
 navigation, update state, Tour and Lock visible. After unlock, Taskboard answers
 three questions: what needs the operator, what is running, and what is waiting.
 A Running now strip follows observed active executor owners. Below it, a wider
@@ -66,6 +68,23 @@ generated records never submit work or approve completion when edited. Keep
 execution outcome, readiness/completion gates and patch review distinct.
 History retains task management, source requests, patches and execution evidence.
 Backend task kinds remain provenance, not separate primary creation journeys.
+
+## WORKFLOW EVIDENCE
+
+Workflow starts with persisted Feature Request stages and stage pressure, then
+UTC-week delivered-increment velocity and measured lead/cycle durations. Project
+and time filters retain their scope across sections. Completion targets distinguish
+human acceptance, main-checkout merge and release publication. Velocity requires
+confirmed integration; review-only closure, provider attempts, passing checks and
+an internal completed phase do not establish delivered increments.
+
+The four Evidence-based management areas expose the limits of the observations.
+Delivery timing can inform Time to Market; no chart manufactures Current Value,
+Unrealized Value, innovation outcomes or a quality score from activity counts.
+Unknown and incomplete-history coverage belongs beside each measure. Empty data,
+failed reads and stale retained observations have distinct messages. Charts retain
+text labels and accessible tabular facts; narrow screens preserve filter labels,
+evidence identity and 44px controls. The existing slate/mint system remains.
 
 ## MONITORING AND STEERING
 
@@ -157,7 +176,7 @@ After unlock, the board and right-hand interaction panel establish the worker's
 current work immediately. Empty attention and queue areas explain their state;
 no placeholder task, model name or fabricated progress is presented as real.
 The selected task remains clear while the operator drafts instructions or reads
-output. A persistent Tour explains the four pages and their controls without
+output. A persistent Tour explains the five pages and their controls without
 configuring providers, enrolling the worker or submitting work.
 
 ## FORM

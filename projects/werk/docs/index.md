@@ -23,7 +23,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Archive to main checkout](tutorials/worker-home-to-main.md): dedicated worker home, webview request/setup, observable implementation, increment review and explicit plain-Git merge permission.
 
 - [Local delivery request](tutorials/worker-feature-lifecycle.md): submit Markdown, inspect isolated implementation and accept an exact tested candidate without shared Git publication.
-- [Local worker run metrics](reference/worker-run-metrics.md): paired snapshots, usage coverage, durable history and paginated export.
+- [Worker workflow and run metrics](reference/worker-run-metrics.md): confirmed-increment velocity, delivery coverage, paired snapshots and durable history.
 
 - [Prepare a Linux VM deployment](tutorials/linux-vm-first-task.md): Ubuntu cloud-init, verified artifacts and SSH access.
 
@@ -54,7 +54,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Answer questions and resume requests](how-to/answer-and-resume-worker.md): guarded answers, cancellation, checkpoints and event replay.
 - [Worker–model interaction contract](reference/model-interaction.md): capabilities, typed results, durable events and recovery.
 - [Markdown feature-request contract](reference/feature-requests.md)
-- [Use the worker webview](how-to/use-worker-webview.md): Taskboard, Metrics, History and Settings.
+- [Use the worker webview](how-to/use-worker-webview.md): Taskboard, Workflow, Metrics, History and Settings.
 - [Implement a feature with the worker](how-to/implement-feature.md): approved worktree changes, required checks, repair and review.
 - [Manage model tools](how-to/manage-model-tools.md): built-in grants, MCP connections and revocation.
 - [Set a worker consumption limit](how-to/worker-consumption-limits.md): daily/monthly token allowance, worker share, reservations and recovery.

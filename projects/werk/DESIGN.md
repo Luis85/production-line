@@ -74,12 +74,14 @@ Operational surfaces: background #111b22, text #edf4f7, secondary #b5c4cd,
 borders #3b4b56, action mint #8be0b8; system sans-serif 16px/1.6. Runtime controls
 have a 44px minimum height. At desktop widths of at least 1100px, the shared
 spatial layout expands orchestrator content to 1540px and Factory content to
-1760px. The worker has four primary pages: Taskboard (default at `/taskboard`),
-Metrics (`/dashboard`), History and Settings (`/settings`). Its horizontal header
+1760px. The worker has five primary pages: Taskboard (default at `/taskboard`),
+Workflow (`/workflow`), Metrics (`/dashboard`), History and Settings (`/settings`).
+Its horizontal header
 frames current execution, Needs you / Up next, completed work and drafts beside
 a task interaction panel. New request starts with instructions; provider and agent
-choices sit under Task options. Metrics presents observations; Settings contains
-focused editors. `/chat` preserves its query when redirecting to Taskboard;
+choices sit under Task options. Workflow presents recorded delivery flow and
+weekly delivered increments with explicit coverage; Metrics presents host and
+invocation observations; Settings contains focused editors. `/chat` preserves its query when redirecting to Taskboard;
 `/monitoring-status` opens Metrics and earlier Dashboard setup anchors open
 Settings. Tables scroll when necessary
 instead of compressing identity and evidence beyond readability. The worker

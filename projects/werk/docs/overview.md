@@ -245,9 +245,11 @@ does not merge the feature branch.
 
 ## Inspect and configure the worker
 
-The **Taskboard** shows current work, queue and capacity. **Metrics** explains
-measured consumption and execution activity; **History** keeps previous runs and
-their evidence. **Settings** holds the worker's operating configuration.
+The **Taskboard** shows current work, queue and capacity. **Workflow** shows
+recorded delivery stages, confirmed-increment velocity and measurement coverage.
+**Metrics** explains measured consumption and execution activity; **History**
+keeps previous runs and their evidence. **Settings** holds the worker's operating
+configuration.
 
 <!-- readme-image: worker-metrics -->
 

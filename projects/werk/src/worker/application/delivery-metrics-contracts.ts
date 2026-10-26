@@ -26,6 +26,8 @@ export interface DeliveryMetricTimelineEvent {
   measurement?: Pick<DeliveryEventMeasurement, 'blockers' | 'observations'>;
 }
 export interface DeliveryMetricsInput {
+  /** Available filter identities are collected before a selected project narrows evidence. */
+  availableProjects?: readonly string[]; availableProfiles?: readonly string[];
   intake?: readonly FeatureIntakeMeasurement[];
   requests: readonly WorkerRequest[];
   events: readonly RequestEvent[];

@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "command": "npm run mutation -- --scope dashboard",
+  "testOnlyComparison": {
+    "sameTargetSources": true,
+    "sameCompiledSources": true,
+    "sameConfiguration": true,
+    "sameMutantUniverse": true,
+    "targetModules": 3,
+    "mutants": 982,
+    "netAssertionKillDelta": 145,
+    "transitions": [
+      {
+        "from": "Killed",
+        "to": "Killed",
+        "count": 524
+      },
+      {
+        "from": "Killed",
+        "to": "Survived",
+        "count": 2
+      },
+      {
+        "from": "NoCoverage",
+        "to": "Killed",
+        "count": 15
+      },
+      {
+        "from": "NoCoverage",
+        "to": "NoCoverage",
+        "count": 13
+      },
+      {
+        "from": "NoCoverage",
+        "to": "Survived",
+        "count": 12
+      },
+      {
+        "from": "Survived",
+        "to": "Killed",
+        "count": 132
+      },
+      {
+        "from": "Survived",
+        "to": "Survived",
+        "count": 282
+      },
+      {
+        "from": "Timeout",
+        "to": "Timeout",
+        "count": 2
+      }
+    ]
+  },
+  "correctedSourceFinal": {
+    "sameTargetFiles": true,
+    "sameTargetSources": false,
+    "sameConfiguration": true,
+    "sameMutantUniverse": false,
+    "note": "A real historical-snapshot defect was fixed after the test-only run. Final mutant IDs/denominator and score are reported independently, not as an unchanged-source kill delta."
+  }
+}

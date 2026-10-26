@@ -1,3 +1,4 @@
+import { workerLinks as links } from '../src/worker/webview/worker-navigation';
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
 import { userEvent, within } from 'storybook/test';
 import { h, KeepAlive, nextTick, type Component } from 'vue';
@@ -27,12 +28,7 @@ const meta = { title: 'Worker/Workspace', parameters: { layout: 'fullscreen' } }
 export default meta;
 type Story = StoryObj;
 const source = (path: string) => 'src/worker/webview/' + path + '.vue';
-const links = [
-  { path: '/taskboard', label: 'Taskboard', icon: 'i-lucide-columns-2' },
-  { path: '/dashboard', label: 'Metrics', icon: 'i-lucide-activity' },
-  { path: '/history', label: 'History', icon: 'i-lucide-history' },
-  { path: '/settings', label: 'Settings', icon: 'i-lucide-settings-2' },
-];
+
 const storymap = (summary: string, covers: string[], route = '/taskboard', step?: number) => ({ app: 'Worker', summary, covers: covers.map(source), route, ready: '[data-worker-story-ready]', ...(step ? { journey: 'Give work to a worker, steer it, and review its evidence', step } : {}) });
 function renderPage(component: Component, variant: WorkerFixture = 'populated') {
   return () => ({ setup() {

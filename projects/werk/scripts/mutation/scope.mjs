@@ -75,10 +75,22 @@ export const workflowScope = {
   supportFiles: ['scripts/mutation/suites/workflow-fixture.mjs', 'scripts/mutation/suites/workflow-local-fixture.mjs', 'scripts/mutation/suites/delivery-policy.test.mjs', 'tests/helpers/typed-boundaries.mjs'],
   timeoutMs: 12 * 60 * 1000,
 };
-const mutationScopes = { authority: authorityScope, workflow: workflowScope };
+/** Dashboard observations have their own bounded denominator; existing authority/workflow targets are unchanged. */
+export const dashboardScope = {
+  id: 'worker-workflow-dashboard-v1',
+  reportDirectory: 'reports/mutation/dashboard',
+  targets: ['src/worker/application/workflow-metrics.ts', 'src/worker/application/workflow-metric-evidence.ts', 'src/worker/application/workflow-metrics-window.ts'],
+  suitePrefix: 'dashboard-',
+  testFiles: ['.mutation-build/tests/*.test.mjs'],
+  reusedTests: ['tests/worker/workflow-metrics-model.test.mjs', 'tests/worker/workflow-metrics-boundaries.test.mjs'],
+  reusedFixtures: ['tests/worker/workflow-metrics-fixture.mjs', 'tests/worker/workflow-boundary-fixtures.mjs'],
+  supportFiles: [],
+  timeoutMs: 3 * 60 * 1000,
+};
+const mutationScopes = { authority: authorityScope, workflow: workflowScope, dashboard: dashboardScope };
 export const mutationTargets = [...new Set(Object.values(mutationScopes).flatMap(value => value.targets))];
 export function selectMutationScope(name = 'authority') {
-  if (!Object.hasOwn(mutationScopes, name)) throw Error('Mutation scope must be authority or workflow.');
+  if (!Object.hasOwn(mutationScopes, name)) throw Error('Mutation scope must be authority, workflow or dashboard.');
   return mutationScopes[name];
 }
 export function mutationOptions(args) {
@@ -87,7 +99,7 @@ export function mutationOptions(args) {
     const arg = args[index];
     if (arg === '--advisory' && !advisory) advisory = true;
     else if (arg === '--scope' && !selected && args[index + 1]) { name = args[++index]; selected = true; }
-    else throw Error('Usage: npm run mutation -- [--advisory] [--scope authority|workflow]');
+    else throw Error('Usage: npm run mutation -- [--advisory] [--scope authority|workflow|dashboard]');
   }
   selectMutationScope(name);
   return { name, advisory };

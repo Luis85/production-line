@@ -238,6 +238,8 @@ export async function statusServer(
             "/chat",
             "/history",
             "/dashboard",
+            "/workflow",
+            "/review",
             "/settings",
             "/monitoring-status",
           ].includes(pagePath)

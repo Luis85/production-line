@@ -1,3 +1,4 @@
+import { workerLinks } from '../src/worker/webview/worker-navigation';
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
 import { h, nextTick } from 'vue';
 import UApp from '@nuxt/ui/components/App.vue';
@@ -15,7 +16,7 @@ const storymap = (summary: string) => ({ app: 'Worker', summary, covers: ['pages
 function render(variant: ReviewFixture = 'verified') {
   return () => ({ setup() {
     fixture = installReviewFixture(variant);
-    return () => h(UApp, null, { default: () => h(WorkerShell, { links: [{ path: '/taskboard', label: 'Taskboard', icon: 'i-lucide-columns-2' }, { path: '/dashboard', label: 'Metrics', icon: 'i-lucide-activity' }, { path: '/history', label: 'History', icon: 'i-lucide-history' }, { path: '/settings', label: 'Settings', icon: 'i-lucide-settings-2' }], homePath: '/taskboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
+    return () => h(UApp, null, { default: () => h(WorkerShell, { links: workerLinks, homePath: '/taskboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
       identity: () => h('div', { class: 'worker-identity' }, [h('div', [h('strong', 'Example worker'), h('span', 'Fictional review data')])]),
       default: () => h(ReviewPage), footer: () => 'Illustrative review · no model call, command or Git write occurred',
     }) });

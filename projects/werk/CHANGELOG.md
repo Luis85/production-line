@@ -7,6 +7,14 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- A dedicated Workflow page shows recorded Feature Request stage pressure, project/time filters, UTC-week confirmed-increment velocity, measured lead/cycle times and explicit evidence coverage. Evidence-based management separates operational delivery proxies from unmeasured business outcomes; Metrics retains host, consumption and submission-cohort observations.
+
+### Changed
+
+- Dashboard mutation testing has a separate three-module advisory scope with retained receipts and residual findings. The corrected-source measurement records 677 assertion kills over 998 mutants (67.84%), with 305 survivors, 14 uncovered and two timeouts; existing authority and workflow baselines remain unchanged.
+
 ## [0.16.0] - 2026-10-25
 
 Qualification: native Windows with a real Claude Code CLI account and worker-managed live GitHub Release publication remain pending; source, provider-protocol and host-API fixtures qualify only their observed boundaries. See the [workflow acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md).

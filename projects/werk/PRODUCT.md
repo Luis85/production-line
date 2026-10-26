@@ -15,9 +15,10 @@ visual navigation, dedicated dashboards, focused editors and a replayable tour.
 
 ## Worker Scope
 
-The worker uses Vue with Nuxt UI and four primary pages: Taskboard
-(`/taskboard`), Metrics (`/dashboard`), History (`/history`) and Settings
-(`/settings`). Taskboard opens after unlock. It keeps current work, Needs you
+The worker uses Vue with Nuxt UI and five primary pages: Taskboard
+(`/taskboard`), Workflow (`/workflow`), Metrics (`/dashboard`), History
+(`/history`) and Settings (`/settings`). Taskboard opens after unlock. It keeps
+current work, Needs you
 and Up next beside a task-scoped interaction panel; completed work and drafts
 remain available without duplicating task identities across sources. A request-scoped
 Review route brings its input, activity, changes, checks and decisions together.
@@ -129,6 +130,26 @@ baseline before replacing policy; another operator's change produces a conflict
 instead of an unseen overwrite. A lost acknowledgement requires inspecting the
 saved result before retrying. Existing requirements to pause or drain work still
 apply where needed before changing providers, repositories, profiles or tools.
+
+## Worker Workflow
+
+Workflow is a read-only view of recorded Feature Request delivery. Project and
+time filters scope the same persisted evidence across flow stages, stage pressure,
+UTC-week velocity and delivery timing. Velocity counts delivered increments, not
+story points, model invocations or passing checks. Human acceptance, a confirmed
+merge and a confirmed published release remain separate milestones. Velocity counts
+confirmed main-checkout merges or, for release-enabled requests, confirmed release
+publications. Review-only closure remains outside delivered-increment counts.
+
+Show measurement coverage and unknown values beside each result. Missing or
+incomplete history must not appear as zero duration, zero work or complete
+coverage. Evidence-based management connects delivery observations to Current
+Value, Unrealized Value, Ability to Innovate and Time to Market without inventing
+business outcomes, satisfaction measures or quality scores. Unmeasured outcomes
+remain explicit. Filters, charts and evidence need keyboard-accessible controls,
+readable narrow-screen alternatives and distinct empty, failed and stale states.
+Metrics continues to own current worker resources and invocation consumption;
+History owns detailed evidence and request Review owns delivery decisions.
 
 ## Worker Metrics
 

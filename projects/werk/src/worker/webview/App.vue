@@ -13,6 +13,7 @@ import UInput from "@nuxt/ui/components/Input.vue";
 import UBadge from "@nuxt/ui/components/Badge.vue";
 import UAlert from "@nuxt/ui/components/Alert.vue";
 import UIcon from "@nuxt/ui/components/Icon.vue";
+import { workerLinks as links } from './worker-navigation';
 import { assignmentModeLabel } from './worker-mode-view';
 import { state, refresh, refreshFromUser, unlock, lock, date, checkAccess } from "./store";
 const router = useRouter(),
@@ -41,6 +42,12 @@ const tourSteps: TourStep[] = [
     activate: () => router.push("/history"),
   },
   {
+    title: "See how work flows",
+    text: "Workflow follows retained Feature Requests from intake to integration. Compare delivered increments by UTC week and inspect the evidence behind delivery measures.",
+    target: ".workflow-page",
+    activate: () => router.push("/workflow"),
+  },
+  {
     title: "Understand usage and health",
     text: "Metrics brings together this worker’s consumption, retained run measurements and host health. Missing measurements stay unavailable.",
     target: ".page-heading",
@@ -58,12 +65,7 @@ const route = useRoute(),
   connecting = ref(false),
   accessError = ref(""),
   showToken = ref(false);
-const links = [
-  { path: "/taskboard", label: "Taskboard", icon: "i-lucide-columns-2" },
-  { path: "/dashboard", label: "Metrics", icon: "i-lucide-activity" },
-  { path: "/history", label: "History", icon: "i-lucide-history" },
-  { path: "/settings", label: "Settings", icon: "i-lucide-settings-2" },
-];
+
 const assignmentLabel = computed(() => assignmentModeLabel(state.environment?.orchestratorUrl, state.status?.mode));
 const connected = computed(
   () =>

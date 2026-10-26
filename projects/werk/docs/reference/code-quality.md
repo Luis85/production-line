@@ -4,7 +4,9 @@ Werk uses pinned Oxlint 1.88.0 and Fallow 3.35.0 alongside TypeScript and its
 existing architecture tests. They run in normal development and CI. The tools
 inspect maintained source; downloaded runtime archives do not need them.
 Mutation testing is a separate, advisory release experiment described in
-[mutation testing](../how-to/mutation-testing.md).
+[mutation testing](../how-to/mutation-testing.md). The dashboard also has an
+independent observation-model scope; it does not alter the historical authority
+or workflow baselines.
 
 ## Contributor commands
 
@@ -39,6 +41,33 @@ The complete Fallow report intentionally exits unsuccessfully while it contains
 findings. It is an inspection command, not an instruction to accept everything
 it reports. Use the regular command to distinguish a new regression from the
 recorded baseline.
+
+## Dashboard mutation checks
+
+`npm run mutation -- --scope dashboard` measures the three pure dashboard modules:
+observation windows, retained workflow evidence and report aggregation. The scope
+is `worker-workflow-dashboard-v1`; its JSON, HTML, log and summary are written to
+`reports/mutation/dashboard/`. It reuses the model tests and independent UTC,
+completion, historical-state and timing boundary contracts. It does not mutate
+browser rendering, storage adapters or the older delivery report.
+
+The lane has a three-minute overall budget and uses the existing per-mutant
+deadline, three workers and per-test coverage. It is advisory, with no recorded
+baseline or automatic promotion. A completed run may still contain surviving,
+uncovered or timed-out mutants; read their counts and the strict assertion score
+alongside Stryker's score, which includes timeouts as detected mutations. A valid
+run also checks source, selected-test and configuration fingerprints before and
+after measurement. The authority and workflow scopes retain their own targets,
+denominators, evidence and baselines.
+
+The corrected-source measurement on 2026-10-26 completed over 998 mutants:
+677 assertion-killed, 305 survived, 14 uncovered and two timed out, with no
+compile/runtime errors. The strict score is 67.84% (Stryker: 68.04%), below the
+advisory 70% threshold. The retained repository proof is under
+`docs/evidence/local-delivery/mutation-dashboard-v1-2026-10-26/`, including all
+three attempt receipts, complete residual inventories and the test-only status
+comparison. The final source correction changes the earlier 982-mutant universe,
+so its score is reported independently.
 
 ## Oxlint's role
 

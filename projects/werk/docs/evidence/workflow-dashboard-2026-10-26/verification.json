@@ -1,0 +1,983 @@
+{
+  "date": "2026-10-26",
+  "scope": "Unreleased development branch; labelled provider fixture, real Git and actual extracted archive.",
+  "responsiveChecks": [
+    {
+      "story": "worker-workflow--observed-delivery",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "e71d63305ed2a4433959f1dbd1ee6e810dc7477c618c6ebdc1c7c9ae44b0de26"
+    },
+    {
+      "story": "worker-workflow--filter-workflow",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "4833b24a77d3c69f697e80020d3dc522b377cb06b4506a992c0d87f32187d1e8"
+    },
+    {
+      "story": "worker-workflow--missing-evidence",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "2d94de91934d2e6ea76b68b368545f57f9d95caf0507d820549af3b801b4456a"
+    },
+    {
+      "story": "worker-workflow--failed-refresh",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "3fb9c37eba09519290605561a108e7af53b71d1765558ed1c200b0ad44091312"
+    },
+    {
+      "story": "worker-workflow--empty-workflow",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "90f7d7aeb1985dea5f84fed1f5c020da229160238d31cb461340d1895f89d0fb"
+    },
+    {
+      "story": "worker-workflow--paused-observations",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "c73a5b8b0fa3012ba718bcac4b3d14b73ed03dd2ba525f89a6f4d94b2ade7de1"
+    },
+    {
+      "story": "worker-workflow--loading-workflow",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "456c0a5224032aab943c8bab1ada21178fbb609c8532834b62bf1cc9b64aab2d"
+    },
+    {
+      "story": "worker-workflow--observed-delivery",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "47a428efdc4701166557a1e7d60f563f0374ba6f48cd1f0ae1c7593997821bb2"
+    },
+    {
+      "story": "worker-workflow--filter-workflow",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "955df119739442b8d8c958d6d5bad6a98292278aa543cf5d644462dd81da6157"
+    },
+    {
+      "story": "worker-workflow--missing-evidence",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "943cc672aef596b41723d5b2c6999f6368bb380da3257d8fd4ab49eda3ed056e"
+    },
+    {
+      "story": "worker-workflow--failed-refresh",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "b8384c89678427e10ace34c97a9668dcbfac69b6b8ec8575e5d0b8a6c171dc81"
+    },
+    {
+      "story": "worker-workflow--empty-workflow",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "ddd1d9d05b33238e47cac7c4cadb314b080ff03b13845034f54d57fc2d05600a"
+    },
+    {
+      "story": "worker-workflow--paused-observations",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "8899eff94fa1cf4d40b2f6ad1161b0933e108e0366e322fcd2a8b45105b06288"
+    },
+    {
+      "story": "worker-workflow--loading-workflow",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "2d1bd1d33c740190c562e1a540ff8b1fa195920b32bc583a5e6c32136d0f0853"
+    },
+    {
+      "story": "worker-workflow--observed-delivery",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "cc9da04f6041f90e7ff02dbda8fb3f011c398eec95d2bc3a394f51aa20dd1feb"
+    },
+    {
+      "story": "worker-workflow--filter-workflow",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "1722efe7062505ca95d3d980f35003bc741e40d243cf643ac6bde0a9619192b9"
+    },
+    {
+      "story": "worker-workflow--missing-evidence",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "84da2506e274f35209bcf2ffb44d55ff0d320f03398952cc013ca2edb8e4767b"
+    },
+    {
+      "story": "worker-workflow--failed-refresh",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "eab949622e7a047347ec2d0936bcaa95318b83893956156941fbd8b6750575fe"
+    },
+    {
+      "story": "worker-workflow--empty-workflow",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "946682c120e402e8fc9d1b3e5ee57320a69b999f0a1a126cefbe1a702063ff49"
+    },
+    {
+      "story": "worker-workflow--paused-observations",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "951a1acbdd5f7d87ff3fa3ecc5b428d2784944e31de81e4b382dd49dc37a57d9"
+    },
+    {
+      "story": "worker-workflow--loading-workflow",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "02181a2ac72f5bd55e86046dd61dc2c041c258756504770978556026e3af54ab"
+    },
+    {
+      "story": "worker-workflow--observed-delivery",
+      "width": 320,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "e662273e5205e51b3d67d284bfb5a71deeb76390b401a198f8eedecaa051c095"
+    },
+    {
+      "story": "worker-workflow--filter-workflow",
+      "width": 320,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "7feb3fc2b61fc1938fc27eab9342197299b25351d44826503532d3363219d4b1"
+    },
+    {
+      "story": "worker-workflow--missing-evidence",
+      "width": 320,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "165dc83cb47e4ca86b80cbcedddafd681fbe8bc7c9a2db8eb6a016890704a788"
+    },
+    {
+      "story": "worker-workflow--failed-refresh",
+      "width": 320,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "02ae12f7c7f1dc6dc7e2f88ee96b747e3f2127aad68d7036170c2ef1a0d1066e"
+    },
+    {
+      "story": "worker-workflow--empty-workflow",
+      "width": 320,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "9f7b269b1133566531f2d69ba14ca2be9a26cb468def303f761b954c9150856f"
+    },
+    {
+      "story": "worker-workflow--paused-observations",
+      "width": 320,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "9cc5d97a62e71ae0871eded8c86f9fb75b905d965c7bf025a23cea594d793305"
+    },
+    {
+      "story": "worker-workflow--loading-workflow",
+      "width": 320,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "captureSha256": "5aadc5e91c2d2740c5e3c71cca96699395f0fa38ea4e4ead02831301cff21494"
+    }
+  ],
+  "retainedCaptures": {
+    "desktop.png": "worker-workflow--observed-delivery-1440-viewport.png",
+    "mobile.png": "worker-workflow--observed-delivery-390-viewport.png",
+    "refresh-error.png": "worker-workflow--failed-refresh-390-viewport.png"
+  },
+  "archiveSmoke": {
+    "fixture": "Deterministic Claude CLI protocol; no real provider login or inference",
+    "liveProvider": false,
+    "checks": [
+      "Verified archive starts in an empty dedicated home and unlocks through the real browser without source/npm/init.",
+      "Extracted /workflow and /review bookmarks serve HTML; workflow API requires authorization; direct/reloaded empty dashboard preserves unmeasured timing and has no desktop/mobile overflow.",
+      "Browser prepares, completes, checks and commits/pushes a ready Feature Request before any inference.",
+      "Real candidate tools, committed verification, feature commit/push and Markdown pull request appear before browser acceptance; explicit exact-main consent merges into checkout.",
+      "Actual completed real-Git increment appears once in extracted workflow throughput, with measured lead/cycle, zero WIP and unmeasured business value; review/dashboard reload and project-filtered desktop/mobile rendering pass."
+    ],
+    "screenshots": [
+      "01-first-worker-home",
+      "workflow-empty-1440",
+      "workflow-empty-390",
+      "02-published-feature-request",
+      "03-taskboard-in-progress",
+      "04-taskboard-review-ready",
+      "05-markdown-candidate-review",
+      "06-main-checkout-merge-confirmed",
+      "workflow-completed-1440",
+      "workflow-completed-390"
+    ],
+    "pageErrors": [],
+    "version": "0.16.0",
+    "sourceCommit": null,
+    "archiveSha256": "b6d7a53608ba03a42cddcf05692b04ffc57b67b6607ded7f75c7559b76c862fe",
+    "manifestSha256": "944eb84457835a9007c5ea46184f108eb91217763e922bd63c159cb20084b7b8",
+    "candidateCommit": "c054daba8b2ce1f1dfaa292bc86830ec9e6060ea",
+    "publishedFeatureCommit": "6113413039e4f0d0092ac05ee7942fa2221eead2",
+    "mergedCommit": "c054daba8b2ce1f1dfaa292bc86830ec9e6060ea",
+    "reviewNote": "feature-reviews/fr-f224f995655544a530b482f9-699e83a9e2e7.md",
+    "providerInvocations": [
+      {
+        "fixture": true,
+        "mode": "ready-review"
+      },
+      {
+        "fixture": true,
+        "mode": "candidate-tools"
+      }
+    ]
+  },
+  "confirmedDelivery": {
+    "scope": "retained_worker_workflow",
+    "coverage": {
+      "canonicalRequests": 1,
+      "intakeOnly": 0,
+      "completeHistories": 1,
+      "unknownSubmissionTimes": 0,
+      "closedWithoutIntegration": 0,
+      "unknownCompletionTimes": 0
+    },
+    "throughput": {
+      "unit": "confirmed_increments",
+      "completed": 1,
+      "weeks": [
+        {
+          "weekStart": "2024-11-04T00:00:00.000Z",
+          "weekEnd": "2024-11-11T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2024-11-11T00:00:00.000Z",
+          "weekEnd": "2024-11-18T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2024-11-18T00:00:00.000Z",
+          "weekEnd": "2024-11-25T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2024-11-25T00:00:00.000Z",
+          "weekEnd": "2024-12-02T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2024-12-02T00:00:00.000Z",
+          "weekEnd": "2024-12-09T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2024-12-09T00:00:00.000Z",
+          "weekEnd": "2024-12-16T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2024-12-16T00:00:00.000Z",
+          "weekEnd": "2024-12-23T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2024-12-23T00:00:00.000Z",
+          "weekEnd": "2024-12-30T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2024-12-30T00:00:00.000Z",
+          "weekEnd": "2025-01-06T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-01-06T00:00:00.000Z",
+          "weekEnd": "2025-01-13T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-01-13T00:00:00.000Z",
+          "weekEnd": "2025-01-20T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-01-20T00:00:00.000Z",
+          "weekEnd": "2025-01-27T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-01-27T00:00:00.000Z",
+          "weekEnd": "2025-02-03T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-02-03T00:00:00.000Z",
+          "weekEnd": "2025-02-10T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-02-10T00:00:00.000Z",
+          "weekEnd": "2025-02-17T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-02-17T00:00:00.000Z",
+          "weekEnd": "2025-02-24T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-02-24T00:00:00.000Z",
+          "weekEnd": "2025-03-03T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-03-03T00:00:00.000Z",
+          "weekEnd": "2025-03-10T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-03-10T00:00:00.000Z",
+          "weekEnd": "2025-03-17T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-03-17T00:00:00.000Z",
+          "weekEnd": "2025-03-24T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-03-24T00:00:00.000Z",
+          "weekEnd": "2025-03-31T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-03-31T00:00:00.000Z",
+          "weekEnd": "2025-04-07T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-04-07T00:00:00.000Z",
+          "weekEnd": "2025-04-14T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-04-14T00:00:00.000Z",
+          "weekEnd": "2025-04-21T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-04-21T00:00:00.000Z",
+          "weekEnd": "2025-04-28T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-04-28T00:00:00.000Z",
+          "weekEnd": "2025-05-05T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-05-05T00:00:00.000Z",
+          "weekEnd": "2025-05-12T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-05-12T00:00:00.000Z",
+          "weekEnd": "2025-05-19T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-05-19T00:00:00.000Z",
+          "weekEnd": "2025-05-26T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-05-26T00:00:00.000Z",
+          "weekEnd": "2025-06-02T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-06-02T00:00:00.000Z",
+          "weekEnd": "2025-06-09T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-06-09T00:00:00.000Z",
+          "weekEnd": "2025-06-16T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-06-16T00:00:00.000Z",
+          "weekEnd": "2025-06-23T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-06-23T00:00:00.000Z",
+          "weekEnd": "2025-06-30T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-06-30T00:00:00.000Z",
+          "weekEnd": "2025-07-07T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-07-07T00:00:00.000Z",
+          "weekEnd": "2025-07-14T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-07-14T00:00:00.000Z",
+          "weekEnd": "2025-07-21T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-07-21T00:00:00.000Z",
+          "weekEnd": "2025-07-28T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-07-28T00:00:00.000Z",
+          "weekEnd": "2025-08-04T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-08-04T00:00:00.000Z",
+          "weekEnd": "2025-08-11T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-08-11T00:00:00.000Z",
+          "weekEnd": "2025-08-18T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-08-18T00:00:00.000Z",
+          "weekEnd": "2025-08-25T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-08-25T00:00:00.000Z",
+          "weekEnd": "2025-09-01T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-09-01T00:00:00.000Z",
+          "weekEnd": "2025-09-08T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-09-08T00:00:00.000Z",
+          "weekEnd": "2025-09-15T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-09-15T00:00:00.000Z",
+          "weekEnd": "2025-09-22T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-09-22T00:00:00.000Z",
+          "weekEnd": "2025-09-29T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-09-29T00:00:00.000Z",
+          "weekEnd": "2025-10-06T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-10-06T00:00:00.000Z",
+          "weekEnd": "2025-10-13T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-10-13T00:00:00.000Z",
+          "weekEnd": "2025-10-20T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-10-20T00:00:00.000Z",
+          "weekEnd": "2025-10-27T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-10-27T00:00:00.000Z",
+          "weekEnd": "2025-11-03T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-11-03T00:00:00.000Z",
+          "weekEnd": "2025-11-10T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-11-10T00:00:00.000Z",
+          "weekEnd": "2025-11-17T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-11-17T00:00:00.000Z",
+          "weekEnd": "2025-11-24T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-11-24T00:00:00.000Z",
+          "weekEnd": "2025-12-01T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-12-01T00:00:00.000Z",
+          "weekEnd": "2025-12-08T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-12-08T00:00:00.000Z",
+          "weekEnd": "2025-12-15T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-12-15T00:00:00.000Z",
+          "weekEnd": "2025-12-22T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-12-22T00:00:00.000Z",
+          "weekEnd": "2025-12-29T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2025-12-29T00:00:00.000Z",
+          "weekEnd": "2026-01-05T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-01-05T00:00:00.000Z",
+          "weekEnd": "2026-01-12T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-01-12T00:00:00.000Z",
+          "weekEnd": "2026-01-19T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-01-19T00:00:00.000Z",
+          "weekEnd": "2026-01-26T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-01-26T00:00:00.000Z",
+          "weekEnd": "2026-02-02T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-02-02T00:00:00.000Z",
+          "weekEnd": "2026-02-09T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-02-09T00:00:00.000Z",
+          "weekEnd": "2026-02-16T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-02-16T00:00:00.000Z",
+          "weekEnd": "2026-02-23T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-02-23T00:00:00.000Z",
+          "weekEnd": "2026-03-02T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-03-02T00:00:00.000Z",
+          "weekEnd": "2026-03-09T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-03-09T00:00:00.000Z",
+          "weekEnd": "2026-03-16T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-03-16T00:00:00.000Z",
+          "weekEnd": "2026-03-23T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-03-23T00:00:00.000Z",
+          "weekEnd": "2026-03-30T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-03-30T00:00:00.000Z",
+          "weekEnd": "2026-04-06T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-04-06T00:00:00.000Z",
+          "weekEnd": "2026-04-13T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-04-13T00:00:00.000Z",
+          "weekEnd": "2026-04-20T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-04-20T00:00:00.000Z",
+          "weekEnd": "2026-04-27T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-04-27T00:00:00.000Z",
+          "weekEnd": "2026-05-04T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-05-04T00:00:00.000Z",
+          "weekEnd": "2026-05-11T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-05-11T00:00:00.000Z",
+          "weekEnd": "2026-05-18T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-05-18T00:00:00.000Z",
+          "weekEnd": "2026-05-25T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-05-25T00:00:00.000Z",
+          "weekEnd": "2026-06-01T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-06-01T00:00:00.000Z",
+          "weekEnd": "2026-06-08T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-06-08T00:00:00.000Z",
+          "weekEnd": "2026-06-15T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-06-15T00:00:00.000Z",
+          "weekEnd": "2026-06-22T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-06-22T00:00:00.000Z",
+          "weekEnd": "2026-06-29T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-06-29T00:00:00.000Z",
+          "weekEnd": "2026-07-06T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-07-06T00:00:00.000Z",
+          "weekEnd": "2026-07-13T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-07-13T00:00:00.000Z",
+          "weekEnd": "2026-07-20T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-07-20T00:00:00.000Z",
+          "weekEnd": "2026-07-27T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-07-27T00:00:00.000Z",
+          "weekEnd": "2026-08-03T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-08-03T00:00:00.000Z",
+          "weekEnd": "2026-08-10T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-08-10T00:00:00.000Z",
+          "weekEnd": "2026-08-17T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-08-17T00:00:00.000Z",
+          "weekEnd": "2026-08-24T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-08-24T00:00:00.000Z",
+          "weekEnd": "2026-08-31T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-08-31T00:00:00.000Z",
+          "weekEnd": "2026-09-07T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-09-07T00:00:00.000Z",
+          "weekEnd": "2026-09-14T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-09-14T00:00:00.000Z",
+          "weekEnd": "2026-09-21T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-09-21T00:00:00.000Z",
+          "weekEnd": "2026-09-28T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-09-28T00:00:00.000Z",
+          "weekEnd": "2026-10-05T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-10-05T00:00:00.000Z",
+          "weekEnd": "2026-10-12T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-10-12T00:00:00.000Z",
+          "weekEnd": "2026-10-19T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-10-19T00:00:00.000Z",
+          "weekEnd": "2026-10-26T00:00:00.000Z",
+          "completed": 0,
+          "partial": false
+        },
+        {
+          "weekStart": "2026-10-26T00:00:00.000Z",
+          "weekEnd": "2026-11-02T00:00:00.000Z",
+          "completed": 1,
+          "partial": true
+        }
+      ],
+      "completeWeeks": 103,
+      "meanPerCompleteWeek": 0
+    },
+    "timing": {
+      "lead": {
+        "samples": 1,
+        "unknown": 0,
+        "p50Ms": 8059,
+        "p95Ms": 8059,
+        "totalMs": 8059
+      },
+      "cycle": {
+        "samples": 1,
+        "unknown": 0,
+        "p50Ms": 5948,
+        "p95Ms": 5948,
+        "totalMs": 5948
+      }
+    },
+    "flow": {
+      "wip": 0
+    },
+    "ebm": [
+      {
+        "id": "current_value",
+        "label": "Current value",
+        "status": "unmeasured",
+        "evidence": [],
+        "unavailable": [
+          "Customer outcomes, satisfaction, revenue and realized business value are not recorded."
+        ]
+      },
+      {
+        "id": "unrealized_value",
+        "label": "Unrealized value",
+        "status": "unmeasured",
+        "evidence": [],
+        "unavailable": [
+          "Unmet customer needs, market opportunities and expected value are not recorded."
+        ]
+      },
+      {
+        "id": "time_to_market",
+        "label": "Time to market",
+        "status": "operational_proxy",
+        "evidence": [
+          "Confirmed integrations per UTC week",
+          "Observed submission-to-integration and implementation-to-integration time"
+        ],
+        "unavailable": [
+          "Integration is not evidence of customer deployment or value realization."
+        ]
+      },
+      {
+        "id": "ability_to_innovate",
+        "label": "Ability to innovate",
+        "status": "operational_proxy",
+        "evidence": [
+          "Observed work in progress and blocker ages",
+          "Recorded repair, review-change and failure observations"
+        ],
+        "unavailable": [
+          "Innovation investment, workforce capacity and product innovation outcomes are not recorded."
+        ]
+      }
+    ]
+  }
+}

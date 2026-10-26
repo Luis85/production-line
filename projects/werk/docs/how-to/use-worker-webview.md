@@ -16,11 +16,12 @@ approved-file implementations and remote assignments. For parallel work, start
 separate workers; see the
 [native and Docker examples](assemble-independent-components.md#scale-with-separate-workers).
 
-Four primary pages organize the workspace; a request opens its own review page:
+Five primary pages organize the workspace; a request opens its own review page:
 
 | Page | Use it to |
 | --- | --- |
 | Taskboard · `/taskboard` | Give instructions, follow current work and answer questions. |
+| Workflow · `/workflow` | Follow recorded delivery flow, weekly increments and evidence coverage. |
 | Metrics · `/dashboard` | Inspect consumption, execution evidence and worker health. |
 | History · `/history` | Find saved tasks and retained execution evidence. |
 | Feature Request review · `/review?session=…` | Inspect one request’s accepted goal, changes, checks, decision and handoff. |
@@ -659,6 +660,34 @@ interaction panel, optional repository-file approval can produce a review patch
 from captured inputs. Routing and file permissions remain separate decisions;
 all admitted work executes serially on whichever worker owns it.
 
+## Inspect Workflow
+
+Open **Workflow** for delivery observations across retained Feature Requests.
+Choose **Project** and **Completed within** before comparing results.
+**Observed workflow** stage pressure spans all submission dates at the displayed observation time; velocity
+uses confirmed completion times in the selected window. An old request completed
+this week belongs in this week's velocity even if it was submitted months ago.
+
+**Weekly delivery velocity** counts confirmed increments: the reviewed candidate merged into
+the main checkout, or the release published when the request requires release
+publication. Human acceptance, passing checks and successful provider calls do
+not count as delivered increments. Review-only closure remains separate. UTC
+weeks start on Monday; partial boundary weeks are labelled and excluded from the
+complete-week average. This is a count of increments, without story points.
+
+Read **Delivery measures** and **Measurement coverage and definitions** alongside
+lead/cycle times and rework/failure observations. Lead time runs from the recorded
+submission to confirmed integration; cycle time starts at the first recorded
+implementation/repair start. Unknown timestamps and incomplete retained history are not zero.
+The Evidence-based management section distinguishes operational proxies from
+unmeasured customer value, opportunity and innovation outcomes. Follow a request
+to Review or History when you need its underlying decisions and evidence.
+
+See the [Workflow measurement contract](../reference/worker-run-metrics.md#workflow-webview)
+for completion rules, window boundaries and coverage. Failed refreshes retain a
+matching **Last successful snapshot**; changing filters clears results from the
+previous scope while the new observation loads.
+
 ## Inspect History and Metrics
 
 History also exposes **Project requests** from the configured feature folder and
@@ -680,7 +709,8 @@ execution evidence and operational health. Measurement age and missing readings 
 visible. Settings links open the corresponding editor without mixing forms into
 the measurements. Standalone mode is healthy without an orchestrator.
 
-The delivery metrics cohort includes eligible local/shared submissions observed
+Metrics also retains detailed delivery evidence for compatibility. Its delivery
+metrics cohort includes eligible local/shared submissions observed
 before readiness or admission succeeds, even when no implementation has started.
 The same request is counted once after admission. Ready Check provider time,
 recorded clarification answers and waits remain linked to that feature. Missing

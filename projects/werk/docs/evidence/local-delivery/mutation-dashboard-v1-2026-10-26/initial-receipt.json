@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-26T08:40:37.561Z",
+  "packageVersion": "0.16.0",
+  "commit": "4e457b40c3839522930cdd25a51652b48bd08d63",
+  "workingTreeDirty": true,
+  "nodeVersion": "v24.19.0",
+  "platform": "linux-x64",
+  "strykerVersion": "10.0.0",
+  "scope": {
+    "id": "worker-workflow-dashboard-v1",
+    "reportDirectory": "reports/mutation/dashboard",
+    "targets": [
+      "src/worker/application/workflow-metrics.ts",
+      "src/worker/application/workflow-metric-evidence.ts",
+      "src/worker/application/workflow-metrics-window.ts"
+    ],
+    "suitePrefix": "dashboard-",
+    "testFiles": [
+      ".mutation-build/tests/*.test.mjs"
+    ],
+    "reusedTests": [
+      "tests/worker/workflow-metrics-model.test.mjs",
+      "tests/worker/workflow-metrics-boundaries.test.mjs"
+    ],
+    "reusedFixtures": [
+      "tests/worker/workflow-metrics-fixture.mjs",
+      "tests/worker/workflow-boundary-fixtures.mjs"
+    ],
+    "supportFiles": [],
+    "timeoutMs": 180000
+  },
+  "sources": {
+    "digest": "b3a17d4412d83313f52014fb2d3f2b722911a2ebc08e37f39356cd76b6df606b",
+    "files": {
+      "src/worker/application/workflow-metric-evidence.ts": "92ff04c89edb0fb7f5ec214a4344dcbfc56ebc581faf44582d21f324d729b3dc",
+      "src/worker/application/workflow-metrics-window.ts": "b2bd7e4c1c16eb6ec6520e4c7881facaec8ebc641e5627aaca204fe8b3507b81",
+      "src/worker/application/workflow-metrics.ts": "7162939d33b9aeaff16a432e070959d951e9c5ad91c159be69b2c1471a5ab53f"
+    }
+  },
+  "tests": {
+    "digest": "cfcc7d6c89091d4b16bfcff36ea143eeaa7effbf012049cb1867fe21b56dfc56",
+    "files": {
+      "tests/worker/workflow-boundary-fixtures.mjs": "c2858d399c0288cf7b0549363b7a90f69e4e084e8003a752a062643503c92941",
+      "tests/worker/workflow-metrics-boundaries.test.mjs": "d8309b64db7e29f2020cdcc1a9e602eced136b162bb13c0c48e2d7452bd79358",
+      "tests/worker/workflow-metrics-fixture.mjs": "b027b2e6113bb85b708f3c8b69f5d2a08fab98335692180247112ba1203f1584",
+      "tests/worker/workflow-metrics-model.test.mjs": "fb160b0113980a99d8eee511286b1ea1ab355f497635df6a07cc67b1812a384c"
+    }
+  },
+  "configuration": {
+    "digest": "0b8a356988c15a6ceee588238e15245318ff827c7fe87e8b97bf120150a78b57",
+    "files": {
+      "scripts/mutation/build.mjs": "29d35d41024809201e98de400ea95cca084066293a6b52647a6a1ebe6b58a42d",
+      "scripts/mutation/process.mjs": "5123ebeca70418b21bb4b4e5dc16f71a4f22181459360a018391a0e625355cc9",
+      "scripts/mutation/provenance.mjs": "0153c0bb0f25510f10d67c0f9f55c4373cb45d56716a1cb224a7560e65356d22",
+      "scripts/mutation/reports.mjs": "0c6c8ab822d6885b8e46a60bf01a1d1b75d127546da038c2344dd64adbcad6de",
+      "scripts/mutation/run.mjs": "531ad5b12635644b5a97e4304e8d35ada5dd6da19061f51dffc814ee85064236",
+      "scripts/mutation/scope.mjs": "d13ccf93762511d24c07a240b6de5a2f47f5555adbfb8417334089ce8935b5a9",
+      "scripts/mutation/summary.mjs": "6cf351d7d34311704a204ea705c0a094962037b944debf1d81dcc45ce41e20e1",
+      "stryker.config.mjs": "41c59718d74c14eee957cdeb1d74203b447d51275b013a1445fcee5e367fff57"
+    }
+  },
+  "reportDigest": "e34e589d94e71372334a1072b410f06c20797a521180ecff63841ef57ef26d8c",
+  "status": "completed",
+  "advisory": true,
+  "score": 53.77,
+  "assertionScore": 53.56,
+  "validMutants": 982,
+  "timeoutDetected": 2,
+  "totalMutants": 982,
+  "counts": {
+    "Killed": 526,
+    "Survived": 414,
+    "NoCoverage": 40,
+    "Timeout": 2,
+    "CompileError": 0,
+    "RuntimeError": 0,
+    "Ignored": 0,
+    "Pending": 0
+  },
+  "files": [
+    {
+      "path": "src/worker/application/workflow-metrics.ts",
+      "total": 239,
+      "counts": {
+        "Killed": 149,
+        "Survived": 83,
+        "NoCoverage": 6,
+        "Timeout": 1,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 62.76
+    },
+    {
+      "path": "src/worker/application/workflow-metric-evidence.ts",
+      "total": 702,
+      "counts": {
+        "Killed": 350,
+        "Survived": 322,
+        "NoCoverage": 30,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 49.86
+    },
+    {
+      "path": "src/worker/application/workflow-metrics-window.ts",
+      "total": 41,
+      "counts": {
+        "Killed": 27,
+        "Survived": 9,
+        "NoCoverage": 4,
+        "Timeout": 1,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 68.29
+    }
+  ],
+  "execution": {
+    "exitCode": 0,
+    "signal": null,
+    "timedOut": false,
+    "durationMs": 58000
+  },
+  "warnings": [
+    "414 surviving and 40 uncovered mutants in this limited scope.",
+    "No recorded baseline is available for comparison.",
+    "Scoped mutation score is below the advisory 70% threshold."
+  ],
+  "compiledSourcesDigest": "1beceaeda8b02425e8866415fc2e5625f4f8b58cac2d78e94ae33d8f2f5bb935",
+  "mutantUniverseDigest": "7bfb6bc4aa39b006db1bfaa48e6bca0980f2979d70fdab161c8ccc846e355f6f"
+}
