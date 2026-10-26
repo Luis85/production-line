@@ -20,8 +20,8 @@ state; the [entity map](../explanation/core-entities.md) identifies their owners
 For a native system using the shipped example:
 
 ```text
-node werk.mjs system status --file examples/system.yaml --json
-node werk.mjs system doctor --file examples/system.yaml --json
+node werk.mjs system status --file runtime/examples/system.yaml --json
+node werk.mjs system doctor --file runtime/examples/system.yaml --json
 ```
 
 If you edited the YAML, use the saved state directly for maintenance:
@@ -157,8 +157,8 @@ defines missing-value semantics and every stable alert code.
 Headless operators can use the same read-only report through application CLIs:
 
 ```text
-node src/factory/dist/factory/cli.js monitoring --url http://127.0.0.1:3100
-node src/orchestrator/dist/orchestrator/cli.js monitoring --url http://127.0.0.1:3001
+node runtime/src/factory/dist/factory/cli.js monitoring --url http://127.0.0.1:3100
+node runtime/src/orchestrator/dist/orchestrator/cli.js monitoring --url http://127.0.0.1:3001
 ```
 
 Supply the viewer credential through `WERK_FACTORY_ADMIN_TOKEN` or

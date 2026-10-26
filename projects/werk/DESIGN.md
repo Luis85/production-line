@@ -74,18 +74,16 @@ Operational surfaces: background #111b22, text #edf4f7, secondary #b5c4cd,
 borders #3b4b56, action mint #8be0b8; system sans-serif 16px/1.6. Runtime controls
 have a 44px minimum height. At desktop widths of at least 1100px, the shared
 spatial layout expands orchestrator content to 1540px and Factory content to
-1760px. The worker has five primary pages: Taskboard (default at `/taskboard`),
-Workflow (`/workflow`), Metrics (`/dashboard`), History and Settings (`/settings`).
-Its horizontal header
-frames current execution, Needs you / Up next, completed work and drafts beside
-a task interaction panel. New request starts with instructions; provider and agent
-choices sit under Task options. Workflow presents recorded delivery flow and
-weekly delivered increments with explicit coverage; Metrics presents host and
-invocation observations; Settings contains focused editors. `/chat` preserves its query when redirecting to Taskboard;
-`/monitoring-status` opens Metrics and earlier Dashboard setup anchors open
-Settings. Tables scroll when necessary
-instead of compressing identity and evidence beyond readability. The worker
-surface's composition is recorded in `src/worker/webview/DESIGN.md`.
+1760px. The worker has four primary pages: Workboard (default at `/workboard`),
+Projects (`/projects`), Workflow (`/workflow`) and Settings (`/settings`). Metrics
+and History remain secondary evidence links. Workboard leads with Feature Request
+stages, live progress and review; New Feature Request opens the guarded project
+Git-authoring flow on demand. Projects exposes visible Home repositories and
+setup status. Request Review leads with diff, checks and the current decision;
+detailed identities disclose progressively. Workflow presents recorded delivery
+and coverage. Existing `/taskboard` and `/chat` links redirect to Workboard with
+their queries intact. Tables scroll rather than compressing evidence identities.
+The worker surface is recorded in `src/worker/webview/DESIGN.md`.
 
 Concept surfaces: background #10191e, panels #17232b, lines #30404a,
 foreground #e8efee, secondary #a1b2bc. Project colors: mint #8be0b8, blue #81b6ee,
@@ -146,20 +144,13 @@ read-only configuration context. Opening a saved task clears
 filters that could hide it. The concept also supports weekly ready-import and
 keeps unsent feature drafts scoped to the selected production line. Factory
 management shows portfolio context; line operations show the selected line.
-Worker Taskboard is the first work surface after unlock. Cards combine session,
-file-task and project-request records by retained identity, preserving Local
-request, Assigned and Project request labels. Needs you makes questions,
-decisions, rework, reviews and failures prominent; Up next shows queued work.
-The Running now strip follows the shared executor's observed active sessions.
-Completed and Drafts are secondary disclosures. Reserved places for unknown
-outcomes remain visibly distinct from observed running work.
-
-Request detail is the delivery workspace: request input/revision, questions,
-activity, changes, verification and human decision remain attached to one Feature
-Request. Show lifecycle separately from run status and phase. A completed model
-invocation or delivery run is never labelled Accepted without a current-candidate
-human decision. Blocked views identify the reason, responsible actor and next
-available action without requiring transcript inspection.
+Worker Workboard is the first work surface after unlock/setup. Its full-width
+stages keep request identity, live progress, questions, holds and review actions
+visible. New Feature Request opens project Git authoring on demand. Projects and
+Workflow health remain one click away; Metrics and History retain secondary
+evidence. The primary flow does not submit generic chat or install a worker in a
+project. Review prioritizes diff, checks and the current human decision while
+retaining exact evidence identities in disclosures.
 
 The behaviour inspector is read-only. It presents the selected branch/action,
 conditions, wait reason and bounded repair allowance. Pause intake and pause after
@@ -168,20 +159,15 @@ actual outcome is known. Reconnect reconstructs durable state, and background
 polling preserves focus and typed answers. Markdown and webview commands share
 operation identity, source/revision guards and candidate evidence rules.
 
-The right-hand panel offers New request and Follow up for the selected task.
-Instructions, provider/agent choices and optional repository-file approval belong
-to this one interaction. Create request establishes a worker-owned session and
-automatic Markdown feature-request tracking; approved files do not create a
-second editor or make persistence optional. One idempotent create command owns
-the first message. An uncertain acknowledgement keeps its exact identity and
-input for Retry same request instead of creating duplicate work.
-Follow-ups retain the session and Markdown record. Source notes remain
-intake-authoritative; the generated record separates execution outcome, lifecycle
-gates and human review. Saving/error states never masquerade as a confirmed file.
+Project Feature Request authoring and guarded answers retain source/revision
+identity and immutable operation keys. Uncertain acknowledgements reconcile before
+new mutations. Source Markdown remains authoritative; generated progress is
+labelled with saved/error state. Legacy conversation/file-task records keep their
+history without becoming the primary creation flow.
 History retains task management and execution evidence without taking authority
 over orchestrator-owned assignments. Settings holds provider and agent setup,
 queue/duration policy, tools, repositories and enrollment. Metrics holds observed
-consumption, process health and diagnostics; Taskboard owns capacity and new-start
+consumption, process health and diagnostics; Workboard owns capacity and new-start
 controls. Settings sections preserve unsubmitted drafts in the current tab; guarded policy saves detect stale baselines.
 
 One worker shares a configured machine ceiling of 1–8 operations across

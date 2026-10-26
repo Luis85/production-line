@@ -1,3 +1,4 @@
+import type { SharedReadyReviewAnswerReceipt } from './shared-ready-review-answer-contracts.js';
 import type { LocalMergeProjection } from './local-merge-markdown.js';
 import type { ReleaseProjection } from './release-markdown.js';
 import type { FeatureIntakeMeasurement, FeatureIntakeMeasurementUpdate } from './feature-intake-measurement.js';
@@ -40,6 +41,7 @@ export interface SharedRepositoryPort {
   readBlob(commit: string, path: string, signal: AbortSignal): Promise<string | null>;
   listRequests(commit: string, signal: AbortSignal): Promise<SharedBlob[]>;
   publishLifecycle(input: LifecycleWrite, signal: AbortSignal): Promise<{ commit: string; head: string }>;
+  publishReadyReviewAnswer?(input: LifecycleWrite, signal: AbortSignal): Promise<{ commit: string; head: string }>;
   publishPatch(input: { operationId: string; featureId: string; sourceCommit: string; patch: string; approvedPaths: string[] }, signal: AbortSignal): Promise<{ commit: string; head: string; branch: string }>;
 }
 export interface SharedTaskCheckpoint {
@@ -73,6 +75,7 @@ export interface SharedReviewReworkReceipt {
 export interface SharedFeatureRecord extends SharedFeatureView, Omit<FeaturePreparation, 'selection'> {
   executionPolicy?: GatePolicy;
   readyReviewState?: SharedReadyReviewCheckpoint;
+  readyReviewAnswers?: SharedReadyReviewAnswerReceipt[];
   reviewReworks?: SharedReviewReworkReceipt[];
   release?: ReleaseProjection; localMerge?: LocalMergeProjection;
   binding: SharedIntakeConfig;
@@ -130,6 +133,7 @@ export interface SharedIntakePorts {
   resolveSelection?(input: SharedFeatureInput): ModelSelection;
   readyReview?: { schedule(input: ReadyReviewInput): Promise<ReadyReviewAttempt>; inspect(input: ReadyReviewInput): ReadyReviewExecutionView | undefined };
   readyReviewEligible?(markdown: string, snapshot: FeatureWorkflowSnapshot, provider?: string): { valid: boolean; input?: SharedFeatureInput; inputHash?: string; errors: { code: string; message: string }[] };
+  readyReviewAnswer?(markdown: string, record: SharedFeatureRecord, answer: string): string;
   readyReviewResponse?(markdown: string, record: SharedFeatureRecord): { sourceMarkdown: string; answer: string; status: string };
   load(): Promise<SharedFeatureState>;
   save(state: SharedFeatureState): Promise<void>;

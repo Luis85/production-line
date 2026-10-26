@@ -1,3 +1,4 @@
+import { assertManagedProjectIsolation } from './workspace-managed-isolation.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { defaultDeliveryRetention } from '../application/delivery-retention.js';
 import { readDeliveryPolicyDraft, saveDeliveryPolicyDraft } from '../infrastructure/delivery-policy-draft.js';
@@ -23,6 +24,12 @@ export function authorizeDeliveryPolicy(workspace: WorkspaceContext, repositoryI
   workspace.repositories.resolve(identifier(repositoryId, 'Repository ID'));
   if (!/^[a-f0-9]{64}$/.test(configurationDigest) || !workspace.deliveryApprovals.view().approvals.some(item => item.repositoryId === repositoryId && item.configurationDigest === configurationDigest))
     throw new DomainError('conflict', 'This exact project delivery policy is not approved on this worker. Review it in Settings → Project delivery.');
+}
+/** Filesystem ownership is asynchronous; machine approval remains synchronous at the dispatch boundary. */
+export async function authorizeIsolatedDeliveryPolicy(workspace: WorkspaceContext, repositoryId: string, configurationDigest: string): Promise<void> {
+  const repository = workspace.repositories.resolve(identifier(repositoryId, 'Repository ID'));
+  await assertManagedProjectIsolation(workspace, repository.id, repository.path);
+  authorizeDeliveryPolicy(workspace, repositoryId, configurationDigest);
 }
 async function deliveryPolicyView(workspace: WorkspaceContext, projectId?: unknown) {
   assertNativeWorkReady(workspace);
@@ -51,6 +58,7 @@ export async function deliveryPolicyCommand(workspace: WorkspaceContext, input: 
     object(input, 'Project delivery draft', raw.action === 'delivery_policy_draft' ? ['action', 'projectId'] : ['action', 'projectId', 'expectedFileDigest', 'configuration']);
     const repository = selectedRepository(workspace, raw.projectId);
     if (!repository) throw new DomainError('conflict', 'Assign this repository before editing its delivery policy.');
+    if (raw.action === 'save_delivery_policy_draft') await assertManagedProjectIsolation(workspace, repository.id, repository.path);
     if (raw.action === 'save_delivery_policy_draft' && !workspace.acceptingTasks) throw new DomainError('unavailable', 'Worker is stopping.');
     const draft = raw.action === 'delivery_policy_draft' ? await readDeliveryPolicyDraft(repository.path, signalFor(workspace))
       : await saveDeliveryPolicyDraft(repository.path, raw.expectedFileDigest, raw.configuration, signalFor(workspace));

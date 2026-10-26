@@ -1,22 +1,24 @@
-# Operate a project worker
+# Operate a WerkHome worker
 
-Use this checklist after you [install a project worker](project-worker.md) to run
+Use this checklist after you [start WerkHome](../tutorials/worker-home-to-main.md) to run
 feature requests on a real project, for example a Markdown vault with application
-code. The commands run from the project directory with the portable worker in
-`bin/apps/worker`. The Windows sections cover Windows PowerShell 5.1, the shell
+code. The commands run from the central Home. Advanced raw commands use `runtime/bin/apps/worker/cli.mjs`
+with the explicit effective `--state-dir` (fresh `Home/state/worker`, or the
+retained adopted absolute path). The Windows sections cover Windows PowerShell 5.1, the shell
 that ships with Windows 10 and 11.
 
 ## Checklist
 
-1. **Start and check the worker.** Run `node bin/apps/worker/cli.mjs start`, then
-   `status` and `health`. `status` returns the webview URL. Keep one state
-   directory per worker and pass the same `--state-dir` to every command.
+1. **Start and check the worker.** Run `node worker.mjs`, then
+   `node worker.mjs status`. The result includes the webview URL; raw CLI health
+   commands require the same explicit effective state.
 2. **Connect a provider.** Save the provider with `settings set --file provider.json`,
    then run `provider check --id PROVIDER`. A CLI provider such as Claude Code or
    Codex must already be signed in on the worker machine.
-3. **Assign the repository.** Accept the detected checkout in the Taskboard, or
-   run `repository status` and `repository accept --discovery-id ID`. File tasks for an assigned repository run in their own Git
-   worktree, created from a commit, never from uncommitted changes.
+3. **Register the remote project.** In Projects clone the remote, inspect its
+   visible path/folder/poll interval, preview workflow publication and separately
+   approve the exact committed policy. Implementation runs in a private owned Git
+   worktree from committed input, never uncommitted checkout changes.
    [Task worktrees](#task-worktrees) explains where they live.
 4. **Grant tools deliberately.** In **Settings → Tools & MCP**, pause new starts
    (`queue pause`) and finish or cancel queued and running work. Grant file tools,
@@ -24,10 +26,10 @@ that ships with Windows 10 and 11.
    implementation, enable repository files and at least one command preset marked
    **Required feature check**, then save and run `queue resume`.
    Read [Tool limits](#tool-limits) before you plan checks that take minutes.
-5. **Submit a small request first.** In **Taskboard → New request**, describe the
+5. **Submit a small request first.** In **Workboard → New Feature Request**, describe the
    acceptance criteria and approve one or two repository paths when edits are
-   needed. Every interaction gets a Markdown feature-request record. Follow its
-   progress in the Taskboard or with `feature wait` / `file-task wait`, and review
+   needed. Prepare/check the project draft and publish its ready request to Git. Follow its
+   progress in the Workboard or with `feature wait` / `file-task wait`, and review
    the patch and required-check evidence before applying or merging changes. See
    [implement a feature](implement-feature.md) for the complete setup.
 6. **Answer questions instead of retrying.** A request in `waiting_input` or
@@ -37,13 +39,13 @@ that ships with Windows 10 and 11.
    Resume with `task resume` or `interaction resume` after you fix the cause.
 8. **Clean up.** Delete or archive finished tasks, then
    [remove retained worktrees](#task-worktrees) you no longer need. Stop the worker
-   with `stop`; it drains running work and keeps its state.
+   with `node worker.mjs stop`; inspect active/unknown work before another start.
 
 ## Recover after a crash or reboot
 
 A worker that crashed, or ran when the machine restarted, leaves its lock files
 behind. `status` then reports `stale` with the dead `pid` and the leftover `files`:
-`.werk/worker/portable.json`, `.werk/worker/worker.lock` and the feature folder's
+`state/worker/portable.json`, `state/worker/worker.lock` and the feature folder's
 `_worker.lock`. You don't need to delete them. `start`, `stop` and
 `update apply --stop` remove exactly these files and continue as if the worker had
 stopped. The worker treats a PID as gone only with proof: the files were written on
@@ -78,7 +80,7 @@ does not follow the PowerShell current location:
 $path = Join-Path (Get-Location) 'provider.json'
 $json = @{ provider = @{ id = 'claude-cli'; executable = 'C:\Users\me\.local\bin\claude.exe' } } | ConvertTo-Json -Depth 20
 [System.IO.File]::WriteAllText($path, $json)
-node bin/apps/worker/cli.mjs settings set --file provider.json
+node runtime/bin/apps/worker/cli.mjs settings set --file provider.json --state-dir state/worker
 ```
 
 `WriteAllText` without an encoding argument writes UTF-8 without a BOM. To fix an
@@ -116,9 +118,9 @@ explicitly with `file-task delete --id TASK_ID --remove-worktree false`. Inspect
 leftovers and preview cleanup before applying it:
 
 ```powershell
-node bin/apps/worker/cli.mjs worktrees list
-node bin/apps/worker/cli.mjs worktrees prune --dry-run
-node bin/apps/worker/cli.mjs worktrees prune --id NAME
+node runtime/bin/apps/worker/cli.mjs worktrees list --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs worktrees prune --dry-run --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs worktrees prune --id NAME --state-dir state/worker
 ```
 
 Pause new starts and drain queued, running and preparing work before pruning;
@@ -167,8 +169,8 @@ and the task waits in `waiting_input` (or `escalated` for a decision outside its
 authority). Answer it once with the session ID, question ID and revision:
 
 ```powershell
-node bin/apps/worker/cli.mjs interaction get --id SESSION_ID
-node bin/apps/worker/cli.mjs interaction answer --id SESSION_ID --question-id PENDING_ID --if-match REVISION --key answer-001 --file answer.json
+node runtime/bin/apps/worker/cli.mjs interaction get --id SESSION_ID --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs interaction answer --id SESSION_ID --question-id PENDING_ID --if-match REVISION --key answer-001 --file answer.json --state-dir state/worker
 ```
 
 `answer.json` contains `{"answer":"..."}`, written as described above. If the

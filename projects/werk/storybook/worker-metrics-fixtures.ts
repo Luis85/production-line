@@ -145,7 +145,7 @@ export const metricsFixture = () => currentFixture;
 export function renderMetricsPage(scenario: MetricsScenario = 'active') {
   return () => ({ setup() {
     currentFixture = installMetricsFixture(scenario);
-    return () => h(UApp, null, { default: () => h(WorkerShell, { links, homePath: '/taskboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
+    return () => h(UApp, null, { default: () => h(WorkerShell, { links, homePath: '/workboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
       identity: () => h('div', { class: 'worker-identity' }, [h('div', [h('strong', 'Atlas documentation'), h('span', 'Worker Storybook · fictional data')])]),
       status: () => 'Isolated example · no model connected',
       default: () => h(KeepAlive, null, { default: () => h(MonitoringPage) }),

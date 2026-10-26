@@ -9,6 +9,7 @@ import { ManagedProjects, type ManagedProject, type ManagedProjectsView } from '
 import { featureWorkflowConfigPath, validateFeatureWorkflow } from '../application/feature-workflow.js';
 import { deliveryPolicyPath } from '../application/delivery-policy.js';
 import { managedProjectStorage } from '../infrastructure/managed-project-storage.js';
+import { managedProjectLocations } from '../infrastructure/managed-project-locations.js';
 import { managedProjectGit } from '../infrastructure/managed-project-git.js';
 import { parseFeature } from '../infrastructure/features/document.js';
 import { findExecutable } from '../infrastructure/providers.js';
@@ -18,6 +19,9 @@ import { projectFeatureTemplate } from './workspace-feature-templates.js';
 import { assertRepositoryChangeAllowed } from './workspace-repositories.js';
 import type { WorkspaceContext } from './workspace-context.js';
 
+function runtimeFor(workspace: WorkspaceContext, projectId: string) {
+  try { return workspace.featureProjects.resolve(projectId).sharedRuntime; } catch { return undefined; }
+}
 const signalFor = (workspace: WorkspaceContext) => AbortSignal.any([workspace.repositoryStop.signal, AbortSignal.timeout(150000)]);
 async function executable(path: string) {
   if (!path || process.platform === 'win32' && extname(path).toLowerCase() !== '.exe') return false;
@@ -48,37 +52,41 @@ async function workflow(project: ManagedProject, signal: AbortSignal): Promise<M
   } catch { signal.throwIfAborted(); return { configured: false, templates: [] }; }
 }
 export async function managedProjectsView(workspace: WorkspaceContext): Promise<ManagedProjectsView> {
-  const state = await managedProjectStorage(workspace.config.stateDir).load(), git = managedProjectGit(workspace.config.stateDir);
+  const state = await managedProjectStorage(workspace.config.stateDir).load(), git = managedProjectGit(workspace.config.stateDir, managedProjectLocations(workspace.config.stateDir, workspace.config.homeDir));
   const signal = signalFor(workspace);
   let githubRequired = false;
-  const projects = await Promise.all(state.projects.map(async project => {
+  const projects = await Promise.all(state.projects.map(async retained => {
+    const project: ManagedProject = retained.status === 'preparing' && !workspace.repositoriesUpdating ? { ...retained, status: 'needs_attention', detail: 'Project registration was interrupted. Recheck project setup to inspect the saved checkout and finish connecting it; its identity and existing files are preserved.' } : retained;
     const { operations: _operations, ...item } = project;
     const assignment = workspace.settings.value.repositories.items.find(value => value.id === project.id && resolve(value.path) === resolve(project.path));
-    const binding = assignment ? workspace.featureProjects.resolve(project.id).sharedRuntime.intake.binding : undefined;
-    const intakeEnabled = project.intake === 'shared' ? !!binding?.enabled && binding.repositoryId === project.id : assignment?.features?.directory === project.featuresDirectory;
+    const binding = assignment ? runtimeFor(workspace, project.id)?.intake.binding : undefined;
+    const intakeEnabled = project.mode !== 'adopt' && (project.intake === 'shared' ? !!binding?.enabled && binding.repositoryId === project.id : assignment?.features?.directory === project.featuresDirectory);
     let policyApproved = false, policyPresent = false, baseline = project.head, intakeBlockedReason: string | null = null;
     try { const observation = await intakePolicy(workspace, project, signal); policyApproved = observation.approved; policyPresent = observation.present; baseline = observation.baseline; githubRequired ||= observation.approved && observation.githubEnabled; }
     catch { signal.throwIfAborted(); intakeBlockedReason = 'The committed delivery policy could not be checked. Restore repository access, then recheck project setup.'; }
     const configuredWorkflow = await workflow({ ...project, head: baseline }, signal);
-    intakeBlockedReason = project.status !== 'ready' ? project.detail : intakeBlockedReason ?? (
+    intakeBlockedReason = project.mode === 'adopt' ? 'This retained project uses an external checkout. Register an isolated remote clone under a new project identity before executing new work.' : project.status !== 'ready' ? project.detail : intakeBlockedReason ?? (
       !assignment ? 'Restore this project repository assignment, then recheck setup.'
       : !policyPresent ? 'Commit .werk/delivery-policy.json, then approve its exact configuration in Project delivery.'
       : !policyApproved ? 'The current committed delivery policy is not approved. Review its exact configuration in Project delivery.'
       : project.intake === 'shared' && !configuredWorkflow.configured ? 'Commit the project Feature Request workflow and templates, then recheck setup.'
       : !intakeEnabled ? 'The delivery policy is approved. Recheck project setup to enable intake.' : null);
-    const setupState = project.mode === 'clone' ? await managedProjectSetupStorage(workspace.config.stateDir, project.id).load() : undefined;
+    const setupState = project.mode === 'clone' ? await managedProjectSetupStorage(workspace.config.stateDir, project.id, managedProjectLocations(workspace.config.stateDir, workspace.config.homeDir).placement(project).privateDirectory).load() : undefined;
     const pending = setupState?.operations.findLast(operation => operation.status === 'prepared' || operation.status === 'unknown');
     const setup: ManagedSetupResult | undefined = pending ? { schemaVersion: 1, projectId: project.id, operationId: pending.operationId, branch: pending.plan.branch,
       ...(pending.commit ? { commit: pending.commit } : {}), ...(pending.status === 'prepared' ? { resumePlan: pending.plan } : {}), status: 'unknown', requiresPolicyApproval: true,
       detail: pending.status === 'prepared' ? 'Setup was interrupted before its first push. Inspect the retained preview and explicitly resume the same operation.'
         : 'The saved workflow publication needs reconciliation. Its push will not be repeated.' } : undefined;
-    return { ...item, ...(setup ? { setup } : {}), intakeEnabled, policyApproved, intakeBlockedReason, workflow: configuredWorkflow };
+    const preferredPath = project.mode === 'clone' ? git.location(project.id) : null;
+    const kind = project.mode === 'adopt' ? 'adopted' as const : project.path === preferredPath && !!workspace.config.homeDir ? 'home' as const : 'legacy_state' as const;
+    const location = { kind, preferredPath, detail: kind === 'home' ? 'Isolated worker-owned checkout in Werk Home.' : kind === 'adopted' ? 'External checkout preserved. New execution requires a separate isolated remote clone.' : 'Registered legacy checkout preserved at its exact path. Relocation requires a stopped, explicit migration; no files or retained request paths were moved.' };
+    return { ...item, location, ...(setup ? { setup } : {}), intakeEnabled, policyApproved, intakeBlockedReason, workflow: configuredWorkflow };
   }));
-  return { schemaVersion: 1, home: git.home, projects, diagnostics: await diagnostics(workspace, githubRequired) };
+  return { schemaVersion: 1, home: git.home, homeDirectory: workspace.config.homeDir ?? null, stateDirectory: workspace.config.stateDir, projects, diagnostics: await diagnostics(workspace, githubRequired) };
 }
 async function intakePolicy(workspace: WorkspaceContext, project: ManagedProject, signal: AbortSignal) {
   const assignment = workspace.settings.value.repositories.items.find(item => item.id === project.id && resolve(item.path) === resolve(project.path));
-  const runtime = assignment ? workspace.featureProjects.resolve(project.id).sharedRuntime : undefined;
+  const runtime = assignment ? runtimeFor(workspace, project.id) : undefined;
   const binding = runtime?.intake.binding;
   const baseline = binding?.enabled && binding.repositoryId === project.id ? await runtime!.selectedBaseline(signal)
     : (await repositoryGit(project.path, ['rev-parse', '--verify', 'HEAD^{commit}'], signal, 30000, 65536)).trim();
@@ -94,11 +102,11 @@ async function attach(workspace: WorkspaceContext, project: ManagedProject, sign
     throw new DomainError('conflict', 'This project ID already belongs to another checkout or intake. Existing requests retain their assignment.');
   if (current.items.some(item => item.id !== project.id && resolve(item.path) === resolve(project.path)))
     throw new DomainError('conflict', 'The selected checkout already has another repository identity. Keep that assignment instead of importing its requests twice.');
-  if (existing?.features && project.intake === 'shared') throw new DomainError('conflict', 'This repository already has local intake. Preserve its requests by adopting it with intake: local.');
+  if (existing?.features && project.intake === 'shared') throw new DomainError('conflict', 'This repository already has local intake. Preserve its existing managed identity and intake configuration before changing its setup.');
   const { approved } = await intakePolicy(workspace, project, signal);
   const enableIntake = project.intake === 'local' && (!!existing?.features || approved);
   const assignment = { id: project.id, path: project.path, remote: 'origin', branch: project.branch, watch: existing?.watch ?? false,
-    ...(enableIntake ? { features: { directory: project.featuresDirectory, pollMs: existing?.features?.pollMs ?? 1000 } } : {}) };
+    ...(enableIntake ? { features: { directory: project.featuresDirectory, pollMs: project.pollMs ?? existing?.features?.pollMs ?? 1000 } } : {}) };
   const items = existing ? current.items.map(item => item.id === project.id ? assignment : item) : [...current.items, assignment];
   workspace.featureProjects.assertAssignments(items);
   if (JSON.stringify(items) !== JSON.stringify(current.items)) await workspace.settings.update({ repositories: { ...current, items } });
@@ -109,7 +117,7 @@ async function attach(workspace: WorkspaceContext, project: ManagedProject, sign
     const selected = await projectFeatureTemplate(workspace, project.id);
     if (selected.snapshot.configuration.requestsDirectory !== project.featuresDirectory) throw new DomainError('conflict', 'The committed request directory differs from project registration. Use its configured featuresDirectory when registering the project.');
     const intake = workspace.featureProjects.resolve(project.id).sharedRuntime.intake, current = intake.view();
-    const config = { enabled: true, repositoryId: project.id, remote: 'origin', branch: project.branch, workflowPath: featureWorkflowConfigPath, pollMs: current.config.pollMs };
+    const config = { enabled: true, repositoryId: project.id, remote: 'origin', branch: project.branch, workflowPath: featureWorkflowConfigPath, pollMs: project.pollMs ?? current.config.pollMs };
     if (JSON.stringify(current.config) !== JSON.stringify(config)) await intake.configure(config, current.revision);
     await workspace.featureProjects.configure();
   }
@@ -122,7 +130,7 @@ export async function managedProjectCommand(workspace: WorkspaceContext, input: 
   assertRepositoryChangeAllowed(workspace);
   if (workspace.featureProjects.busy) throw new DomainError('conflict', 'Wait for shared intake synchronization before changing project registration.');
   workspace.repositoriesUpdating = true;
-  const signal = signalFor(workspace), git = managedProjectGit(workspace.config.stateDir);
+  const signal = signalFor(workspace), git = managedProjectGit(workspace.config.stateDir, managedProjectLocations(workspace.config.stateDir, workspace.config.homeDir));
   try {
     const action = (input as { action?: unknown } | null)?.action;
     if (action === 'setup_plan' || action === 'setup_apply' || action === 'setup_reconcile') return await managedSetupCommand(workspace, input, signal);

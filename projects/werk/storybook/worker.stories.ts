@@ -29,11 +29,11 @@ export default meta;
 type Story = StoryObj;
 const source = (path: string) => 'src/worker/webview/' + path + '.vue';
 
-const storymap = (summary: string, covers: string[], route = '/taskboard', step?: number) => ({ app: 'Worker', summary, covers: covers.map(source), route, ready: '[data-worker-story-ready]', ...(step ? { journey: 'Give work to a worker, steer it, and review its evidence', step } : {}) });
+const storymap = (summary: string, covers: string[], route = '/workboard', step?: number) => ({ app: 'Worker', summary, covers: covers.map(source), route, ready: '[data-worker-story-ready]', ...(step ? { journey: 'Give work to a worker, steer it, and review its evidence', step } : {}) });
 function renderPage(component: Component, variant: WorkerFixture = 'populated') {
   return () => ({ setup() {
     installWorkerFixture(variant);
-    return () => h(UApp, null, { default: () => h(WorkerShell, { links, homePath: '/taskboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
+    return () => h(UApp, null, { default: () => h(WorkerShell, { links, homePath: '/workboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
       identity: () => h('div', { class: 'worker-identity' }, [h('div', [h('strong', 'Werk release'), h('span', 'Worker storybook · example data')])]),
       status: () => h('span', { class: 'muted' }, 'Isolated example · no model connected'),
       default: () => h(KeepAlive, null, { default: () => h(component) }),
@@ -60,16 +60,20 @@ async function ready(canvas: HTMLElement) {
   canvas.setAttribute('data-worker-story-ready', 'true');
 }
 const settled = async ({ canvasElement }: { canvasElement: HTMLElement }) => ready(canvasElement);
-const followUp = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+const selectConversation = async (canvasElement: HTMLElement) => {
+  if (!canvasElement.querySelector('#followup-task-tab')) { const open = [...canvasElement.querySelectorAll('button')].find(button => button.textContent?.includes('Continue selected task')); open?.click(); }
   (await element(canvasElement, '#followup-task-tab')).click();
+};
+const followUp = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+  await selectConversation(canvasElement);
   await element(canvasElement, '#chat-message');
   await ready(canvasElement);
 };
-const boardCovers = ['components/WorkerShell', 'pages/TaskboardPage', 'components/WorkerCapacityPanel', 'components/OverviewTaskCard', 'components/TaskInteraction', 'components/TaskIntake'];
+const boardCovers = ['components/WorkerShell', 'pages/TaskboardPage', 'components/WorkerCapacityPanel', 'components/OverviewTaskCard'];
 
 export const LockedWorkspace: Story = {
   name: '01 · Unlock the worker',
-  parameters: { storymap: storymap('The workspace starts behind its access screen. No task or provider data is shown before unlocking.', ['App'], '/taskboard', 1) },
+  parameters: { storymap: storymap('The workspace starts behind its access screen. No task or provider data is shown before unlocking.', ['App'], '/workboard', 1) },
   render: renderComponent(App, 'locked'), play: settled,
 };
 export const EmptyTaskboard: Story = {
@@ -79,34 +83,34 @@ export const EmptyTaskboard: Story = {
 };
 export const PopulatedTaskboard: Story = {
   name: '03 · Taskboard with mixed work',
-  parameters: { storymap: storymap('Needs you, Up next, drafts and completed work aggregate saved conversations, file patches and project requests.', boardCovers, '/taskboard', 3) },
+  parameters: { storymap: storymap('Needs you, Up next, drafts and completed work aggregate saved conversations, file patches and project requests.', boardCovers, '/workboard', 3) },
   render: renderPage(TaskboardPage), play: settled,
 };
 export const RunningTask: Story = {
   name: '04 · Monitor the selected model attempt',
-  parameters: { storymap: storymap('The running strip records the actual attempt model and its usage. Stop task applies to that current attempt; a follow-up can be drafted while it runs.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/OverviewTaskCard', 'components/TaskInteraction', 'components/MessageContent'], '/taskboard', 4) },
+  parameters: { storymap: storymap('The running strip records the actual attempt model and its usage. Stop task applies to that current attempt; a follow-up can be drafted while it runs.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/OverviewTaskCard', 'components/TaskInteraction', 'components/MessageContent'], '/workboard', 4) },
   render: renderPage(TaskboardPage, 'running'), play: followUp,
 };
 export const AnswerCheckpoint: Story = {
   name: '05 · Answer a saved checkpoint',
-  parameters: { storymap: storymap('A saved model question keeps its choices and context visible. Selecting a choice fills an answer without sending it.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/OverviewTaskCard', 'components/TaskInteraction', 'components/InteractionPanel', 'components/MessageContent'], '/taskboard', 5) },
+  parameters: { storymap: storymap('A saved model question keeps its choices and context visible. Selecting a choice fills an answer without sending it.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/OverviewTaskCard', 'components/TaskInteraction', 'components/InteractionPanel', 'components/MessageContent'], '/workboard', 5) },
   render: renderPage(TaskboardPage, 'checkpoint'),
   play: async context => { await followUp(context); await element(context.canvasElement, '#checkpoint-answer'); await ready(context.canvasElement); },
 };
 export const FollowUp: Story = {
   name: '06 · Follow up on a completed task',
-  parameters: { storymap: storymap('Follow-up retains the selected feature request, transcript and Markdown record. It does not create unrelated work or infer the model from new provider defaults.', ['components/TaskInteraction', 'components/MessageContent'], '/taskboard', 6) },
+  parameters: { storymap: storymap('Follow-up retains the selected feature request, transcript and Markdown record. It does not create unrelated work or infer the model from new provider defaults.', ['components/TaskInteraction', 'components/MessageContent'], '/workboard', 6) },
   render: renderComponent(TaskInteraction, 'formatted'), play: followUp,
 };
 export const FailedAttempt: Story = {
   name: '07 · Inspect and continue a failed attempt',
-  parameters: { storymap: storymap('A failed attempt exposes saved execution evidence and an explicit continuation while preserving earlier results.', ['components/TaskInteraction', 'components/InteractionPanel', 'components/MessageContent'], '/taskboard', 7) },
+  parameters: { storymap: storymap('A failed attempt exposes saved execution evidence and an explicit continuation while preserving earlier results.', ['components/TaskInteraction', 'components/InteractionPanel', 'components/MessageContent'], '/workboard', 7) },
   render: renderComponent(TaskInteraction, 'failed'),
   play: async context => { await followUp(context); await element(context.canvasElement, '#checkpoint-answer'); await ready(context.canvasElement); },
 };
 export const FileTaskIntake: Story = {
   name: '08 · Add repository files to the same request',
-  parameters: { storymap: storymap('One set of instructions creates a Markdown feature request. Optional approved repository files extend that request; the worker produces a patch for human review without changing the original checkout.', ['components/TaskInteraction', 'components/TaskIntake', 'components/RunTask'], '/taskboard', 8) },
+  parameters: { storymap: storymap('One set of instructions creates a Markdown feature request. Optional approved repository files extend that request; the worker produces a patch for human review without changing the original checkout.', ['components/TaskInteraction', 'components/TaskIntake', 'components/RunTask'], '/workboard', 8) },
   render: renderComponent(TaskInteraction),
   play: async ({ canvasElement }) => {
     const input = await element(canvasElement, '#new-task-instructions') as HTMLTextAreaElement;
@@ -180,7 +184,7 @@ export const AgentDefinitions: Story = {
 };
 export const RequestReview: Story = {
   name: '16 · Review readiness, findings and rework',
-  parameters: { storymap: storymap('Request lifecycle is separate from a model result. Open findings, readiness evidence, rework ownership and acceptance remain visible for human steering.', ['components/RequestGatePanel', 'components/RequestGateEvidence', 'components/MessageContent'], '/taskboard') },
+  parameters: { storymap: storymap('Request lifecycle is separate from a model result. Open findings, readiness evidence, rework ownership and acceptance remain visible for human steering.', ['components/RequestGatePanel', 'components/RequestGateEvidence', 'components/MessageContent'], '/workboard') },
   render: renderComponent(RequestGatePanel, 'populated', { requestId: 'request-review' }),
   play: async ({ canvasElement }) => { await element(canvasElement, '#request-gate-title'); await ready(canvasElement); },
 };
@@ -198,13 +202,13 @@ export const ProjectRequests: Story = {
 };
 export const LegacyConversation: Story = {
   name: '19 · Retained conversation component',
-  parameters: { storymap: storymap('The legacy conversation component remains documented for source compatibility; the public /chat route redirects to Taskboard.', ['components/WorkerShell', 'pages/ChatPage', 'components/SessionPanel', 'components/MessageContent', 'components/RequestGatePanel'], '/taskboard') },
+  parameters: { storymap: storymap('The legacy conversation component remains documented for source compatibility; the public /chat route redirects to Taskboard.', ['components/WorkerShell', 'pages/ChatPage', 'components/SessionPanel', 'components/MessageContent', 'components/RequestGatePanel'], '/workboard') },
   render: renderPage(ChatPage),
   play: async ({ canvasElement }) => { await element(canvasElement, '#chat-task-title'); await element(canvasElement, '#request-gate-title'); await ready(canvasElement); },
 };
 export const DraftTask: Story = {
   name: '20 · Create a named draft task',
-  parameters: { storymap: storymap('The retained draft-task component chooses a connection, optional agent definition and name without sending a model request.', ['components/NewTask'], '/taskboard') },
+  parameters: { storymap: storymap('The retained draft-task component chooses a connection, optional agent definition and name without sending a model request.', ['components/NewTask'], '/workboard') },
   render: renderComponent(NewTask), play: settled,
 };
 export const DiagnosticExport: Story = {
@@ -231,7 +235,7 @@ export const RepositoryAssignments: Story = {
 
 export const RepositoryConsent: Story = {
   name: '24 · Choose the detected repository',
-  parameters: { storymap: storymap('The first unlocked taskboard asks before adding its local Git checkout. The full path, watching permission and a durable decline are visible without blocking tasks.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/RepositoryDiscovery'], '/taskboard') },
+  parameters: { storymap: storymap('The first unlocked taskboard asks before adding its local Git checkout. The full path, watching permission and a durable decline are visible without blocking tasks.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/RepositoryDiscovery'], '/workboard') },
   render: renderPage(TaskboardPage, 'repository-pending'), play: settled,
 };
 export const ReconsiderRepository: Story = {
@@ -247,7 +251,7 @@ export const LocalRepositoryConsent: Story = {
 
 export const FormattedModelReply: Story = {
   name: '27 · Read a formatted model reply',
-  parameters: { storymap: storymap('A synthetic completed reply demonstrates readable headings, nested lists, quoted guidance, a scrollable evidence table, copyable code and a safe documentation link. The transcript is example data, not verification evidence.', ['components/MessageContent'], '/taskboard') },
+  parameters: { storymap: storymap('A synthetic completed reply demonstrates readable headings, nested lists, quoted guidance, a scrollable evidence table, copyable code and a safe documentation link. The transcript is example data, not verification evidence.', ['components/MessageContent'], '/workboard') },
   render: renderComponent(MessageContent, 'formatted', { text: formattedReplyFixture }),
   play: async ({ canvasElement }) => {
     const message = await element(canvasElement, '.message-content.markdown');
@@ -300,9 +304,11 @@ export const ProjectIntegrationSettings: Story = {
 };
 export const FullLocalCapacity: Story = {
   name: '32 · Keep a draft while local admission is full',
-  parameters: { storymap: storymap('One active task plus two queued tasks fills three local admission places. The execution slot remains one, and new instructions cannot be submitted until space is free.', boardCovers, '/taskboard') },
+  parameters: { storymap: storymap('One active task plus two queued tasks fills three local admission places. The execution slot remains one, and new instructions cannot be submitted until space is free.', boardCovers, '/workboard') },
   render: renderPage(TaskboardPage, 'capacity-full'),
   play: async ({ canvasElement }) => {
+    await followUp({ canvasElement });
+    (await element(canvasElement, '#new-task-tab')).click();
     const input = await element(canvasElement, '#new-task-instructions') as HTMLTextAreaElement;
     input.value = 'Prepare a follow-up release checklist when capacity is available.'; input.dispatchEvent(new Event('input', { bubbles: true }));
     await nextTick();
@@ -313,17 +319,17 @@ export const FullLocalCapacity: Story = {
 };
 export const ConsumptionBlockedCapacity: Story = {
   name: '33 · Distinguish admission from blocked starts',
-  parameters: { storymap: storymap('Queued tasks use two local places while an exhausted allowance blocks new model calls. Admission can remain available without promising an immediate start.', boardCovers, '/taskboard') },
+  parameters: { storymap: storymap('Queued tasks use two local places while an exhausted allowance blocks new model calls. Admission can remain available without promising an immediate start.', boardCovers, '/workboard') },
   render: renderPage(TaskboardPage, 'capacity-blocked'), play: settled,
 };
 export const StaleWorkerCapacity: Story = {
   name: '34 · Recognize stale activity',
-  parameters: { storymap: storymap('Last reported execution and admission values remain visible with a refresh action. Stale data does not claim the worker is available or blocked.', boardCovers, '/taskboard') },
+  parameters: { storymap: storymap('Last reported execution and admission values remain visible with a refresh action. Stale data does not claim the worker is available or blocked.', boardCovers, '/workboard') },
   render: renderPage(TaskboardPage, 'capacity-stale'), play: settled,
 };
 export const PausedWorkerCapacity: Story = {
   name: '35 · Keep accepted work while starts are paused',
-  parameters: { storymap: storymap('A manual pause keeps two accepted tasks queued. Local admission and execution occupancy stay separate from the pause state.', boardCovers, '/taskboard') },
+  parameters: { storymap: storymap('A manual pause keeps two accepted tasks queued. Local admission and execution occupancy stay separate from the pause state.', boardCovers, '/workboard') },
   render: renderPage(TaskboardPage, 'capacity-paused'), play: settled,
 };
 
@@ -380,10 +386,10 @@ export const FeatureRequestSaveFailure: Story = {
 
 export const InterruptedRequestPreparation: Story = {
   name: '40 · Recover a request with a changed worktree',
-  parameters: { storymap: storymap('Interrupted file preparation retains its request and changed worktree for inspection. Without accepted file snapshots, the worker requires a new request and offers no resume, retry or follow-up on the failed admission.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/TaskInteraction', 'components/FeatureRequestNote'], '/taskboard') },
+  parameters: { storymap: storymap('Interrupted file preparation retains its request and changed worktree for inspection. Without accepted file snapshots, the worker requires a new request and offers no resume, retry or follow-up on the failed admission.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/TaskInteraction', 'components/FeatureRequestNote'], '/workboard') },
   render: renderPage(TaskboardPage, 'admission-failed'),
   play: async context => {
-    (await element(context.canvasElement, '#followup-task-tab')).click();
+    await selectConversation(context.canvasElement);
     const recovery = await element(context.canvasElement, '.admission-recovery[aria-label="Request recovery"]');
     if (!recovery.textContent?.includes('/example/.werk/worker/worktrees/file-review')) throw Error('The preserved worktree must remain available for inspection.');
     if (![...recovery.querySelectorAll('button')].some(button => button.textContent?.includes('New request'))) throw Error('Recovery must offer a new request.');
@@ -394,7 +400,7 @@ export const InterruptedRequestPreparation: Story = {
 
 export const FileTaskReply: Story = {
   name: '40 · Read a file-task result',
-  parameters: { storymap: storymap('A saved file-task change set reads as its summary and a changed-file list. Paths and globs stay literal, file contents stay in the patch view, and the stored model output remains available, collapsed.', ['components/TaskInteraction', 'components/AssistantMessage', 'components/MessageContent'], '/taskboard') },
+  parameters: { storymap: storymap('A saved file-task change set reads as its summary and a changed-file list. Paths and globs stay literal, file contents stay in the patch view, and the stored model output remains available, collapsed.', ['components/TaskInteraction', 'components/AssistantMessage', 'components/MessageContent'], '/workboard') },
   render: renderComponent(TaskInteraction, 'file-reply'),
   play: async context => {
     await followUp(context);
@@ -408,7 +414,7 @@ export const FileTaskReply: Story = {
 
 export const JsonExampleReply: Story = {
   name: '41 · Read a JSON example without artifact claims',
-  parameters: { storymap: storymap('An ordinary JSON example remains a code block. Its property names cannot claim a saved patch or create a checkpoint.', ['components/AssistantMessage', 'components/MessageContent'], '/taskboard') },
+  parameters: { storymap: storymap('An ordinary JSON example remains a code block. Its property names cannot claim a saved patch or create a checkpoint.', ['components/AssistantMessage', 'components/MessageContent'], '/workboard') },
   render: renderComponent(AssistantMessage, 'formatted', { text: JSON.stringify({ summary: 'Example schema, not executed work.', files: [{ path: 'example.json', content: 'Example content' }] }) }),
   play: async ({ canvasElement }) => {
     const message = await element(canvasElement, '.assistant-message');

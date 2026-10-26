@@ -39,9 +39,9 @@ changes it to `escalated`. The provider invocation has ended and its consumption
 is recorded. Other queued work can use the execution slot while you decide.
 
 ```sh
-node bin/apps/worker/cli.mjs capabilities
-node bin/apps/worker/cli.mjs feature get --name checkout.md
-node bin/apps/worker/cli.mjs interaction get --id SESSION_ID
+node runtime/bin/apps/worker/cli.mjs capabilities --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs feature get --name checkout.md --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs interaction get --id SESSION_ID --state-dir state/worker
 ```
 
 Use the request record's `sessionId`, not its feature ID or run ID. Read `pending.id`,
@@ -55,8 +55,8 @@ settings, not in an answer to a model question.
 For example, if the current revision is 7:
 
 ```sh
-node bin/apps/worker/cli.mjs interaction answer --id SESSION_ID --question-id PENDING_ID --if-match 7 --key checkout-answer-001 --message "Require a manual retry after showing the error."
-node bin/apps/worker/cli.mjs interaction get --id SESSION_ID
+node runtime/bin/apps/worker/cli.mjs interaction answer --id SESSION_ID --question-id PENDING_ID --if-match 7 --key checkout-answer-001 --message "Require a manual retry after showing the error." --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs interaction get --id SESSION_ID --state-dir state/worker
 ```
 
 The key identifies this one intended response. If the connection fails before you
@@ -80,8 +80,8 @@ applying it. For legacy requests, use the linked Task or this interaction comman
 Read the latest interaction and inspect its checkpoint:
 
 ```sh
-node bin/apps/worker/cli.mjs interaction get --id SESSION_ID
-node bin/apps/worker/cli.mjs interaction turn --id SESSION_ID --turn-id TURN_ID
+node runtime/bin/apps/worker/cli.mjs interaction get --id SESSION_ID --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs interaction turn --id SESSION_ID --turn-id TURN_ID --state-dir state/worker
 ```
 
 Check the saved provider/model, prompt, previous-turn link, outcome and error code.
@@ -91,7 +91,7 @@ Fix the underlying provider/authentication issue first when needed.
 Resume the latest stopped turn with its current numeric revision:
 
 ```sh
-node bin/apps/worker/cli.mjs interaction resume --id SESSION_ID --turn-id TURN_ID --if-match 11 --key checkout-resume-001
+node runtime/bin/apps/worker/cli.mjs interaction resume --id SESSION_ID --turn-id TURN_ID --if-match 11 --key checkout-resume-001 --state-dir state/worker
 ```
 
 Optionally add `--message "Use the requirements already supplied; keep the manual
@@ -112,8 +112,8 @@ rather than asking the model to produce it again.
 To decline the current question, use its current identity and revision:
 
 ```sh
-node bin/apps/worker/cli.mjs interaction cancel --id SESSION_ID --question-id PENDING_ID --if-match 7 --key checkout-cancel-001
-node bin/apps/worker/cli.mjs interaction events --id SESSION_ID --after 0 --limit 100
+node runtime/bin/apps/worker/cli.mjs interaction cancel --id SESSION_ID --question-id PENDING_ID --if-match 7 --key checkout-cancel-001 --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs interaction events --id SESSION_ID --after 0 --limit 100 --state-dir state/worker
 ```
 
 Cancellation preserves the historical question and consumption. A later permitted
@@ -128,8 +128,8 @@ Events summarize durable state without private prompt/result bodies.
 ## Compare the attempts
 
 ```sh
-node bin/apps/worker/cli.mjs run list --session-id SESSION_ID
-node bin/apps/worker/cli.mjs run analyze --session-id SESSION_ID
+node runtime/bin/apps/worker/cli.mjs run list --session-id SESSION_ID --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs run analyze --session-id SESSION_ID --state-dir state/worker
 ```
 
 The questioning call, answer continuation and later resume remain separate

@@ -5,21 +5,25 @@ This extracted release contains prebuilt applications; do not run npm install,
 source builds or Forge workspace commands here. Native execution requires Node24;
 Docker execution requires Docker/Compose and Bash or PowerShell.
 
-For copied independent apps, use `env init` to preserve/create project `.env`
-and credential-free `.env.example`; project worker `init` includes this step.
-Read docs/reference/configuration.md for supported namespaced keys, precedence,
-permissions and stopped token rotation. Never echo or commit `.env` values.
-Explicit remote `--url` requires a token file or process WERK_APP_TOKEN; local
-project secrets must not be inferred as remote credentials.
+Start the central Home with `node worker.mjs`; use status/stop on that same
+launcher. Its directory anchors Home regardless of cwd. Fresh private state is
+state/worker; visible cloned repositories are projects/<id>; replaceable payload
+is runtime/. New project-local worker init/install is retired.
 
-For a standalone project worker, start with docs/how-to/project-worker.md,
-docs/how-to/shared-feature-intake.md and docs/how-to/team-feature-authoring.md.
-Discover commands with `node bin/apps/worker/cli.mjs schema`. Review shared setup
-with --dry-run, select the inspected repository/provider explicitly and preserve
-existing tool grants unless an authorized change supplies them. The CLI reads
-local credentials; no browser connection is required.
+Read docs/tutorials/worker-home-to-main.md and docs/how-to/project-worker.md.
+Register the remote project, preview workflow files and separately approve the
+exact committed delivery policy. Workboard New Feature Request uses the project
+Git authoring/readiness flow. Never substitute generic chat for shared submission.
+For advanced commands use runtime/bin/apps/worker/cli.mjs and always pass the
+explicit effective --state-dir. Compatible old standalone state needs migration
+plan then stopped explicit adoption; paths are retained, never automatically moved.
+Project-installed state requires its old runtime for recovery/export.
+Factory/orchestrator independent apps retain advanced env init configuration.
+Never echo or commit credentials. Explicit remote --url requires a token file or
+process WERK_APP_TOKEN; local secrets are not inferred as remote credentials.
 
-Use the project Create Feature Request skill and template. Shared ready requests
+Use Workboard New Feature Request or the committed project template. A Create
+Feature Request skill is available only when the optional offline kit is installed. Shared ready requests
 and actionable Task answers require commit and push to the watched branch; a
 local save or local commit alone does not dispatch. Pull progress and review
 notes. Edit only a Task's Answer and status: ready, preserving all generated
@@ -27,9 +31,8 @@ identity/revision fields. Never invent human approval. A blocked diagnostic Task
 cannot grant tools, change policy or attest acceptance. PullRequest Markdown is
 a review handoff, not a hosting-service PR or permission to merge.
 
-The separate local folder flow is covered by docs/tutorials/worker-feature-lifecycle.md.
-Do not feed shared templateId requests to that watcher. Its local Task responses
-use stable local saves. For metrics, use run list/get/analyze/export and read
+Retained local records are explained in docs/tutorials/worker-feature-lifecycle.md.
+Do not create a second local watcher for shared templateId requests. For metrics, use run list/get/analyze/export and read
 docs/reference/worker-run-metrics.md. Inspect terminal outcomes and coverage;
 a timeout does not cancel work, and unknown usage is not zero.
 
@@ -46,7 +49,7 @@ output revisions distinct; a model finding cannot attest an operator fact.
 A saved command receipt does not prove execution was admitted. Inspect dispatch
 state and the request before issuing a new guarded execute operation.
 
-For a Factory hierarchy, use `node werk.mjs system plan --file examples/system.yaml`
+For a Factory hierarchy, use `node werk.mjs system plan --file runtime/examples/system.yaml`
 then `system up` with that file, or the Docker wrapper's `system` actions with
 `--environment docker`. Read docs/reference/system-definition.md first. The YAML
 contains topology and optional native Codex policy; generated credentials and runtime tasks stay outside it.

@@ -1,5 +1,5 @@
 import { validateFeatureReviewEligibility } from './review-eligibility.js';
-import { readReadyReviewResponse } from './ready-review-document.js';
+import { readReadyReviewResponse, writeReadyReviewAnswer } from './ready-review-document.js';
 import type { ReadyReviewPort } from '../../application/ready-review-contracts.js';
 import { join } from 'node:path';
 import { SharedFeatureAuthoring } from '../../application/feature-authoring.js';
@@ -34,7 +34,7 @@ export class SharedIntakeRuntime {
       loadWorkflow: (repository, commit, configPath, signal) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (sha, path) => repository.readBlob(sha, path, signal) }),
       ready: (markdown, snapshot, provider) => validateFeatureReadiness(markdown, snapshot.readyCheck, provider ?? options.defaultProvider?.(), snapshot.template, { configuration: snapshot.configuration, templates: snapshot.templates, workflowPath: snapshot.files.configuration.path }),
       resolveSelection: options.resolveSelection, prepare: options.prepare,
-      readyReview: options.readyReview, readyReviewEligible: (markdown, snapshot, provider) => validateFeatureReviewEligibility(markdown, snapshot, provider ?? options.defaultProvider?.()), readyReviewResponse: readReadyReviewResponse,
+      readyReview: options.readyReview, readyReviewEligible: (markdown, snapshot, provider) => validateFeatureReviewEligibility(markdown, snapshot, provider ?? options.defaultProvider?.()), readyReviewResponse: readReadyReviewResponse, readyReviewAnswer: writeReadyReviewAnswer,
       source: sharedSource, renderSource: renderSharedSource, submit: options.submit, inspect: options.inspect, canAdmit: options.canAdmit, admissionHold: options.admissionHold, admissionIssue: options.admissionIssue, continue: options.continue, reviewRework: options.reviewRework, sourceHold: options.sourceHold,
     });
     this.authoring = new SharedFeatureAuthoring({
@@ -67,6 +67,7 @@ export class SharedIntakeRuntime {
       readBlob: (commit: string, path: string, signal: AbortSignal) => guard(() => adapter.readBlob(commit, path, signal)),
       listRequests: (commit: string, signal: AbortSignal) => guard(() => adapter.list(commit, workflow.requestsDirectory, signal)),
       publishRequest: (input: Parameters<GitFeatureRepository['publishRequest']>[0], signal: AbortSignal) => guard(() => adapter.publishRequest(input, signal)),
+      publishReadyReviewAnswer: (input: Parameters<GitFeatureRepository['publishReadyReviewAnswer']>[0], signal: AbortSignal) => guard(() => adapter.publishReadyReviewAnswer(input, signal)),
       publishLifecycle: (input: Parameters<GitFeatureRepository['publishLifecycle']>[0], signal: AbortSignal) => guard(() => adapter.publishLifecycle(input, signal)),
       publishPatch: (input: Parameters<GitFeatureRepository['publishPatch']>[0], signal: AbortSignal) => guard(() => adapter.publishPatch(input, signal)),
     };

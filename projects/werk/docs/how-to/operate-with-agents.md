@@ -42,16 +42,16 @@ bash werk-docker.sh cli workers list --limit 100
 
 ## Call the native application CLI
 
-The prebuilt client is `src/orchestrator/dist/orchestrator/cli.js` beneath the
+The prebuilt client is `runtime/src/orchestrator/dist/orchestrator/cli.js` beneath the
 release root. Set `WERK_URL` to the selected line URL and supply `WERK_ADMIN_TOKEN`
 from the private credentials file in the **child process environment**. Read the
 file inside your trusted runner without printing it or putting its value in
 command arguments, prompt text or shell history. Then run:
 
 ```text
-node src/orchestrator/dist/orchestrator/cli.js task list --limit 100
-node src/orchestrator/dist/orchestrator/cli.js workers list --limit 100
-node src/orchestrator/dist/orchestrator/cli.js task create --file - --key first-feature-001
+node runtime/src/orchestrator/dist/orchestrator/cli.js task list --limit 100
+node runtime/src/orchestrator/dist/orchestrator/cli.js workers list --limit 100
+node runtime/src/orchestrator/dist/orchestrator/cli.js task create --file - --key first-feature-001
 ```
 
 The last command consumes one JSON object on stdin:
@@ -83,7 +83,7 @@ mock runtime.
 ## Review a worker’s repository and execution profiles
 
 From the installed project, inspect the worker with
-`node bin/apps/worker/cli.mjs repository status`. Discovery alone does not permit
+`node runtime/bin/apps/worker/cli.mjs repository status --state-dir state/worker`. Discovery alone does not permit
 using the project checkout. Review `discovery.path`, branch and remote against
 the operator’s intended repository, then record the authorized choice with
 `repository accept --discovery-id ID` or `repository decline --discovery-id ID`.

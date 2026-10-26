@@ -13,11 +13,21 @@ export function isMainScript(moduleUrl, entry = process.argv[1]) {
 
 export async function verifyRelease(root) {
   if (!(await lstat(root)).isDirectory()) throw Error('Release root must be a regular directory');
+  const rootFiles = new Set(['worker.mjs', 'werk.mjs', 'werk-docker.sh', 'werk-docker.ps1', 'README.md', 'AGENTS.md', 'LICENSE', 'CHANGELOG.md', 'release-manifest.json']);
+  const owned = path => rootFiles.has(path) || path.startsWith('runtime/') || path.startsWith('docs/');
+  // Mutable Home content is deliberately never traversed, opened or checksummed.
+  const manifestInfo = await lstat(join(root, 'release-manifest.json'));
+  if (!manifestInfo.isFile() || manifestInfo.size > 32 * 1024 * 1024) throw Error('Missing or nonregular release manifest');
+  const manifest = JSON.parse(await readRegular('release-manifest.json'));
+  if (manifest.layout !== undefined && manifest.layout !== 'werk-home-v1') throw Error('Unknown release layout');
+  const home = manifest.layout === 'werk-home-v1';
+  if (home && manifest.updateProtocol !== 2) throw Error('Invalid Werk Home update protocol');
   const actual = new Set();
   let totalBytes = 0;
   async function inspect(path = '') {
     for (const name of await readdir(join(root, path))) {
       const relative = path ? `${path}/${name}` : name;
+      if (home && !path && !rootFiles.has(name) && !['runtime', 'docs'].includes(name)) continue;
       const stat = await lstat(join(root, relative));
       if (stat.isSymbolicLink()) throw Error(`Unexpected symbolic link: ${relative}`);
       if (stat.isDirectory()) await inspect(relative);
@@ -40,18 +50,17 @@ export async function verifyRelease(root) {
     } finally { await handle.close(); }
   }
   if (!actual.has('release-manifest.json')) throw Error('Missing release manifest');
-  const manifest = JSON.parse(await readRegular('release-manifest.json'));
   if (manifest.schemaVersion !== 1 || manifest.name !== 'werk' || !Array.isArray(manifest.files)) throw Error('Invalid release manifest');
   const expected = new Set(['release-manifest.json']);
   for (const file of manifest.files) {
-    if (typeof file.path !== 'string' || /[:\\\x00-\x1f]/.test(file.path) || file.path.startsWith('/') || file.path.split('/').some(part => !part || part === '.' || part === '..') || expected.has(file.path)) throw Error('Invalid or duplicate manifest path');
+    if (typeof file.path !== 'string' || home && !owned(file.path) || /[:\\\x00-\x1f]/.test(file.path) || file.path.startsWith('/') || file.path.split('/').some(part => !part || part === '.' || part === '..') || expected.has(file.path)) throw Error('Invalid or duplicate manifest path');
     if (!actual.has(file.path)) throw Error(`Missing release entry: ${file.path}`);
     expected.add(file.path);
     const content = await readRegular(file.path);
     if (content.length !== file.bytes || createHash('sha256').update(content).digest('hex') !== file.sha256) throw Error(`Release integrity mismatch: ${file.path}`);
   }
   for (const path of actual) if (!expected.has(path)) throw Error(`Unexpected release entry: ${path}`);
-  return { version: manifest.version, files: manifest.files.length, sourceCommit: manifest.sourceCommit };
+  return { version: manifest.version, files: manifest.files.length, sourceCommit: manifest.sourceCommit, ...(home ? { layout: manifest.layout, updateProtocol: manifest.updateProtocol } : {}) };
 }
 if (isMainScript(import.meta.url)) {
   try {

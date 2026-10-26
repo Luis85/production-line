@@ -7,7 +7,8 @@ import { createHash } from 'node:crypto';
 import { featureFolder } from '../../scripts/runtime/portable/feature-folder.mjs';
 import { planFeatureAuthoringMove } from '../../scripts/runtime/portable/feature-folder-authoring.mjs';
 import { setupFeatureAuthoring, runFeatureAuthoring } from '../../scripts/runtime/portable/feature-authoring.mjs';
-import { initializeWorker, projectDefaults } from '../../scripts/runtime/portable/project.mjs';
+import { projectDefaults } from '../../scripts/runtime/portable/project.mjs';
+import { initializeLegacyProjectWorker } from '../helpers/legacy-project-worker.mjs';
 const app = resolve('bin/apps/worker'), digest = text => createHash('sha256').update(text).digest('hex');
 async function project(t) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'werk authoring folder ')));
@@ -24,18 +25,18 @@ async function fixture(t) {
   return { root, raw, config, authoring, call: (action, path) => featureFolder(action, { 'project-dir': root, ...(path ? { path } : {}) }) };
 }
 
-test('init adopts an existing authoring folder and rejects policy or explicit-folder conflicts before installing files', async t => {
+test('legacy fixture adopts an existing authoring folder and rejects policy or explicit-folder conflicts before installing files', async t => {
   const root = await project(t), authoring = await setupFeatureAuthoring(app, root, { featuresDirectory: 'team requests' });
-  await assert.rejects(initializeWorker(app, { 'project-dir': root, 'features-dir': 'another' }), /authoring workflow uses another/);
+  await assert.rejects(initializeLegacyProjectWorker(app, { 'project-dir': root, 'features-dir': 'another' }), /authoring workflow uses another/);
   await assert.rejects(access(join(root, 'bin')), { code: 'ENOENT' });
   await assert.rejects(access(join(root, '.werk/worker.json')), { code: 'ENOENT' });
   const check = join(root, authoring.workflow.readyCheck), original = await readFile(check, 'utf8');
   await writeFile(check, '{}');
-  await assert.rejects(initializeWorker(app, { 'project-dir': root }));
+  await assert.rejects(initializeLegacyProjectWorker(app, { 'project-dir': root }));
   await assert.rejects(access(join(root, 'bin')), { code: 'ENOENT' });
   await assert.rejects(access(join(root, '.werk/worker.json')), { code: 'ENOENT' });
   await writeFile(check, original);
-  const initialized = await initializeWorker(app, { 'project-dir': root });
+  const initialized = await initializeLegacyProjectWorker(app, { 'project-dir': root });
   assert.equal(initialized.featuresDirectory, join(root, 'team requests'));
   assert.equal(JSON.parse(await readFile(initialized.configuration, 'utf8')).features.directory, 'team requests');
   assert.equal(initialized.authoring.workflow.requestsDirectory, 'team requests');

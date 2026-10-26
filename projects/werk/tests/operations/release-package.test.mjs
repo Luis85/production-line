@@ -57,21 +57,21 @@ test('packages both formats with identical verified payload, normalized modes, c
   assert.ok(!installer.includes('/* RELEASE_CONFIG */ null'));
   const zipBytes=await readFile(join(root,'release/werk-0.1.0.zip'));
   const files=unzipSync(zipBytes);
-  assert.ok(Object.keys(files).every(path=>path.startsWith('werk-0.1.0/')));
-  assert.equal(Buffer.from(files['werk-0.1.0/CHANGELOG.md']).toString(), await readFile(join(root, 'CHANGELOG.md'), 'utf8'));
-  assert.equal(files['werk-0.1.0/scripts/release/changelog.mjs'], undefined);
+  assert.ok(Object.keys(files).every(path=>!path.startsWith('werk-0.1.0/') && !path.startsWith('projects/') && !path.startsWith('state/')));
+  assert.equal(Buffer.from(files['CHANGELOG.md']).toString(), await readFile(join(root, 'CHANGELOG.md'), 'utf8'));
+  assert.equal(files['runtime/scripts/release/changelog.mjs'], undefined);
   assert.ok(Object.values(files).every(bytes=>!Buffer.from(bytes).includes('SECRET_NEVER_SHIP')));
-  for (const app of ['factory','orchestrator','worker']) assert.equal(Buffer.from(files[`werk-0.1.0/bin/apps/${app}/.env.example`]).toString(), environmentExample(app));
-  assert.equal(Buffer.from(files['werk-0.1.0/src/guide/public/index.html']).toString(), '<!doctype html><title>Composed spatial guide</title>');
+  for (const app of ['factory','orchestrator','worker']) assert.equal(Buffer.from(files[`runtime/bin/apps/${app}/.env.example`]).toString(), environmentExample(app));
+  assert.equal(Buffer.from(files['runtime/src/guide/public/index.html']).toString(), '<!doctype html><title>Composed spatial guide</title>');
   const extracted=join(root,'fresh extraction with spaces');
   await mkdir(extracted);
   await extract({file:join(root,'release/werk-0.1.0.tar.gz'),cwd:extracted,chmod:true});
-  const installed=join(extracted,'werk-0.1.0');
+  const installed=extracted;
   const verified=await verifyRelease(installed);
   assert.equal(verified.version,'0.1.0');
   for(const [path,bytes] of Object.entries(files)) assert.deepEqual(await readFile(join(extracted,path)),Buffer.from(bytes));
   let shellMode;
-  await list({file:join(root,'release/werk-0.1.0.tar.gz'),onReadEntry(entry){if(entry.path==='werk-0.1.0/werk-docker.sh') shellMode=entry.mode;}});
+  await list({file:join(root,'release/werk-0.1.0.tar.gz'),onReadEntry(entry){if(entry.path==='werk-docker.sh') shellMode=entry.mode;}});
   assert.equal(shellMode,0o755);
   if(process.platform!=='win32') assert.ok((await stat(join(installed,'werk-docker.sh'))).mode&0o100);
   const sums=await readFile(join(root,'release/SHA256SUMS'),'utf8');
@@ -149,7 +149,7 @@ test('the shipped documentation links resolve against the real curated release f
   for (const app of ['factory', 'orchestrator', 'worker']) await put(`bin/apps/${app}/README.md`, portableReadme);
   await packageRelease(root);
   const files = unzipSync(await readFile(join(root, 'release/werk-0.1.0.zip')));
-  const guide = files['werk-0.1.0/docs/how-to/generate-storybook.md'];
+  const guide = files['docs/how-to/generate-storybook.md'];
   assert.ok(guide, 'the release includes the linked Storybook and Pages guide');
   assert.match(Buffer.from(guide).toString('utf8'), /## Host release documentation on GitHub Pages/);
 });
@@ -224,4 +224,14 @@ test('invalid release changelog fails before creating or replacing candidate art
   await put('release/RELEASE-NOTES.md', 'existing notes');
   await assert.rejects(packageRelease(root), /Missing changelog entry/);
   assert.equal(await readFile(join(root, 'release/RELEASE-NOTES.md'), 'utf8'), 'existing notes');
+});
+
+test('shipped Home launcher refuses missing runtime instead of executing retained source-layout bin/apps', async t => {
+  const { root } = await fixture(t); await packageRelease(root);
+  const { root: home } = await extractRelease(join(root, 'release'), join(root, 'strict-home'));
+  await mkdir(join(home, 'bin/apps/worker/scripts/runtime/portable'), { recursive: true });
+  await writeFile(join(home, 'bin/apps/worker/scripts/runtime/portable/home.mjs'), "console.log('UNOWNED_PAYLOAD_EXECUTED'); export async function workerHome() {};");
+  await rm(join(home, 'runtime'), { recursive: true });
+  const result = spawnSync(process.execPath, [join(home, 'worker.mjs'), 'status'], { encoding: 'utf8' });
+  assert.equal(result.status, 1); assert.match(result.stderr, /runtime is absent/); assert.match(result.stderr, /candidate launcher/i); assert.equal(result.stdout, '');
 });

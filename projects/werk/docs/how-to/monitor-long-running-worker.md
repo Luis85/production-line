@@ -29,7 +29,7 @@ does not implicitly forward every host environment variable.
 ## Interpret the measurements
 
 The worker samples every ten seconds. Metrics shows active warnings, measurement
-age and retained alert history; Taskboard shows the active task.
+age and retained alert history; Workboard shows the active task.
 The measurements describe the **worker Node process**, not the model CLI child,
 remote provider or account. Missing readings remain unavailable. A stale snapshot
 must not be interpreted as a fresh healthy measurement.
@@ -54,8 +54,8 @@ provider is not automatically declared hung.
 From the installed project worker CLI:
 
 ```sh
-node bin/apps/worker/cli.mjs resource status
-node bin/apps/worker/cli.mjs resource events --after 0 --limit 100
+node runtime/bin/apps/worker/cli.mjs resource status --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs resource events --after 0 --limit 100 --state-dir state/worker
 ```
 
 These commands inspect the running worker without making a provider call.

@@ -39,7 +39,7 @@ try {
   const artifacts = process.env.WERK_WORKER_HOME_ARCHIVES ? resolve(process.env.WERK_WORKER_HOME_ARCHIVES) : join(outer, 'artifacts');
   if (!process.env.WERK_WORKER_HOME_ARCHIVES) await packageRelease(project, artifacts);
   const extracted = await extractRelease(artifacts, home, 'zip'); entry = join(extracted.root, 'worker.mjs');
-  const started = await cli('--no-open', '--port', '0'); url = started.url; token = (await readFile(started.credentialsFile, 'utf8')).trim(); assert.equal(started.stateDirectory, join(home, '.werk', 'worker'));
+  const started = await cli('--no-open', '--port', '0'); url = started.url; token = (await readFile(started.credentialsFile, 'utf8')).trim(); assert.equal(started.stateDirectory, join(home, 'state', 'worker'));
   const { chromium } = await import(process.env.WERK_PLAYWRIGHT_MODULE ? pathToFileURL(resolve(process.env.WERK_PLAYWRIGHT_MODULE)).href : 'playwright');
   browser = await chromium.launch({ ...(process.env.WERK_CHROMIUM ? { executablePath: process.env.WERK_CHROMIUM } : {}), args: ['--no-sandbox'] });
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' }); page.setDefaultTimeout(30000); page.on('pageerror', error => result.pageErrors.push(error.message));
@@ -56,8 +56,8 @@ try {
   await api('/api/requests', { action: 'approve_delivery_policy', repositoryId: 'company', configurationDigest: policy.configurationDigest, expectedApprovalRevision: policy.approvalRevision });
   const enabled = await api('/api/managed-projects', { action: 'reconcile', id: 'company', operationId: 'browser-enable' }); assert.equal(enabled.projects[0].intakeEnabled, true);
   const grant = await api('/api/tool-access'); await api('/api/tool-access', { expectedRevision: grant.revision, builtins: { ...grant.builtins, files: true, commands: [{ id: 'browser-value', name: 'Verify exported value', executable: process.execPath, args: ['tests/value.mjs'], enabled: true, verification: true }] }, mcp: [] });
-  await page.reload(); await page.getByRole('heading', { name: 'Taskboard', exact: true }).waitFor();
-  await page.getByRole('tab', { name: 'New request', exact: true }).click();
+  await page.reload(); await page.getByRole('heading', { name: 'Workboard', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'New Feature Request', exact: true }).click();
   const composer = page.locator('.shared-feature-composer'); await composer.getByRole('heading', { name: 'Create a feature request', exact: true }).waitFor();
   await composer.getByLabel('Project', { exact: true }).selectOption('company');
   await composer.getByLabel('Request instructions', { exact: true }).fill('Change the exported value from one to two within the approved source file.');
@@ -71,6 +71,7 @@ try {
   await composer.getByRole('button', { name: 'Mark ready and publish', exact: true }).click(); const published = await publication; const ready = await published.json(); assert.ok(published.ok(), JSON.stringify(ready)); assert.ok(ready.publication?.commit);
   assert.equal(await git(remote, 'show', 'main:src/value.mjs'), 'export const value = 1;'); await assert.rejects(readFile(join(outer, 'fixture-calls.jsonl')), { code: 'ENOENT' });
   result.checks.push('Browser prepares, completes, checks and commits/pushes a ready Feature Request before any inference.'); await screenshot('02-published-feature-request');
+  await page.getByRole('button', { name: 'Close · keep draft', exact: true }).click();
   await api('/api/settings', { board: { paused: false } });
   let shared;
   /** @type {import('../../src/worker/application/shared-intake-contract.js').SharedFeatureView | undefined} */
@@ -85,8 +86,9 @@ try {
   assert.equal(await git(remote, 'show', publishedFeatureCommit + ':src/value.mjs'), 'export const value = 2;'); assert.match(reviewMarkdown, /Required checks passed for this candidate/); assert.ok(reviewMarkdown.includes(publishedFeatureCommit));
   assert.equal(await git(remote, 'show', 'main:src/value.mjs'), 'export const value = 1;'); assert.equal(await readFile(join(checkout, 'src/value.mjs'), 'utf8'), 'export const value = 1;\n');
   await refresh(); await page.getByRole('heading', { name: 'Worker updates', exact: true }).waitFor(); await screenshot('04-taskboard-review-ready');
-  const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Downloaded worker value increment', exact: true }) }).first(); await card.getByRole('button', { name: /Review changes|Review result|Review candidate/ }).click();
+  const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Downloaded worker value increment', exact: true }) }).first(); await card.getByRole('button', { name: /Review increment/ }).click();
   await page.getByRole('heading', { name: 'Record your review', exact: true }).waitFor();
+  await page.getByText('Delivery progress & retained Git checkpoints', { exact: true }).click();
   await page.getByRole('link', { name: 'Open Markdown pull request', exact: true }).click(); await page.locator('.delivery-publication details[open]').waitFor();
   await screenshot('05-markdown-candidate-review');
   const outcomes = page.getByLabel('Review outcome', { exact: true }); for (let index = 0; index < await outcomes.count(); index++) { await outcomes.nth(index).selectOption('passed'); await page.getByLabel('What you checked or what needs to change', { exact: true }).nth(index).fill('Inspected the exact source diff and observed the committed value check pass.'); }

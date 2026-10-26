@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { featureContentHash } from '../../src/worker/dist/worker/application/feature-workflow.js';
 import { ManagedProjectSetup, managedSetupDigest } from '../../src/worker/dist/worker/application/managed-project-setup.js';
+import { managedProjectLocations } from '../../src/worker/dist/worker/infrastructure/managed-project-locations.js';
 import { managedProjectGit } from '../../src/worker/dist/worker/infrastructure/managed-project-git.js';
 import { managedProjectSetupGit } from '../../src/worker/dist/worker/infrastructure/managed-project-setup.js';
 import { managedProjectSetupStorage } from '../../src/worker/dist/worker/infrastructure/managed-project-setup-storage.js';
@@ -19,16 +20,17 @@ import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.m
 prepareNativeProcessFixture();
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 }).trim();
 const timeout = process.platform === 'win32' ? 180000 : 60000;
-async function fixture(t, { cleanup = true } = {}) {
+async function fixture(t, { cleanup = true, home = false } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-managed-setup-'))), source = join(root, 'source'), remote = join(root, 'company.git'), state = join(root, 'state');
   if (cleanup) t.after(() => rm(root, { recursive: true, force: true })); await mkdir(source); await mkdir(state);
   git(root, 'init', '--bare', '--initial-branch=main', remote); git(source, 'init', '--initial-branch=main');
   await writeFile(join(source, '.gitattributes'), '* text eol=lf\n'); await writeFile(join(source, 'value.txt'), 'original\n'); git(source, 'add', '.'); git(source, 'commit', '-m', 'Project before workflow setup'); git(source, 'remote', 'add', 'origin', remote); git(source, 'push', 'origin', 'main');
-  const adapter = managedProjectGit(state), initial = git(source, 'rev-parse', 'HEAD');
+  const locations = managedProjectLocations(state, home ? root : undefined);
+  const adapter = managedProjectGit(state, locations), initial = git(source, 'rev-parse', 'HEAD');
   /** @type {import('../../src/worker/application/managed-projects.ts').ManagedProject} */
   const project = { id: 'plain', name: 'Plain', mode: 'clone', repository: pathToFileURL(remote).toString(), branch: 'main', featuresDirectory: 'features', path: adapter.location('plain'), intake: 'shared', operationId: 'clone-setup', status: 'ready', attached: true, head: initial, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), detail: '', operations: [{ operationId: 'clone-setup', digest: 'a'.repeat(64), action: 'register' }] };
   await adapter.clone(project, t.signal);
-  const ports = { ...managedProjectSetupStorage(state, project.id), ...managedProjectSetupGit(state, project, t.signal) };
+  const ports = { ...managedProjectSetupStorage(state, project.id, locations.placement(project).privateDirectory), ...managedProjectSetupGit(state, project, t.signal, locations) };
   const setup = new ManagedProjectSetup(ports);
   return { root, source, state, remote, project, initial, ports, setup };
 }
@@ -182,4 +184,16 @@ test('setup journal storage refuses an oversized history before replacing its pr
   const operations = Array.from({ length: 16 }, (_value, index) => ({ operationId: 'retained-' + index, plan, status: /** @type {const} */ ('not_published') }));
   await assert.rejects(f.ports.save({ schemaVersion: 1, operations }), /storage limit/);
   assert.equal(await readFile(path, 'utf8'), before); assert.equal((await f.ports.load()).plan.planDigest, current.planDigest);
+});
+
+
+test('direct Home checkout setup keeps publication outboxes private and the canonical repository clean', { timeout }, async t => {
+  const f = await fixture(t, { home: true }), plan = await preview(f.setup);
+  assert.equal(f.project.path, join(f.root, 'projects', 'plain'));
+  const result = await apply(f.setup, plan); assert.ok('status' in result); assert.equal(result.status, 'published');
+  assert.equal(git(f.project.path, 'status', '--porcelain'), '');
+  const outbox = JSON.parse(await readFile(join(f.state, 'managed-projects', f.project.id, 'workflow-setup.json'), 'utf8'));
+  assert.equal(outbox.operations[0].commit, result.commit); assert.equal(outbox.operations[0].status, 'published');
+  await assert.rejects(readFile(join(f.project.path, 'registration.json')), { code: 'ENOENT' });
+  assert.equal(git(f.source, 'rev-parse', 'HEAD'), f.initial);
 });

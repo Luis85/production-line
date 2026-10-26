@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReadyReviewAnswerPanel from './ReadyReviewAnswerPanel.vue';
 import AcceptedModelSelection from './AcceptedModelSelection.vue';
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
@@ -10,12 +11,16 @@ import type { SharedFeatureView } from '../../application/shared-intake-contract
 import { sharedReadyReviewView } from '../shared-ready-review-view';
 import { createSharedIntakeEditor } from '../shared-intake-editor';
 import { date, request, state } from '../store';
-const editor = createSharedIntakeEditor({ unlocked: () => state.unlocked, epoch: () => state.draftEpoch, repositories: () => state.settings?.repositories.items ?? [], read: () => request('/api/shared-intake'), write: command => request('/api/shared-intake', 'POST', command), note: id => request('/api/shared-intake', 'POST', { action: 'note', id }) });
+const props = defineProps<{ projectId?: string; requestName?: string; observationOnly?: boolean }>();
+const endpoint = () => '/api/shared-intake' + (props.projectId ? '?projectId=' + encodeURIComponent(props.projectId) : '');
+const editor = createSharedIntakeEditor({ unlocked: () => state.unlocked, epoch: () => state.draftEpoch, repositories: () => state.settings?.repositories.items ?? [], read: () => request(endpoint()), write: command => request(endpoint(), 'POST', { ...command, ...(props.projectId ? { projectId: props.projectId } : {}) }), note: id => request(endpoint(), 'POST', { action: 'note', id, ...(props.projectId ? { projectId: props.projectId } : {}) }) });
 const { view, draft, dirty, stale, busy, validation, canSave, canSync, canClear, clearBlockedReason } = editor;
 const search = ref(''), filter = ref('all'), selectedId = ref('');
 let active = true, trigger: HTMLElement | null = null;
 const repositories = computed(() => (state.settings?.repositories.items ?? []).map(item => ({ label: item.id + ' · ' + item.path, value: item.id })));
 const seconds = computed({ get: () => draft.config.pollMs / 1000, set: (value: number | string) => { draft.config.pollMs = Number(value) * 1000; } });
+let openedRequest = '';
+watch([() => props.requestName, view], ([name, value]) => { const record = name && value?.requests.find(item => item.name === name); if (record && openedRequest !== name) { openedRequest = name; selectedId.value = record.id; } });
 const selected = computed(() => view.value?.requests.find(item => item.id === selectedId.value));
 const readinessReview = computed(() => selected.value ? sharedReadyReviewView(selected.value) : null);
 const needsAttention = (item: SharedFeatureView) => ['waiting_input', 'failed'].includes(item.readyReview?.status ?? '') || item.ready?.passed === false || item.done?.passed === false || item.publication === 'error' || !!item.error;
@@ -38,14 +43,14 @@ watch(() => selected.value?.reviewNote, (next, previous) => { if (next !== previ
 </script>
 <template>
   <section class="shared-intake-panel" aria-labelledby="shared-intake-title" :aria-busy="draft.loading && !view">
-    <div class="section-heading"><div><h2 id="shared-intake-title">Connect shared requests</h2><p class="page-note">Read requests from a shared Git repository. Owning workers automatically publish lifecycle and review notes; a person reviews feature branches before merge.</p></div><UButton color="neutral" variant="outline" :loading="draft.loading" :disabled="busy || !state.unlocked" @click="editor.load()">Refresh shared intake</UButton></div>
+    <div class="section-heading"><div><h2 id="shared-intake-title">{{ observationOnly ? 'Shared request progress' : 'Connect shared requests' }}</h2><p class="page-note">Read requests from a shared Git repository. Owning workers automatically publish lifecycle and review notes; a person reviews feature branches before merge.</p></div><UButton color="neutral" variant="outline" :loading="draft.loading" :disabled="busy || !state.unlocked" @click="editor.load()">Refresh shared intake</UButton></div>
     <p v-if="draft.loading && !view" role="status">Reading the saved shared intake connection…</p>
     <p v-if="draft.error" role="alert" class="error-text">{{ draft.error }}</p>
     <p v-if="draft.notice" role="status" class="page-note">{{ draft.notice }}</p>
     <template v-if="view">
       <div class="shared-intake-status"><UBadge :color="view.state === 'error' ? 'error' : view.state === 'syncing' ? 'primary' : 'neutral'" variant="subtle">{{ view.state === 'disabled' ? view.config.repositoryId ? 'New intake paused' : 'Not connected' : view.state === 'syncing' ? 'Synchronizing' : view.state === 'error' ? 'Check failed' : 'Watching shared requests' }}</UBadge><span>Last synchronized {{ date(view.lastSyncedAt) }}</span></div>
       <p v-if="view.error" role="alert" class="error-text">{{ view.error }} Previously observed requests may be stale. Sync again to retry.</p>
-      <details class="shared-intake-connection" :open="!view.config.enabled">
+      <details v-if="!observationOnly" class="shared-intake-connection" :open="!view.config.enabled">
         <summary>Shared repository connection{{ dirty ? ' · unsaved changes' : '' }}</summary>
         <p class="page-note">Prepare the shared workflow kit in your repository with <code>node bin/apps/worker/cli.mjs feature setup</code>, then commit and push it before connecting this worker.</p>
         <form @submit.prevent="editor.save" class="shared-intake-form">
@@ -106,10 +111,11 @@ watch(() => selected.value?.reviewNote, (next, previous) => { if (next !== previ
             <ul v-if="selected.readyReview.findings.length"><li v-for="(finding, index) in selected.readyReview.findings" :key="index"><strong>{{ finding.kind === 'question' ? 'Question' : finding.blocking ? 'Blocking finding' : 'Finding' }}</strong><MessageContent :text="finding.message" /></li></ul>
             <p class="page-note break-anywhere">Review {{ selected.readyReview.attempt }} · Prompt <code>{{ selected.readyReview.promptPath }}</code></p>
           </section>
+          <ReadyReviewAnswerPanel v-if="projectId && selected.readyReview" :key="projectId + selected.id" :project-id="projectId" :record="selected" :disabled="!!draft.error || state.paused" @published="refresh" />
           <div class="shared-gate-results"><section v-for="stage in ['ready', 'done'] as const" :key="stage"><h4>{{ stage === 'ready' ? 'Ready checks' : 'Done checks' }} · {{ gate(selected[stage]) }}</h4><ul v-if="selected[stage]?.issues.length"><li v-for="(issue, index) in selected[stage]!.issues" :key="index">{{ issue }}</li></ul><p v-else class="page-note">{{ selected[stage] === null ? 'No check result has been published.' : selected[stage]?.passed ? 'The recorded checks passed.' : 'Inspect the review note for the recorded findings.' }}</p></section></div>
           <AcceptedModelSelection v-if="selected.owner" :selection="selected.selection" />
           <dl class="shared-request-facts"><div><dt>Request</dt><dd>{{ selected.id }}</dd></div><div><dt>Source commit</dt><dd>{{ selected.sourceCommit }}</dd></div><div v-if="selected.featureBranch"><dt>Feature branch</dt><dd>{{ selected.featureBranch }}</dd></div><div v-if="selected.reviewNote"><dt>Review note</dt><dd>{{ selected.reviewNote }}</dd></div><div v-if="selected.taskId"><dt>Local task</dt><dd>{{ selected.taskId }}</dd></div></dl>
-          <div class="actions"><UButton v-if="selected.isLocal && selected.taskId" to="/taskboard" color="neutral" variant="outline">Open taskboard</UButton><UButton v-if="selected.reviewNote" color="neutral" variant="outline" :loading="draft.noteLoading" @click="editor.openNote(selected.id)">Read review note</UButton></div>
+          <div class="actions"><UButton v-if="selected.isLocal && selected.taskId" to="/workboard" color="neutral" variant="outline">Open Workboard</UButton><UButton v-if="selected.reviewNote" color="neutral" variant="outline" :loading="draft.noteLoading" @click="editor.openNote(selected.id)">Read review note</UButton></div>
           <p class="page-note">Execution completion, passing checks and Git publication are separate from human review and merge.</p>
           <p v-if="draft.noteError" role="alert" class="error-text">{{ draft.noteError }} Select Read review note to retry.</p>
           <div v-if="draft.note && draft.noteId === selected.id" class="shared-review-note"><h4>Review note</h4><p class="page-note break-anywhere">{{ draft.note.path }}</p><MessageContent :text="draft.note.markdown" /></div>

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { managedProjectStorage } from '../../src/worker/dist/worker/infrastructure/managed-project-storage.js';
 import { managedProjectCommand, managedProjectsView } from '../../src/worker/dist/worker/status/workspace-managed-projects.js';
 import { defaultDeliveryProjectPolicy, deliveryPolicySnapshot } from '../../src/worker/dist/worker/application/delivery-policy.js';
 import { defaultFeatureWorkflow, defaultFeatureCheck } from '../../src/worker/dist/worker/application/feature-workflow.js';
@@ -29,7 +30,7 @@ async function fixture(t) {
   git('add', '.'); git('commit', '-m', 'Project workflow');
   const digest = deliveryPolicySnapshot(policy, git('rev-parse', 'HEAD')).configurationDigest;
   /** @type {{repositoryId:string,configurationDigest:string}[]} */ let approvals = [];
-  let updates = 0, configured = 0;
+  let updates = 0, configured = 0, attachFailure = false, runtimePresent = true;
   /** @type {import('../../src/worker/application/provider-contract.ts').ProviderConnection[]} */ let providers = [];
   /** @type {import('../../src/worker/application/repositories.ts').RepositoryConfiguration} */ let repositories = { pollMs: 30000, items: [] };
     let binding = { enabled: false, repositoryId: '', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 1000 }, revision = 0;
@@ -46,13 +47,13 @@ async function fixture(t) {
     repositoryPreparations: 0, sessions: { busy: false }, board: { active: 0 }, get: () => ({ activeTasks: [], queuedTasks: [] }),
     settings: { get value() { return { repositories, providers }; }, async update(input) { repositories = structuredClone(input.repositories); updates++; } },
     deliveryApprovals: { view: () => ({ approvals }) }, repositoryDiscovery: { async assignmentsChanged() {} },
-    repositories: { async configure() { configured++; } }, featureProjects: { busy: false, assertAssignments() {}, async configure() {}, resolve: () => runtime, repository: project => project.repository, id: () => 'sample' },
+    repositories: { async configure() { configured++; } }, featureProjects: { busy: false, assertAssignments() {}, async configure() { if (attachFailure) throw new Error('Private raw transport error'); runtimePresent = true; }, resolve: () => { if (!runtimePresent) throw new Error('Project runtime not initialized.'); return runtime; }, repository: project => project.repository, id: () => 'sample' },
   }));
   return { workspace, repository: pathToFileURL(source).toString(), digest, get updates() { return updates; }, get configured() { return configured; },
     approve(configurationDigest = digest) { approvals = [{ repositoryId: 'sample', configurationDigest }]; }, revoke() { approvals = []; },
     claudeExecutable(path) { providers = [{ id: 'claude-cli', executable: path, model: '', apiKey: '', authenticationMode: 'cli-account' }]; },
     async changePolicy(change = {}) { Object.assign(policy, change); policy.version++; await writeFile(join(source, '.werk', 'delivery-policy.json'), JSON.stringify(policy)); git('add', '.werk/delivery-policy.json'); git('commit', '-m', 'Updated project policy'); return deliveryPolicySnapshot(policy, git('rev-parse', 'HEAD')).configurationDigest; },
-    items: () => repositories.items };
+    failAttach(value) { attachFailure = value; if (value) runtimePresent = false; }, items: () => repositories.items };
 }
 
 test('managed composition registers a repository but requires committed policy approval before enabling intake', async t => {
@@ -142,4 +143,39 @@ test('GitHub diagnostics require explicit current policy approval and remain opt
   h.approve(digest); row = await github(); assert.equal(row.required, true); assert.equal(row.applicable, true);
   assert.match(row.detail, /approved project policy.*GitHub/);
   h.revoke(); assert.equal((await github()).required, false, 'Revocation removes the optional integration prerequisite.');
+});
+
+
+test('a persisted assignment with interrupted runtime attachment returns its saved registration and recovers without recloning', async t => {
+  const h = await fixture(t); h.workspace.config.homeDir = h.workspace.config.stateDir;
+  h.failAttach(true);
+  const first = await managedProjectCommand(h.workspace, { action: 'register', operationId: 'lost-attach', id: 'sample', repository: h.repository, pollMs: 45000 });
+  const project = first.projects[0], checkout = join(h.workspace.config.homeDir, 'projects', 'sample');
+  assert.equal(project.path, checkout); assert.equal(project.status, 'needs_attention'); assert.equal(project.attached, false);
+  assert.equal(h.items()[0].path, checkout); assert.doesNotMatch(project.detail, /Private raw transport/);
+  assert.equal((await managedProjectsView(h.workspace)).projects[0].path, checkout);
+  const cloneGit = (...args) => execFileSync('git', args, { cwd: checkout, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  const initial = cloneGit('rev-parse', 'HEAD');
+  h.failAttach(false); h.approve();
+  const recovered = await managedProjectCommand(h.workspace, { action: 'reconcile', operationId: 'recover-attach', id: 'sample' });
+  assert.equal(recovered.projects[0].status, 'ready'); assert.equal(recovered.projects[0].attached, true); assert.equal(recovered.projects[0].intakeEnabled, true);
+  assert.equal(recovered.projects[0].pollMs, 45000); assert.equal(h.workspace.featureProjects.resolve('sample').sharedRuntime.intake.view().config.pollMs, 45000);
+  assert.equal(cloneGit('rev-parse', 'HEAD'), initial); assert.equal(h.items().length, 1); assert.equal(h.updates, 1);
+  const replayed = await managedProjectCommand(h.workspace, { action: 'register', operationId: 'lost-attach', id: 'sample', repository: h.repository, pollMs: 45000 });
+  assert.equal(replayed.projects.length, 1); assert.equal(replayed.projects[0].path, checkout); assert.equal(replayed.projects[0].status, 'ready');
+});
+
+
+test('a restart after cloning exposes interrupted registration as actionable and reconciles its original checkout', async t => {
+  const h = await fixture(t), input = { action: 'register', operationId: 'interrupted-registration', id: 'sample', repository: h.repository };
+  const initial = await managedProjectCommand(h.workspace, input), checkout = initial.projects[0].path;
+  const storage = managedProjectStorage(h.workspace.config.stateDir), journal = await storage.load();
+  journal.projects[0].status = 'preparing'; journal.projects[0].attached = false; await storage.save(journal);
+  h.failAttach(true);
+  const restored = (await managedProjectsView(h.workspace)).projects[0];
+  assert.equal(restored.path, checkout); assert.equal(restored.status, 'needs_attention'); assert.match(restored.detail, /interrupted.*Recheck/);
+  assert.equal((await storage.load()).projects[0].status, 'preparing', 'Read projection does not rewrite retained registration history.');
+  h.failAttach(false);
+  const recovered = await managedProjectCommand(h.workspace, { action: 'reconcile', operationId: 'resume-registration', id: 'sample' });
+  assert.equal(recovered.projects[0].status, 'ready'); assert.equal(recovered.projects[0].path, checkout); assert.equal(h.items().length, 1);
 });

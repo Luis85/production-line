@@ -27,7 +27,7 @@ async function eventually(probe, label) {
   throw Error(`Timed out: ${label}`);
 }
 async function ready() {
-  const result = JSON.parse(execFileSync('runuser', ['-u', 'werk', '--', binary, `${root}/werk.mjs`, 'system', 'doctor', '--state-dir', state, '--json'], { encoding: 'utf8', timeout: 15000 }));
+  const result = JSON.parse(execFileSync('runuser', ['-u', 'werk', '--', binary, `${root}/runtime/werk.mjs`, 'system', 'doctor', '--state-dir', state, '--json'], { encoding: 'utf8', timeout: 15000 }));
   return result.ok && result.state === 'running';
 }
 await eventually(ready, 'authenticated readiness');

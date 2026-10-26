@@ -238,11 +238,11 @@ write must fit the API's 64 KiB limit. Other JSON commands retain their 64 KiB
 input limit. New starts must be paused and the worker idle:
 
 ```sh
-node bin/apps/worker/cli.mjs queue pause
-node bin/apps/worker/cli.mjs tool-access get > tool-access.json
+node runtime/bin/apps/worker/cli.mjs queue pause --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs tool-access get --state-dir state/worker > tool-access.json
 # Edit builtins.cliTools in tool-access.json, then:
-node bin/apps/worker/cli.mjs tool-access set --file tool-access.json
-node bin/apps/worker/cli.mjs queue resume
+node runtime/bin/apps/worker/cli.mjs tool-access set --file tool-access.json --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs queue resume --state-dir state/worker
 ```
 
 A minimal CLI tool entry for a Node script in `bin/`:

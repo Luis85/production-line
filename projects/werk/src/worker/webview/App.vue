@@ -19,46 +19,11 @@ import { state, refresh, refreshFromUser, unlock, lock, date, checkAccess } from
 const router = useRouter(),
   tourOpen = ref(false);
 const tourSteps: TourStep[] = [
-  {
-    title: "Start with your taskboard",
-    text: "Describe what you need in New request. Every request has a Markdown progress record, and follow-ups stay with the same request.",
-    target: ".page-heading",
-    activate: () => router.push("/taskboard"),
-  },
-  {
-    title: "Keep each task together",
-    text: "Select a task to reopen its transcript. New request creates a separate session. This worker executes one task at a time; additional work waits in its queue.",
-    target: ".taskboard-groups",
-  },
-  {
-    title: "Include repository changes",
-    text: "Use the same instructions for all work. When repository changes are needed, allow file changes and choose the repository and approved paths. Review the resulting patch before applying it.",
-    target: ".task-interaction",
-  },
-  {
-    title: "Follow your work",
-    text: "History keeps completed work and execution attempts. Open a request to inspect its progress record, results and any patch awaiting review.",
-    target: ".taskboard",
-    activate: () => router.push("/history"),
-  },
-  {
-    title: "See how work flows",
-    text: "Workflow follows retained Feature Requests from intake to integration. Compare delivered increments by UTC week and inspect the evidence behind delivery measures.",
-    target: ".workflow-page",
-    activate: () => router.push("/workflow"),
-  },
-  {
-    title: "Understand usage and health",
-    text: "Metrics brings together this worker’s consumption, retained run measurements and host health. Missing measurements stay unavailable.",
-    target: ".page-heading",
-    activate: () => router.push("/dashboard"),
-  },
-  {
-    title: "Configure your worker",
-    text: "Settings groups providers and accounts, queue limits, consumption, tools and project connections. Choose a section; unsaved edits stay in this tab while you navigate.",
-    target: ".settings-content",
-    activate: () => router.push("/settings"),
-  },
+  { title: 'Start on Workboard', text: 'Follow Feature Requests from the shared queue through implementation, review and explicit merge. Needs you collects questions and blockers.', target: '.page-heading', activate: () => router.push('/workboard') },
+  { title: 'Add your projects', text: 'One worker serves multiple repositories in Werk Home. Clone a project, review its workflow files, approve the exact policy and recheck setup.', target: '.projects-page', activate: () => router.push('/projects') },
+  { title: 'Connect your provider', text: 'Configure the provider CLI and account on this worker. Model execution and GitHub integration are separate choices.', target: '.settings-content', activate: () => router.push('/settings#provider-connections') },
+  { title: 'Create a Feature Request', text: 'Choose New Feature Request on Workboard. Prepare from the project template, check the draft, then explicitly commit and push it into intake.', target: '#new-feature-request', activate: () => router.push('/workboard') },
+  { title: 'Understand workflow health', text: 'Workflow measures retained requests, confirmed delivered increments and weekly velocity. Missing business and customer outcomes remain unmeasured.', target: '.workflow-page', activate: () => router.push('/workflow') },
 ];
 const route = useRoute(),
   credential = ref(""),
@@ -117,8 +82,8 @@ watch(
     <AccessPanel
       v-if="!state.unlocked"
       title="Your worker, ready when you are."
-      lead="Unlock this workspace to give your worker a task, pick up a conversation, or inspect its progress."
-      caption="One worker. One task at a time. Your work stays together."
+      lead="Unlock this workspace to create a Feature Request, follow progress, or review a delivered increment."
+      caption="One worker. Multiple projects. Your work stays together."
     >
       <p v-if="!state.accessChecked" role="status">Checking saved access…</p>
       <form v-else @submit.prevent="connect">
@@ -145,11 +110,9 @@ watch(
           />
         </div>
         <p id="token-help" class="page-note">
-          For a project worker, use <code>WERK_WORKER_TOKEN</code> from the
-          project’s <code>.env</code> file. Existing standalone or managed
-          setups can use the private <code>webview-token</code> file in the
-          worker’s state directory; the start or status command shows its
-          location as <code>credentialsFile</code>.
+          Use the private <code>webview-token</code> file in Werk Home’s
+          <code>state/worker</code> directory. The start or status command shows
+          its exact location as <code>credentialsFile</code>.
         </p>
         <p v-if="accessError" class="error-text" role="alert">
           {{ accessError }}
@@ -185,7 +148,7 @@ watch(
     <WorkerShell
       v-else
       :links="links"
-      home-path="/taskboard"
+      home-path="/workboard"
       home-label="Werk worker home"
       nav-label="Worker pages"
     >
@@ -193,7 +156,7 @@ watch(
         ><div class="worker-identity">
           <UIcon name="i-lucide-cpu" class="worker-icon" />
           <div>
-            <strong>{{ state.status?.project ?? "Local worker" }}</strong
+            <strong>{{ state.environment?.homeLayout === 'central' ? "Werk Home" : state.status?.project ?? "Local worker" }}</strong
             ><span>{{
               state.status?.workerId
                 ? "Worker " + state.status.workerId.slice(0, 8)
@@ -221,7 +184,7 @@ watch(
               ? 'Connection lost'
               : (state.status?.state ?? 'Connecting')
           "
-          :detail="state.paused ? 'Updates paused' : 'Checks for updates every second'"
+          :detail="state.paused ? 'Live updates paused' : 'Live progress updates'"
       /></template>
       <template #actions
         ><UButton

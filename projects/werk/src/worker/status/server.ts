@@ -239,6 +239,8 @@ export async function statusServer(
             "/history",
             "/dashboard",
             "/workflow",
+            "/workboard",
+            "/projects",
             "/review",
             "/settings",
             "/monitoring-status",

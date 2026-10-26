@@ -13,16 +13,17 @@ function skipToContent() { document.getElementById('main')?.focus(); }
       <RouterLink class="wordmark" :to="homePath" :aria-label="homeLabel">werk<span>.</span></RouterLink>
       <div class="worker-header-identity"><slot name="identity" /></div>
       <nav :aria-label="navLabel">
-        <RouterLink v-for="link in links" :key="link.path" :to="link.path" :aria-current="route.path === link.path ? 'page' : route.path === '/review' && link.path === '/taskboard' ? 'location' : undefined"><UIcon v-if="link.icon" :name="link.icon" /><span>{{ link.label }}</span></RouterLink>
+        <RouterLink v-for="link in links" :key="link.path" :to="link.path" :aria-current="route.path === link.path ? 'page' : route.path === '/review' && link.path === '/workboard' ? 'location' : undefined"><UIcon v-if="link.icon" :name="link.icon" /><span>{{ link.label }}</span></RouterLink>
       </nav>
       <div class="worker-header-actions"><slot name="actions" /></div>
     </header>
-    <main id="main" tabindex="-1" :class="{ 'worker-detail-page': route.path !== '/taskboard' }">
+    <main id="main" tabindex="-1" :class="{ 'worker-detail-page': !['/taskboard', '/workboard'].includes(route.path) }">
       <div class="worker-notices"><slot name="notices" /></div>
       <slot />
     </main>
     <footer class="worker-footer">
       <div class="worker-footer-status"><slot name="status" /><slot name="mode" /></div>
+      <div class="worker-footer-evidence" aria-label="Worker evidence"><RouterLink to="/dashboard">Resource metrics</RouterLink><RouterLink to="/history">History</RouterLink></div>
       <div class="worker-footer-refresh"><slot name="footer" /></div>
     </footer>
   </div>
@@ -47,6 +48,7 @@ nav a[aria-current] { background: #243b37; color: #b3f1cf; }
 .worker-detail-page .worker-notices:has(> *) { padding: 0; }
 .worker-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--ui-border); padding: 14px 32px; color: var(--ui-text-muted); font-size: .6875rem; }
 .worker-footer-status { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.worker-footer-evidence { display:flex;flex-wrap:wrap;gap:16px; }.worker-footer-evidence a { display:inline-flex;align-items:center;min-height:44px;color:var(--ui-primary);font-size:.75rem; }
 .worker-footer-refresh { display: flex; gap: 20px; flex-wrap: wrap; }
 .worker-footer-status :deep(.connection-status) { font-size: .6875rem; }
 @media (max-width: 1150px) { .worker-header { gap: 16px; padding-inline: 24px; } .worker-header-identity { padding-left: 16px; } nav { margin-left: 0; } nav a { padding-inline: 10px; } }

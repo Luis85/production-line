@@ -1,3 +1,4 @@
+import { publishSharedReadyReviewAnswer, readyReviewAnswerView, validateSharedReadyReviewAnswer } from './shared-ready-review-answer.js';
 import { sharedFeaturePolicy } from './shared-feature-policy.js';
 import { reserveSharedReviewRework } from './shared-review-rework.js';
 import type { RequestCommand } from './request-gates.js';
@@ -98,7 +99,7 @@ export class SharedFeatureIntake {
     const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, error, taskId, selection } = record;
     const publication = this.lifecycle.publication(record);
     const review = record.readyReviewState;
-    const readyReview = review ? { status: review.status, attempt: review.generation, promptPath: review.input.prompt.path, promptDigest: review.input.prompt.sha256, findings: review.result?.findings ?? [],
+    const readyReview = review ? { ...readyReviewAnswerView(record, this.state.workerId), status: review.status, attempt: review.generation, promptPath: review.input.prompt.path, promptDigest: review.input.prompt.sha256, findings: review.result?.findings ?? [],
       ...(review.attempt ? { sessionId: review.attempt.sessionId, ...(review.attempt.runId ? { runId: review.attempt.runId } : {}) } : {}),
     } : undefined;
     const task = record.task;
@@ -153,6 +154,21 @@ export class SharedFeatureIntake {
         const interaction = this.ports.inspect(taskId)?.interaction;
         if (!interaction) throw new DomainError('unavailable', 'The response was published. Refresh the Feature Request to inspect its saved interaction.');
         return interaction;
+      });
+    } finally { this.responses--; }
+  }
+  /** Publish only the canonical Ready Check answer; normal synchronization owns review/admission. */
+  async answerReadyReview(value: unknown) {
+    const command = validateSharedReadyReviewAnswer(value);
+    if (this.stopping.signal.aborted || this.configuring) throw new DomainError('unavailable', 'Worker configuration is changing or the worker is stopping.');
+    this.responses++;
+    try {
+      return await this.configureWork.run(async () => {
+        this.stopping.signal.throwIfAborted();
+        const record = this.state.records.find(item => item.id === command.requestId && bindingKey(item.binding) === bindingKey(this.state.config));
+        if (!record) throw new DomainError('not_found', 'The owned Ready Check Feature Request is unavailable.');
+        const repository = this.ports.repository(record.binding, record.workflow);
+        return publishSharedReadyReviewAnswer({ record, command, workerId: this.state.workerId, ports: this.ports, signal: this.stopping.signal, save: () => this.save(), flush: () => this.lifecycle.flushPending(record, repository, this.stopping.signal) });
       });
     } finally { this.responses--; }
   }

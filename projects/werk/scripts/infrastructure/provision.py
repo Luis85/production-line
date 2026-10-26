@@ -15,6 +15,7 @@ import time
 MAX_ARCHIVE = 300 * 1024 * 1024
 MAX_RELEASE = 256 * 1024 * 1024
 MAX_NODE = 512 * 1024 * 1024
+HOME_FILES = {'worker.mjs', 'werk.mjs', 'werk-docker.sh', 'werk-docker.ps1', 'README.md', 'AGENTS.md', 'LICENSE', 'CHANGELOG.md', 'release-manifest.json'}
 
 
 def verify_download(path, expected):
@@ -29,17 +30,21 @@ def verify_download(path, expected):
         raise ValueError('Artifact SHA-256 mismatch; nothing extracted')
 
 
-def safe_name(value, prefix):
+def safe_name(value, prefix=None):
     parts = value.rstrip('/').split('/')
-    if len(value) > 4096 or not parts or parts[0] != prefix or any(not part or part in ('.', '..') for part in parts) or any(ord(char) < 32 or ord(char) == 127 for char in value) or '\\' in value or ':' in value:
+    if len(value) > 4096 or not parts or (prefix is not None and parts[0] != prefix) or any(not part or part in ('.', '..') for part in parts) or any(ord(char) < 32 or ord(char) == 127 for char in value) or '\\' in value or ':' in value:
         raise ValueError('Unsafe artifact path or unexpected archive root')
+    if prefix is None and (parts[0] not in HOME_FILES | {'runtime', 'docs'} or (parts[0] in HOME_FILES and len(parts) != 1)):
+        raise ValueError('Flat Home archives may contain only immutable runtime and guidance files')
     return PurePosixPath(*parts)
 
 
-def extract_archive(archive, destination, prefix, node=False):
+def extract_archive(archive, destination, prefix=None, node=False):
     """Validate all headers before extraction; never invoke tarfile.extract()."""
     if destination.exists():
         raise ValueError('Extraction destination must be new')
+    if node and not prefix:
+        raise ValueError('Node extraction requires its exact artifact root')
     with tarfile.open(archive, 'r:*') as source:
         members, seen, total = [], set(), 0
         for member in source:
@@ -65,7 +70,8 @@ def extract_archive(archive, destination, prefix, node=False):
                 members.append((member, path))
         if node and {str(path) for _, path in members} != {prefix + '/bin/node', prefix + '/LICENSE'}:
             raise ValueError('Node archive lacks its regular binary or license')
-        if not node and prefix + '/release-manifest.json' not in seen:
+        manifest_path = prefix + '/release-manifest.json' if prefix else 'release-manifest.json'
+        if not node and manifest_path not in seen:
             raise ValueError('Release archive lacks its manifest')
         # A file cannot also be another file's ancestor.
         files = {str(path) for member, path in members}
@@ -78,12 +84,12 @@ def extract_archive(archive, destination, prefix, node=False):
             with source.extractfile(member) as incoming, target.open('xb') as outgoing:
                 shutil.copyfileobj(incoming, outgoing, 1024 * 1024)
             target.chmod(0o755 if member.mode & 0o111 else 0o644)
-    return destination / prefix
+    return destination / prefix if prefix else destination
 
 
 def check_manifest_version(root, expected):
     manifest = json.loads((root / 'release-manifest.json').read_text())
-    if manifest.get('version') != expected or manifest.get('name') != 'werk' or manifest.get('node') != '>=24.0.0 <25':
+    if manifest.get('version') != expected or manifest.get('name') != 'werk' or manifest.get('node') != '>=24.0.0 <25' or manifest.get('layout') not in (None, 'werk-home-v1') or (manifest.get('layout') == 'werk-home-v1' and manifest.get('updateProtocol') != 2):
         raise ValueError('Release manifest version or Node contract mismatch')
 
 
@@ -136,7 +142,7 @@ def provision():
         scratch = Path(temporary)
         download(config['release'], scratch / 'werk.tar.gz')
         download(config['node'], scratch / 'node.tar.xz')
-        staged_release = extract_archive(scratch / 'werk.tar.gz', scratch / 'release', 'werk-' + config['release']['version'])
+        staged_release = extract_archive(scratch / 'werk.tar.gz', scratch / 'release')
         node_prefix = 'node-' + config['node']['version'] + '-linux-' + config['node']['architecture']
         staged_node = extract_archive(scratch / 'node.tar.xz', scratch / 'node', node_prefix, node=True)
         binary = staged_node / 'bin/node'
@@ -160,10 +166,10 @@ def provision():
     os.chown(state, identity.pw_uid, identity.pw_gid)
     state.chmod(0o700)
     # Provision secrets once as the runtime identity, never in user-data or logs.
-    subprocess.run(['runuser', '-u', 'werk', '--', 'env', '-i', 'PATH=/usr/bin:/bin', 'HOME=/var/lib/werk', 'WERK_UPDATES=external', str(node / 'bin/node'), str(release / 'werk.mjs'), 'system', 'setup', '--file', '/etc/werk/system.yaml', '--state-dir', str(state), '--json'], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(['runuser', '-u', 'werk', '--', 'env', '-i', 'PATH=/usr/bin:/bin', 'HOME=/var/lib/werk', 'WERK_UPDATES=external', str(node / 'bin/node'), str(release / 'runtime/werk.mjs'), 'system', 'setup', '--file', '/etc/werk/system.yaml', '--state-dir', str(state), '--json'], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(['systemctl', 'daemon-reload'], check=True)
     subprocess.run(['systemctl', 'enable', '--now', 'werk-system.service'], check=True)
-    doctor = ['runuser', '-u', 'werk', '--', 'env', '-i', 'PATH=/usr/bin:/bin', 'HOME=/var/lib/werk', 'WERK_UPDATES=external', str(node / 'bin/node'), str(release / 'werk.mjs'), 'system', 'doctor', '--file', '/etc/werk/system.yaml', '--state-dir', str(state), '--json']
+    doctor = ['runuser', '-u', 'werk', '--', 'env', '-i', 'PATH=/usr/bin:/bin', 'HOME=/var/lib/werk', 'WERK_UPDATES=external', str(node / 'bin/node'), str(release / 'runtime/werk.mjs'), 'system', 'doctor', '--file', '/etc/werk/system.yaml', '--state-dir', str(state), '--json']
     try:
         await_ready(doctor)
     except RuntimeError:

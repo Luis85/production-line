@@ -53,7 +53,7 @@ onActivated(() => { void focusSection(); });
   <section class="settings-page">
     <div class="page-heading">
       <div><h1 tabindex="-1">Worker settings</h1><p>Configure how this worker runs, which tools it can use, and where work comes from.</p></div>
-      <UButton to="/taskboard" color="neutral" variant="outline" icon="i-lucide-arrow-left">Back to work</UButton>
+      <UButton to="/workboard" color="neutral" variant="outline" icon="i-lucide-arrow-left">Back to work</UButton>
     </div>
     <div class="settings-layout">
       <nav class="settings-nav" aria-label="Worker settings sections">

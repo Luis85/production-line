@@ -1,4 +1,74 @@
-# Automatic updates
+# Runtime updates
+
+## Central worker Home
+
+Use a separately extracted verified candidate and the root launcher:
+
+```sh
+node worker.mjs update plan --from /path/to/verified-candidate-home
+node worker.mjs update apply --from /path/to/verified-candidate-home --if-match PLAN_ID --stop
+```
+
+Inspect the exact plan before applying. The worker must be stopped or explicitly
+stopped with `--stop`. The update owns replaceable runtime/root/docs files;
+projects and unrelated private state stay outside its payload. Staging/backups
+are `Home/state/updates`. Do not extract over a populated Home. This candidate
+path does not establish automatic network discovery or release publication.
+See [Home update boundaries](portable-apps.md#update-a-copied-app) and
+[legacy standalone-state adoption](../how-to/project-worker.md#existing-standalone-installations).
+
+### Recover an interrupted Home update
+
+Startup and replacement share `Home/state/home-runtime.lock`; replacement also
+owns `Home/state/updates/update.lock`. Before replacing files, the updater reserves
+`worker.lock` and `runtime.lock` under `Home/state/{worker,line,system,factory,orchestrator}`
+and, when selected, the retained legacy worker state. Reservation records identify
+`homeUpdate: true` and their owning PID. Abandoned ownership is preserved on a crash.
+
+Advanced foreground components retain `Home/state/runtime-leases/<uuid>.json`
+while running. Normal shutdown removes their lease. A crash leaves it behind;
+that lease blocks Home replacement even if the central worker is stopped.
+
+Inspect the retained update status/journal and every relevant owner first. Verify
+the matching updater PID and all component ownership are dead before explicitly
+removing only abandoned updater-owned lock/reservation records or abandoned leases.
+Never delete a live, unknown or unrelated owner's files. Removing an ownership
+record does not establish that a process stopped or that replacement completed.
+
+An interrupted runtime-directory swap can leave `ActiveHome/runtime/` absent, so
+its own launcher may not load. Use a separate, complete verified candidate Home
+for status and rollback, with the command **before** `--home`:
+
+```sh
+node /CandidateHome/worker.mjs update status --home /ActiveHome
+node /CandidateHome/worker.mjs update rollback --home /ActiveHome
+```
+
+On Windows, for example:
+
+```powershell
+node C:\VerifiedCandidate\worker.mjs update status --home C:\WerkHome
+node C:\VerifiedCandidate\worker.mjs update rollback --home C:\WerkHome
+```
+
+Resolve the inspected abandoned ownership before rollback. The candidate launcher
+uses ActiveHome's retained update journal; it does not copy projects or rewrite
+worker journals. Corrupt backup evidence refuses rollback before displacing a
+healthy active payload. Restart and inspect the selected worker afterward. This
+is explicit recovery, not automatic lock deletion or automatic database rewind.
+
+## Legacy protocol-1 Factory and line updates
+
+The remainder describes older matching runtimes outside the current Home layout.
+Current root `werk.mjs update` directs operators to `worker.mjs update`; it does
+not run this legacy updater. Current Home manifests use `updateProtocol: 2`.
+Legacy copied-app updaters require protocol 1 and refuse new Home archives; use a
+verified manual replacement and retained old recovery rather than expecting
+copied apps to update themselves from a Home archive.
+
+
+The following version-selection behavior belongs to the separate Factory/line
+operator, not the central worker Home update above.
 
 Native downloaded releases from 0.2.0 onward check the stable GitHub release before
 `node werk.mjs up`, `system up`, `system start` or single-line `start`. The system
@@ -52,7 +122,7 @@ The archive SHA-256 and extracted file inventory are checked before use. As with
 installation, trust comes from this repository and HTTPS; unsigned checksums are
 not an independent publisher signature.
 
-A new release must declare `updateProtocol: 1` and `stateFormat: 1` in its manifest.
+A release consumed by this legacy updater must declare `updateProtocol: 1` and `stateFormat: 1` in its manifest.
 Maintainers must change the state format when persisted data becomes incompatible;
 such changes require a documented manual migration. A matching format is a
 compatibility contract, not permission to run two versions against one database.
@@ -114,9 +184,9 @@ separate system; it does not discover previous installations.
 ## Deployment scope
 
 Automatic activation and backup apply to native whole-system and single-line
-installations. Portable apps copied into other projects (`bin/apps/<app>`) update themselves with
-their own [guarded update command](portable-apps.md#update-a-copied-app), which uses the
-same checksum discovery, release verification and verified state backups. Docker wrappers and managed VM deployment tooling retain their
+installations. Legacy copied-app updaters accept only their matching protocol-1 archives. New
+Home archives require [Home replacement](portable-apps.md#update-a-copied-app);
+independent copied components use verified manual replacement/old recovery. Docker wrappers and managed VM deployment tooling retain their
 pinned-release, stopped-state upgrade procedures. Generated VM services set
 `WERK_UPDATES=external`, which bypasses the update manager and its writable sibling
 directory entirely. Preserve that variable when manually replacing a managed VM release; no host Node dependency is added

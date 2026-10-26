@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isMainScript } from './verify.mjs';
 import { createArchives } from './archives.mjs';
 import { readReleaseChangelog } from './changelog.mjs';
+import { homeWerkLauncher, homeWorkerLauncher } from './home-launchers.mjs';
 import { environmentExample } from '../runtime/portable/environment.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -62,16 +63,29 @@ async function collect(projectRoot, version) {
   totalBytes += builtGuide.content.length;
   if (totalBytes > 256 * 1024 * 1024) throw Error('Release exceeds packaging limits (256 MiB)');
   entries.push({ path: 'src/guide/public/index.html', content: builtGuide.content, mode: 0o644 });
-  const paths = new Set(entries.map(entry => entry.path));
-  for (const entry of entries.filter(entry => entry.path.endsWith('.md') && !entry.path.startsWith('src/') && !/^bin\/apps\/[^/]+\/src\//.test(entry.path))) {
-    for (const match of entry.content.toString('utf8').matchAll(/!?\[[^\]]+\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g)) {
-      const target = match[1];
-      if (/^(?:[a-z][a-z0-9+.-]*:|#)/i.test(target)) continue;
-      const destination = posix.normalize(posix.join(posix.dirname(entry.path), decodeURIComponent(target.split(/[?#]/)[0])));
-      if (target.startsWith('/') || !paths.has(destination)) throw Error(`Release documentation link is not packaged: ${entry.path} -> ${target}`);
-    }
-  }
-  return entries.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  const human = path => path === 'worker.mjs' || ['README.md', 'AGENTS.md', 'LICENSE', 'CHANGELOG.md'].includes(path) || path.startsWith('docs/');
+  const mapped = new Map(entries.map(entry => [entry.path, human(entry.path) ? entry.path : 'runtime/' + entry.path]));
+  const destinations = new Set(mapped.values());
+  const homeEntries = entries.map(entry => {
+    const path = mapped.get(entry.path);
+    if (!entry.path.endsWith('.md') || entry.path.startsWith('src/') || /^bin\/apps\/[^/]+\/src\//.test(entry.path)) return { ...entry, path };
+    const text = entry.content.toString('utf8').replace(/(!?\[[^\]]+\]\()([^\s)]+)([^)]*\))/g, (match, before, target, after) => {
+      if (/^(?:[a-z][a-z0-9+.-]*:|#)/i.test(target)) return match;
+      const suffixIndex = target.search(/[?#]/), local = suffixIndex < 0 ? target : target.slice(0, suffixIndex), suffix = suffixIndex < 0 ? '' : target.slice(suffixIndex);
+      const original = posix.normalize(posix.join(posix.dirname(/^bin\/apps\/[^/]+\/README\.md$/.test(entry.path) ? 'docs/reference/portable-apps.md' : entry.path), decodeURIComponent(local)));
+      const destination = mapped.get(original) ?? (destinations.has(original) ? original : undefined);
+      if (!destination) throw Error(`Release documentation link is not packaged: ${entry.path} -> ${target}`);
+      const rewritten = posix.relative(posix.dirname(path), destination).split('/').map(part => encodeURIComponent(part)).join('/');
+      return before + rewritten + suffix + after;
+    });
+    return { ...entry, path, content: Buffer.from(text) };
+  });
+  homeEntries.find(entry => entry.path === 'worker.mjs').content = Buffer.from(homeWorkerLauncher);
+  homeEntries.push({ path: 'werk.mjs', mode: 0o755, content: Buffer.from(homeWerkLauncher) });
+  const dockerShell = '#!/usr/bin/env bash\nset -euo pipefail\nhome_dir="$(cd -- "$(dirname -- "$0")" && pwd -P)"\nforward=("$@")\nexplicit=false; for arg in "$@"; do [[ "$arg" != --state-dir ]] || explicit=true; done\nif [[ "$explicit" == false ]]; then state=docker; [[ "${1:-}" != system ]] || state=docker-system; forward+=(--state-dir "$home_dir/state/$state"); fi\nexec bash "$home_dir/runtime/werk-docker.sh" "${forward[@]}"\n';
+  const dockerPowerShell = '$ErrorActionPreference = "Stop"\n$forward = @($args)\nif ("--state-dir" -notin $args) { $state = if ($args.Count -and $args[0] -eq "system") { "docker-system" } else { "docker" }; $forward += @("--state-dir", (Join-Path $PSScriptRoot "state/$state")) }\n& "$PSScriptRoot/runtime/werk-docker.ps1" @forward\nexit $LASTEXITCODE\n';
+  for (const [name, text] of [['werk-docker.sh', dockerShell], ['werk-docker.ps1', dockerPowerShell]]) homeEntries.push({ path: name, mode: name.endsWith('.sh') ? 0o755 : 0o644, content: Buffer.from(text) });
+  return homeEntries.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 }
 function sourceCommit(projectRoot) {
   try {
@@ -86,17 +100,17 @@ export async function packageRelease(projectRoot = root, output = join(projectRo
   const changelog = await readReleaseChangelog(projectRoot, { version: info.version });
   const entries = await collect(projectRoot, info.version);
   if (entries.find(entry => entry.path === 'CHANGELOG.md').content.toString('utf8') !== changelog.markdown) throw Error('CHANGELOG.md changed while preparing the release; retry packaging');
-  const manifest = { schemaVersion: 1, name: 'werk', version: info.version, updateProtocol: 1, stateFormat: 1, node: '>=24.0.0 <25', sourceCommit: sourceCommit(projectRoot), files: entries.map(({path,content,mode}) => ({ path, bytes: content.length, sha256: hash(content), mode: mode.toString(8) })) };
+  const manifest = { schemaVersion: 1, name: 'werk', layout: 'werk-home-v1', version: info.version, updateProtocol: 2, stateFormat: 1, node: '>=24.0.0 <25', sourceCommit: sourceCommit(projectRoot), files: entries.map(({path,content,mode}) => ({ path, bytes: content.length, sha256: hash(content), mode: mode.toString(8) })) };
   entries.push({ path: 'release-manifest.json', content: Buffer.from(JSON.stringify(manifest, null, 2) + '\n'), mode: 0o644 });
   const prefix = `werk-${info.version}`;
-  const archiveEntries = entries.map(entry => ({ ...entry, path: `${prefix}/${entry.path}` }));
+  const archiveEntries = entries;
   const built = await createArchives(archiveEntries);
   const archives = [{ name: `${prefix}.tar.gz`, content: built.tarGzip }, { name: `${prefix}.zip`, content: built.zip }];
   const repository = process.env.GITHUB_REPOSITORY || 'Luis85/production-line';
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw Error('Invalid release repository');
   const installerTemplate = await readFile(join(projectRoot, 'scripts/release/install.mjs'), 'utf8');
   if (!installerTemplate.includes('/* RELEASE_CONFIG */ null')) throw Error('Missing installer configuration marker');
-  const installer = { name: 'install.mjs', content: Buffer.from(installerTemplate.replace('/* RELEASE_CONFIG */ null', JSON.stringify({ version: info.version, repository, sha256: hash(built.tarGzip) }))) };
+  const installer = { name: 'install.mjs', content: Buffer.from(installerTemplate.replace('/* RELEASE_CONFIG */ null', JSON.stringify({ version: info.version, repository, sha256: hash(built.tarGzip), layout: 'werk-home-v1' }))) };
   const assets = [...archives, installer];
   const staging = join(dirname(output), `.${basename(output)}-${process.pid}-${Date.now()}`);
   await mkdir(staging, { recursive: true });

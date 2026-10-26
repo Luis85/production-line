@@ -15,26 +15,30 @@ visual navigation, dedicated dashboards, focused editors and a replayable tour.
 
 ## Worker Scope
 
-The worker uses Vue with Nuxt UI and five primary pages: Taskboard
-(`/taskboard`), Workflow (`/workflow`), Metrics (`/dashboard`), History
-(`/history`) and Settings (`/settings`). Taskboard opens after unlock. It keeps
-current work, Needs you
-and Up next beside a task-scoped interaction panel; completed work and drafts
-remain available without duplicating task identities across sources. A request-scoped
-Review route brings its input, activity, changes, checks and decisions together.
+The worker uses Vue with Nuxt UI and four primary pages: Workboard (`/workboard`),
+Projects (`/projects`), Workflow (`/workflow`) and Settings (`/settings`). After
+unlock/setup, Workboard leads with Feature Requests, live delivery progress and
+review actions. Projects and Workflow health remain one navigation action away.
+Metrics (`/dashboard`) and History (`/history`) remain secondary evidence links.
+A request-scoped Review route leads with changes, checks and the current human
+decision; execution identities and detailed activity disclose progressively.
 
-New request starts with the operator's instructions. Task options disclose the
-provider, optional name and reusable agent definition. Follow up continues the
-selected task. Taskboard shows execution and admission capacity. Metrics visualizes
-this worker's current capacity, token allowance, resources and retained execution
-activity. History retains conversations, review patches
-and execution evidence; Settings
-owns provider accounts, queue/duration policy, tools, repositories, shared intake,
-profiles and optional orchestrator enrollment.
+**New Feature Request** uses the selected project's committed template, guarded
+preparation/readiness and shared Git publication. It does not submit generic local
+chat as a substitute. Projects owns remote clone registration, visible repository
+paths, watched-folder/poll configuration and guided workflow setup. Settings owns
+provider accounts, queue/duration policy, tools and optional orchestrator enrollment.
 
-The legacy `/chat` route preserves its query when redirecting to Taskboard.
-`/monitoring-status` opens Metrics; earlier Dashboard setup bookmarks redirect
-to their corresponding Settings sections.
+WerkHome is transparent: stable root launchers, replaceable `runtime/`, visible
+`projects/` and private `state/`. The worker starts from its launcher directory,
+independently of the shell's working directory. Fresh state is `state/worker`.
+New project-local worker installation is retired. Legacy standalone state needs
+explicit stopped-state adoption; retained absolute paths are not relocated.
+Project-installed state requires its old runtime for recovery/export.
+
+The legacy `/taskboard` and `/chat` routes preserve their queries when redirecting
+to Workboard. `/monitoring-status` opens Metrics; earlier Dashboard setup bookmarks
+redirect to their corresponding Settings sections.
 
 ## Worker Access
 
@@ -80,8 +84,8 @@ A request retains its logical model session across invocations; native resume an
 worker context replay are distinct adapter capabilities. Shared project context
 comes from an explicit committed manifest, while private conversation history
 remains request-specific.
-The unified interaction starts with instructions; approved repository-file work is
-an optional permission, never an opt-in to persistence. Source notes retain their
+The primary interaction prepares a project Feature Request; legacy conversation
+and approved-file records retain their source authority and persistence. Source notes retain their
 own intake authority; the generated record reports progress without replacing them.
 
 Creation and admission remain distinct from Markdown synchronization. An accepted
@@ -101,7 +105,7 @@ the same task interaction; generated patches still require human review.
 
 ## Feature Request Review
 
-Review is a request-scoped page reached from the Taskboard, conversation or History.
+Review is a request-scoped page reached from the Workboard, conversation or History.
 Accepted scope, changes, current checks, human decisions and shared publication
 appear together with one next valid action. It projects existing request authority;
 it never creates a parallel lifecycle. Inconsistent ownership or stale evidence
@@ -172,14 +176,14 @@ execution keeps its separate evidence contract.
 Each source exposes freshness and failed reads retain clearly marked last values.
 Background updates keep controls stable; pausing reads does not freeze measurement
 age. Configuration stays in Settings, detailed evidence and export in History,
-and current work in Taskboard. See the
+and current work in Workboard. See the
 [metrics reference](docs/reference/worker-run-metrics.md#metrics-webview).
 
 ## Worker Provider and Agent Definitions
 
 Provider connections belong to the worker. Settings → Providers & accounts owns
 saved settings, local Codex or Claude sign-in commands and checks of saved connections.
-Taskboard links there when a connection needs setup. CLI sign-in must belong to
+Workboard links there when a connection needs setup. CLI sign-in must belong to
 the user running the worker;
 Docker workers need access inside their container. API credentials are stored
 privately on the worker and are not returned to the browser. Saving settings does
@@ -249,31 +253,29 @@ Configured providers, profiles and subscriptions do not establish verified login
 available quota or measured cost. Simulation, local patches requiring review and
 accepted/merged work must remain distinct.
 
-## Project-local feature requests
+## Project Feature Requests
 
-A worker can be initialized inside a project and started as a portable Node app
-or a standalone Docker service. Setup provides a configurable feature folder and
-an editable frontmatter-plus-Markdown request template. Drafts remain inactive;
-canonical local notes use `worker.request/v1` with a stable ID and explicit
-`intent: draft` or `submit`. Stable local saves trigger admission; shared Git
-requests retain their commit-and-push handoff. Committed policy snapshots, local
-approval, readiness, scope and capacity checks govern implementation.
+Projects contain committed workflow configuration, templates and Markdown requests;
+the worker runtime stays in WerkHome. New projects clone the selected remote into
+visible `projects/<id>`, with configurable watched folder/poll interval. Guided
+setup previews missing files before an approved Git commit/push, then separately
+requires exact-policy approval and a setup recheck. Arbitrary existing-checkout
+adoption and project-local worker installation are not new registration paths.
 
-The original Feature Request remains the authority for user intent. Its generated
-region projects progress and links questions and review evidence; per-task records
-remain supporting projections. Material local requirement changes reassess the same
-request while preserving history. Accepted shared scope stays frozen, and terminal
-canonical work requires an explicit reopen command. Orchestrator mirrors retain
-their original lease and routing authority.
+The original request owns intent. Shared request publication, claims, progress,
+questions and PullRequest Markdown remain Git-backed. Workboard authoring uses
+this same flow. Rework retains request/candidate evidence; changed accepted scope
+needs the supported successor path. Existing local records retain their source
+semantics without making legacy installation a current product path.
 
-One worker can register multiple project intakes with separate identities, policy
-and ownership. Setup, native/Docker switching, recovery and copied-app operation
-are documented in [project worker setup](docs/how-to/project-worker.md) and
-[project delivery policy](docs/reference/delivery-policy.md).
+Compatible stopped legacy standalone Home state may be explicitly adopted at its
+original absolute path. Project-installed state is refused and needs its matching
+old runtime for recovery/export. No automatic relocation is implied. See
+[project setup and adoption](docs/how-to/project-worker.md).
 
 ## Local execution evidence and analysis
 
-A project worker preserves durable per-invocation run evidence for local chat,
+A worker preserves durable per-invocation run evidence for local chat,
 approved-file tasks and feature requests. Before invoking a provider, it records
 state, worker-process resources and cumulative known consumption after acquiring
 a permit from shared execution capacity. A matching terminal observation records

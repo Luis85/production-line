@@ -11,6 +11,7 @@ import FeatureRequestNote from '../components/FeatureRequestNote.vue';
 import PatchReview from '../components/PatchReview.vue';
 import RequestGatePanel from '../components/RequestGatePanel.vue';
 import RequestGateEvidence from '../components/RequestGateEvidence.vue';
+import WorkflowTimeline from '../components/WorkflowTimeline.vue';
 import DeliveryRunPanel from '../components/DeliveryRunPanel.vue';
 import RequestActivityPanel from '../components/RequestActivityPanel.vue';
 import DeliveryReviewEvidence from '../components/DeliveryReviewEvidence.vue';
@@ -29,7 +30,7 @@ const gateRevision = shallowRef<{ id: string; revision: number } | null>(null);
 const gateMismatch = computed(() => gateRevision.value?.id === data.value?.request?.id && gateRevision.value?.revision !== data.value?.request?.revision);
 const stale = computed(() => state.paused || !!error.value || gateMismatch.value || !readAt.value || now.value - Date.parse(readAt.value) > 15000);
 const review = computed(() => buildFeatureReviewView({ ...data.value, interaction: data.value?.session.interaction, freshness: { stale: stale.value, error: error.value, readAt: readAt.value } }));
-const conversation = computed(() => '/taskboard?session=' + encodeURIComponent(data.value?.session.id ?? identity.value.sessionId));
+const conversation = computed(() => '/workboard?session=' + encodeURIComponent(data.value?.session.id ?? identity.value.sessionId));
 const action = computed(() => review.value.nextStep.action);
 const nextHref = computed(() => {
   const href = reviewActionHref(action.value?.kind, data.value?.session.id ?? '');
@@ -45,14 +46,20 @@ const currentResult = computed(() => {
 const result = computed(() => currentResult.value ?? data.value?.chat.messages.findLast(message => message.role === 'assistant' && message.state === 'complete')?.text);
 const actor = computed(() => ({ operator: 'Your next step', worker: 'Worker’s next step', owning_worker: 'Owning worker’s next step', orchestrator: 'Orchestrator’s next step' })[review.value.nextStep.actor]);
 const stageLabels = { pending: 'Not yet', active: 'In progress', complete: 'Complete', blocked: 'Needs attention', unknown: 'Not confirmed' };
+function revealEvidence(event: MouseEvent) {
+  const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href^="#"]');
+  if (!anchor) return;
+  let target = document.getElementById(anchor.hash.slice(1));
+  while (target) { if (target instanceof HTMLDetailsElement) target.open = true; target = target.parentElement; }
+}
 function requestChanged(value: WorkerRequest | null) {
   if (value) gateRevision.value = { id: value.id, revision: value.revision };
   if (value && data.value?.request?.id === value.id && data.value.request.revision !== value.revision && !loading.value) void refresh();
 }
 </script>
 <template>
-  <section class="feature-review" aria-labelledby="review-title">
-    <nav class="review-breadcrumb" aria-label="Breadcrumb"><RouterLink to="/taskboard"><UIcon name="i-lucide-arrow-left" />Taskboard</RouterLink><span aria-hidden="true">/</span><span>Feature request review</span></nav>
+  <section class="feature-review" aria-labelledby="review-title" @click="revealEvidence">
+    <nav class="review-breadcrumb" aria-label="Breadcrumb"><RouterLink to="/workboard"><UIcon name="i-lucide-arrow-left" />Workboard</RouterLink><span aria-hidden="true">/</span><span>Feature request review</span></nav>
     <header class="review-heading">
       <div><h1 id="review-title" tabindex="-1">{{ data ? review.title : 'Review a feature request' }}</h1></div>
       <div class="review-header-actions"><UButton v-if="data" :to="conversation" color="neutral" variant="outline" icon="i-lucide-message-circle">Open conversation</UButton><UButton color="neutral" variant="ghost" icon="i-lucide-refresh-cw" :loading="refreshing" :disabled="!state.unlocked" @click="refresh">Refresh review</UButton></div>
@@ -70,8 +77,8 @@ function requestChanged(value: WorkerRequest | null) {
       <ol v-if="!data.request?.delivery" class="review-stages" aria-label="Feature request progress">
         <li v-for="(stage, index) in review.stages" :key="stage.id" :class="'stage-' + stage.state"><span class="stage-number" aria-hidden="true"><UIcon v-if="stage.state === 'complete'" name="i-lucide-check" /><template v-else>{{ index + 1 }}</template></span><div><strong>{{ stage.label }}</strong><span class="stage-state">{{ stageLabels[stage.state] }}</span><p>{{ stage.detail }}</p></div></li>
       </ol>
+      <WorkflowTimeline v-if="data.request?.delivery" :subject="data.request" />
       <nav class="review-sections" aria-label="Review sections"><a href="#review-goal">Accepted request</a><a v-if="data.request?.delivery" href="#review-progress">Delivery progress</a><a href="#review-changes">{{ data.task ? 'Changes' : 'Result' }}</a><a href="#review-checks">Checks</a><a href="#review-decision">Decision</a><a v-if="data.request?.delivery" href="#review-activity">Activity</a><a v-if="data.shared" href="#review-handoff">Team handoff</a></nav>
-      <DeliveryRunPanel v-if="data.request?.delivery" :request="data.request" />
       <section id="review-goal" class="review-section" aria-labelledby="review-goal-title">
         <div class="section-heading"><h2 id="review-goal-title">Accepted request</h2><span v-if="data.request" class="section-caption">Scope revision {{ data.request.inputRevision }}</span></div>
         <AcceptedModelSelection :selection="review.selection" />
@@ -104,14 +111,15 @@ function requestChanged(value: WorkerRequest | null) {
         <RequestGatePanel v-if="data.request" :key="data.request.id" :request-id="data.request.id" :session-id="data.session.id" :feature-source="review.identity.source" :summary="false" :disabled="stale || review.ownership.readOnly" @change="requestChanged" />
         <p v-else class="section-caption">No retained request checks are available for this conversation. Inspect its result and execution history before taking action.</p>
       </section>
+      <details v-if="data.request?.delivery" class="review-technical"><summary>Delivery progress & retained Git checkpoints</summary><DeliveryRunPanel :request="data.request" /></details>
       <section v-if="data.shared" id="review-handoff" class="review-section" aria-labelledby="review-handoff-title">
         <h2 id="review-handoff-title">Team handoff</h2><p>Publication: <strong>{{ data.shared.publication === 'synced' ? 'Published to shared Git' : data.shared.publication === 'pending' ? 'Waiting to publish' : 'Publication needs attention' }}</strong></p>
         <p v-if="data.shared.error" class="error-text">{{ data.shared.error }}</p>
         <dl class="review-identities"><div v-if="data.shared.featureBranch"><dt>Feature branch</dt><dd>{{ data.shared.featureBranch }}</dd></div><div v-if="data.shared.reviewNote"><dt>Review note in the project</dt><dd>{{ data.shared.reviewNote }}</dd></div><div v-if="data.shared.taskNote"><dt>Task note for team input</dt><dd>{{ data.shared.taskNote }}</dd></div></dl>
         <p class="section-caption">The team reviews the shared notes and feature branch before merging. Publication does not merge changes.</p>
       </section>
-      <FeatureRequestNote :key="data.session.id" :session="data.session" />
-      <RequestActivityPanel v-if="data.request?.delivery" :request-id="data.request.id" :revision="data.request.revision" />
+      <details class="review-technical"><summary>Feature Request Markdown & progress record</summary><FeatureRequestNote :key="data.session.id" :session="data.session" /></details>
+      <details v-if="data.request?.delivery" class="review-technical"><summary>Request activity & worker notifications</summary><RequestActivityPanel :request-id="data.request.id" :revision="data.request.revision" /></details>
       <details class="review-technical"><summary>Technical identity and retained context</summary><dl class="review-identities"><div v-for="(value, key) in review.identity" :key="key"><dt>{{ key }}</dt><dd>{{ value || 'Not recorded' }}</dd></div><div v-if="data.task?.worktree"><dt>Worktree</dt><dd>{{ data.task.worktree }}</dd></div><div v-if="data.task?.baseCommit"><dt>Base commit</dt><dd>{{ data.task.baseCommit }}</dd></div></dl></details>
     </template>
   </section>

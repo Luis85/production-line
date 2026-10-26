@@ -23,7 +23,7 @@ merging.
 | You want to… | Start here |
 | --- | --- |
 | Start a standalone worker in its own home | [Archive-to-main-checkout quick start](#start-a-dedicated-worker-home) |
-| Install a worker directly in an existing project | [Project-worker setup](#install-a-project-worker) |
+| Bring an existing 0.16 worker into WerkHome | [Retained-state adoption](docs/how-to/project-worker.md#existing-standalone-installations) |
 | Work locally from Markdown with review before merge | [Local delivery worker](docs/explanation/local-delivery-worker.md) |
 | Explicitly opt into GitHub PRs and Releases | [Optional GitHub release workflow](docs/how-to/deliver-worker-release.md) |
 | Let a team submit requests through Git and Obsidian | [Shared Markdown queue](docs/how-to/shared-feature-intake.md) |
@@ -41,16 +41,17 @@ when working with an older installation.
 ## Start a dedicated worker home
 
 Use Node 24.x, Git and a complete verified runtime archive containing the standalone
-`worker.mjs` launcher. Extract it into a fresh worker home, preserving its
-`werk-<version>` top directory. From the outer home, start the prebuilt worker:
+`worker.mjs` launcher. Extract the archive directly into a fresh WerkHome; there
+is no inner version folder. Start the prebuilt worker:
 
 ```sh
-node ./werk-<version>/worker.mjs
+node ./worker.mjs
 ```
 
-Replace `<version>` with the extracted version. The current directory is its home;
+The launcher's directory is its Home regardless of the current working directory;
 `--home PATH` selects it explicitly. The worker opens its webview and keeps private
-state in `<home>/.werk/worker`. Startup prints the local URL and private credential
+state in `<home>/state/worker`, visible cloned repositories in `<home>/projects/`
+and replaceable prebuilt files in `<home>/runtime/`. Startup prints the local URL and private credential
 file path; unlock locally without putting the token in the URL. This starts the
 standalone worker; no project-local `init`, npm step or Factory fleet is needed.
 
@@ -67,76 +68,18 @@ archive-to-main journey. A newly built candidate archive and the currently publi
 released binary are separate artifacts; use the matching version's documentation.
 GitHub PRs and Releases remain optional committed/approved integrations.
 
-## Install a project worker
+## Existing project-local workers
 
-Native workers require **Node.js 24.x**. The download command also needs `curl`
-and `tar` on PATH. From a directory for downloaded releases:
+The new runtime uses one central WerkHome and retires project-local worker
+installation. Projects contain source and committed workflow files; they do not
+need runtime copies, private worker `.env` files or `init`.
 
-Linux/macOS (Bash):
-
-```sh
-curl -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs &&
-  node werk-install.mjs --no-start
-```
-
-Windows (PowerShell):
-
-```powershell
-curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs
-if ($LASTEXITCODE -eq 0) { node werk-install.mjs --no-start }
-```
-
-The installer verifies a version-pinned archive and its extracted files, then
-creates `werk-<version>/`. Existing version directories are preserved. The
-prebuilt runtime needs no npm installation, compiler or administrator privileges.
-You can also download and verify a runtime archive from
-[GitHub Releases](https://github.com/Luis85/production-line/releases); choose the
-runtime asset, rather than GitHub's source-code archive.
-
-Next, **open a terminal in your team's project directory**. Replace the release
-path below with the directory created by the installer. Initialization defaults
-to `codex-cli` (Linux/macOS). For Claude Code, including native Windows, use
-`init --provider claude-cli` instead. This selection also sets the provider in the
-new request template; changing the connection later does not rewrite that template.
-
-```sh
-node /path/to/werk-release/bin/apps/worker/cli.mjs init
-node bin/apps/worker/cli.mjs run
-```
-
-Initialization installs `bin/apps/worker`, a private `.env`, a shareable
-`.env.example`, configuration, a Feature Request template, readiness/completion
-rules, an Obsidian Base and the offline **Create Feature Request** authoring kit.
-Choose a request folder with `init --features-dir requests/features`; the default
-is `features`. Keep `.env`, provider credentials and private state out of Git.
-
-The worker prints its local URL. To use the webview, unlock it with
-`WERK_WORKER_TOKEN` from your project's `.env`. The token is never put in a browser
-URL. `run` stays in the terminal; Ctrl+C stops it. Use `start`, `status` and `stop`
-for background operation.
-
-Before submitting shared work:
-
-1. Sign in to Claude Code or Codex CLI on the worker machine, or configure an API
-   provider. Check the connection in **Settings → Providers & accounts**.
-2. Review the detected project repository and explicitly accept it. Configure
-   the repository, remote and shared intake branch.
-3. Review the model's file, command and MCP permissions and the required project
-   checks. A provider login does not grant tool access.
-4. Review and commit the generated `.werk/delivery-policy.json` with the shared
-   template, authoring kit and ready/done rules. Approve the exact committed policy
-   in **Settings → Project delivery**. New project policies require a structured
-   readiness assessment before implementation.
-5. Push the shared setup files, then connect shared intake using the
-   [setup guide](docs/how-to/shared-feature-intake.md#connect-the-worker). For local intake,
-   commit and approve the policy before submitting canonical requests as well.
-
-All setup controls are also available through the CLI. The
-[project-worker guide](docs/how-to/project-worker.md) covers browser-free setup,
-Docker without host Node, existing repositories, upgrades and environment files.
-Portable apps include an npm-compatible `package.json`; run
-`npm --prefix bin/apps/worker run` to list the available scripts. No npm install
-is needed.
+An existing 0.16 installation must be stopped and inspected before adoption. Use
+`node worker.mjs migration plan --state-dir ABSOLUTE_OLD_STATE` from the new Home,
+then explicitly adopt the selected stopped state. Adoption retains its absolute
+paths and writes a private selection; it does not move or delete old projects,
+journals or worktrees. Follow [the adoption guide](docs/how-to/project-worker.md#existing-standalone-installations)
+and keep the old files and a verified backup until recovery is resolved.
 
 ## One Feature Request throughout the workflow
 
@@ -181,13 +124,11 @@ retries, conflicts and human review.
 
 ### Working locally
 
-For a worker that watches your own folder, choose `init --intake local`. New
-`worker.request/v1` notes start as drafts; set `intent: submit` after writing the
-acceptance criteria and approved paths. The worker pins the committed project
-policy, implements in an owned worktree, runs required checks and creates a local
-review note. Accept the exact candidate through Markdown or the webview, then
-explicitly approve its merge into the displayed main checkout. Older review-only
-policies and manual Git integration retain their established behavior. Local intake does not automatically push branches or notes.
+New Home requests use the project's committed template and shared Git handoff.
+Legacy local request records retain their accepted source/intent and policy
+semantics; they are not a new project-installation option. Review the exact
+candidate and explicitly approve the displayed main-checkout merge. Acceptance
+alone does not mutate the checkout or establish delivered-increment velocity.
 A project can explicitly opt into [GitHub candidate publication](docs/how-to/publish-worker-candidates.md)
 through committed integration policy and local approval of its exact digest.
 Each authorized push or hosting-service PR retains its own recorded outcome.
@@ -200,7 +141,7 @@ The [local delivery guide](docs/explanation/local-delivery-worker.md) explains q
 profiles, dependencies, pause and interruption recovery. Both intake modes retain
 the same Feature Request throughout execution and review.
 
-## Create requests through Markdown or chat
+## Create requests through Markdown or Workboard
 
 ### From any team member's clone
 
@@ -227,7 +168,7 @@ templates and rules are configurable; see [team authoring](docs/how-to/team-feat
 
 ### From the worker webview
 
-Open **Taskboard → New request**, describe the outcome and choose **Prepare
+Open **Workboard → New Feature Request**, describe the outcome and choose **Prepare
 request**. This prepares the committed template without invoking a model. Fill
 in the request details and use **Check readiness**, then **Save draft to Git** or
 **Mark ready and publish**. Shared intake picks up that same note.
@@ -253,9 +194,10 @@ does not merge the feature branch.
 
 ## Inspect and configure the worker
 
-The **Taskboard** shows current work, queue and capacity. **Workflow** shows
+The **Workboard** leads with Feature Requests, live progress and review.
+**Projects** keeps visible clone paths and guided setup one click away. **Workflow** shows
 recorded delivery stages, confirmed-increment velocity and measurement coverage.
-**Metrics** explains measured consumption and execution activity; **History**
+Secondary **Metrics** explains measured consumption and execution activity; **History**
 keeps previous runs and their evidence. **Settings** holds the worker's operating
 configuration.
 
@@ -343,7 +285,7 @@ application or npm install.
 3. Confirm registration in the worker and the Orchestrator's worker list. Review
    **Settings → Execution profiles**. To edit them, pause and drain the worker,
    save the profiles, wait for the Orchestrator's acknowledgment, then resume
-   new starts on Taskboard.
+   new starts on Workboard.
 4. In the Orchestrator, choose automatic routing to eligible workers or a manual
    worker destination. Submit a small **simulation** using the line's project ID
    and an advertised provider/profile. Inspect its evidence and expect the
@@ -377,10 +319,10 @@ owned by that line.
    [private credential example](docs/how-to/assemble-independent-components.md#start-factory-with-a-private-line-credential).
    Restart Factory with the updated environment after adding or rotating a line
    credential.
-2. Start the Factory from the project directory with its own state and port:
+2. Start the Factory from Home with its own state and port:
 
    ```sh
-   node /path/to/werk-release/bin/apps/factory/cli.mjs start --state-dir .werk/factory --port 3100
+   node /path/to/WerkHome/runtime/bin/apps/factory/cli.mjs start --state-dir /path/to/WerkHome/state/factory --port 3100
    ```
 
 3. Open the returned URL and sign in with the Factory's own admin token. Create

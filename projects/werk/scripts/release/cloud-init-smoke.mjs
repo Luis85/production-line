@@ -15,7 +15,7 @@ if (args.length !== 4 || args[0] !== '--root' || args[2] !== '--archives') throw
 if (process.platform !== 'linux') throw Error('VM qualification requires a Linux host');
 const root = resolve(args[1]), archives = resolve(args[3]);
 await verifyRelease(root);
-const { prepare, render } = await import(pathToFileURL(join(root, 'scripts/infrastructure/cloud-init.mjs')));
+const { prepare, render } = await import(pathToFileURL(join(root, 'runtime/scripts/infrastructure/cloud-init.mjs')));
 const version = JSON.parse(await readFile(join(root, 'release-manifest.json'), 'utf8')).version;
 const archive = join(archives, `werk-${version}.tar.gz`);
 const scratch = await mkdtemp(join(tmpdir(), 'werk-vm-'));
@@ -68,7 +68,7 @@ try {
     const stream = createReadStream(archive); stream.on('error', () => response.destroy()); stream.pipe(response);
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
-  const prepared = await prepare({ file: join(root, 'examples/system.yaml'), architecture: 'x86_64', 'release-version': version, 'release-url': `https://10.0.2.100/v${version}/werk-${version}.tar.gz`, 'release-sha256': archiveHash, 'node-url': 'https://nodejs.org/dist/v24.19.0/node-v24.19.0-linux-x64.tar.xz', 'node-sha256': '14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647' });
+  const prepared = await prepare({ file: join(root, 'runtime/examples/system.yaml'), architecture: 'x86_64', 'release-version': version, 'release-url': `https://10.0.2.100/v${version}/werk-${version}.tar.gz`, 'release-sha256': archiveHash, 'node-url': 'https://nodejs.org/dist/v24.19.0/node-v24.19.0-linux-x64.tar.xz', 'node-sha256': '14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647' });
   const cloud = JSON.parse((await render(prepared)).cloudConfig.replace(/^#cloud-config\n/, ''));
   // Only fixture access changes: keep the generated installer and service unchanged.
   cloud.ssh_authorized_keys = [(await readFile(key + '.pub', 'utf8')).trim()];

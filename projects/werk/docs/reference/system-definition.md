@@ -87,13 +87,13 @@ authentication, patch verification and human review.
 Native entry point:
 
 ```text
-node werk.mjs system plan --file examples/system.yaml --json
-node werk.mjs system setup --file examples/system.yaml
-node werk.mjs system up --file examples/system.yaml
-node werk.mjs system start --file examples/system.yaml
-node werk.mjs system status --file examples/system.yaml --json
-node werk.mjs system doctor --file examples/system.yaml --json
-node werk.mjs system stop --file examples/system.yaml
+node werk.mjs system plan --file runtime/examples/system.yaml --json
+node werk.mjs system setup --file runtime/examples/system.yaml
+node werk.mjs system up --file runtime/examples/system.yaml
+node werk.mjs system start --file runtime/examples/system.yaml
+node werk.mjs system status --file runtime/examples/system.yaml --json
+node werk.mjs system doctor --file runtime/examples/system.yaml --json
+node werk.mjs system stop --file runtime/examples/system.yaml
 ```
 
 Use `plan` to validate and inspect the effective topology. `setup` prepares private
@@ -111,7 +111,7 @@ or `./werk-docker.ps1`, with `--environment docker` when the file selects native
 No host Node/npm is required for Docker. Both environments support the declared
 1–8 lines and 1–8 workers per line; these are system-topology limits, separate from
 the legacy single-line Docker helper's one-worker limit. The default state location is
-`.werk-system/<id>` beside the release; `--state-dir PATH` selects a different
+`Home/state/system` through the stable Home launcher; `--state-dir PATH` selects a different
 system state directory, not a parent directory containing another ID level. Keep
 the file/environment/state selection consistent for every command. Native
 `status`, `doctor` and `stop` also accept `--state-dir PATH` without `--file`,
@@ -193,7 +193,7 @@ for a separate deployment.
 
 On Linux, Docker uses the same on-disk hierarchy in private bind state. Windows
 Docker stores that hierarchy in an owned named volume with a host pointer. Use
-`./werk-docker.ps1 system credentials --file examples/system.yaml --environment docker`
+`./werk-docker.ps1 system credentials --file runtime/examples/system.yaml --environment docker`
 to export private login files into a new host `credential-export` directory:
 `factory/credentials.json` and `lines/<id>/credentials.json`. The export preserves
 current-user-only ACLs, reports paths rather than secrets, and refuses an existing

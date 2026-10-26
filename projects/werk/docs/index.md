@@ -7,8 +7,10 @@ these maintained guides alongside the release’s component API and live example
 
 Start from [a release archive in a dedicated worker home](tutorials/worker-home-to-main.md),
 create the Feature Request in its webview and follow it through review and an
-explicit merge into the displayed main checkout. Direct project installation is
-also available through [CLI setup](how-to/project-worker.md). For a team queue,
+explicit merge into the displayed main checkout. Projects are visible beneath
+WerkHome; worker runtime and private state stay central. Existing 0.16 workers
+need [explicit retained-state adoption](how-to/project-worker.md#existing-standalone-installations).
+For a team queue,
 [connect the shared Markdown queue](how-to/shared-feature-intake.md). Team members
 can author requests and answer Task notes without connecting to the worker.
 Configured local providers execute approved work; the Factory/orchestrator's
@@ -22,7 +24,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 
 - [Archive to main checkout](tutorials/worker-home-to-main.md): dedicated worker home, webview request/setup, observable implementation, increment review and explicit plain-Git merge permission.
 
-- [Local delivery request](tutorials/worker-feature-lifecycle.md): submit Markdown, inspect isolated implementation and accept an exact tested candidate without shared Git publication.
+- [Retained local delivery evidence](tutorials/worker-feature-lifecycle.md): understand legacy records and current request/evidence boundaries.
 - [Worker workflow and run metrics](reference/worker-run-metrics.md): confirmed-increment velocity, delivery coverage, paired snapshots and durable history.
 
 - [Prepare a Linux VM deployment](tutorials/linux-vm-first-task.md): Ubuntu cloud-init, verified artifacts and SSH access.
@@ -40,10 +42,10 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Optionally deliver through GitHub Releases](how-to/deliver-worker-release.md): default Git/Markdown handoff and an explicitly enabled GitHub PR/release extension.
 
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
-- [Install a project worker](how-to/project-worker.md): app, private environment, provider and team authoring kit.
+- [Set up projects in WerkHome](how-to/project-worker.md): visible clones, committed workflow and explicit adoption of retained 0.16 state.
 - [Connect the shared Markdown queue](how-to/shared-feature-intake.md): CLI setup, committed requests, Task answers and PullRequest review handoffs.
 - [Hand off an overnight batch](how-to/shared-feature-intake.md#work-during-the-day-implement-overnight): daytime drafting, unattended implementation and morning review.
-- [Operate a project worker](how-to/operate-project-worker.md): checklist, Windows PowerShell 5.1 JSON files, task worktrees, tool limits and answers.
+- [Operate a worker](how-to/operate-project-worker.md): Home lifecycle, Windows PowerShell JSON files, task worktrees, tool limits and answers.
 - [Author feature requests with your team](how-to/team-feature-authoring.md): portable skill, editable template, shared checks, optional model Ready Checks, definition prompts and Obsidian queue; no worker connection required.
 - [Integrate with Claude and Codex](how-to/project-agent-integrations.md): reviewed project skills and guarded synchronization.
 - [Monitor long-running workers](how-to/monitor-long-running-worker.md): duration budgets, resource warnings and durable alert history.
@@ -54,7 +56,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Answer questions and resume requests](how-to/answer-and-resume-worker.md): guarded answers, cancellation, checkpoints and event replay.
 - [Worker–model interaction contract](reference/model-interaction.md): capabilities, typed results, durable events and recovery.
 - [Markdown feature-request contract](reference/feature-requests.md)
-- [Use the worker webview](how-to/use-worker-webview.md): Taskboard, Workflow, Metrics, History and Settings.
+- [Use the worker webview](how-to/use-worker-webview.md): Workboard, Projects, Workflow and Settings; Metrics and History retain secondary evidence.
 - [Implement a feature with the worker](how-to/implement-feature.md): approved worktree changes, required checks, repair and review.
 - [Manage model tools](how-to/manage-model-tools.md): built-in grants, MCP connections and revocation.
 - [Set a worker consumption limit](how-to/worker-consumption-limits.md): daily/monthly token allowance, worker share, reservations and recovery.
@@ -86,7 +88,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Shared Vue webview architecture](reference/webview-architecture.md): reusable Nuxt UI layouts/components, state boundaries and independent builds.
 
 - [Docker Agent definition profiles](reference/agent-definitions.md): compatibility and per-task selection.
-- [Portable Node apps and automation CLI](reference/portable-apps.md): copy one app into any project.
+- [Prebuilt apps and automation CLI](reference/portable-apps.md): central Home worker and independently deployed components.
 
 - [Infrastructure renderer](reference/infrastructure.md)
 

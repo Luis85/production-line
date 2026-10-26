@@ -9,6 +9,7 @@ import { authoringBase, authoringDefinitionPrompt, authoringReadyReviewPrompt, a
 import type { ProviderId } from '../application/provider-contract.js';
 import { FeatureGitIo, gitPath, assertPublicationPath } from './features/git-io.js';
 import { loadFeatureWorkflowSnapshot } from './features/workflow.js';
+import { managedProjectLocations, type ManagedProjectLocationPort } from './managed-project-locations.js';
 import { managedProjectGit } from './managed-project-git.js';
 import type { RepositoryRoot } from './repositories-git.js';
 
@@ -18,11 +19,11 @@ function parsed(content: string, label: string): unknown {
   try { return JSON.parse(content); } catch { throw new DomainError('invalid_input', `The committed ${label} must contain valid JSON. Preserve it and correct its contents before setup.`); }
 }
 /** Git remains an edge adapter: this service only installs generated missing files in private publication worktrees. */
-export function managedProjectSetupGit(stateDirectory: string, project: ManagedProject, signal: AbortSignal) {
-  const managed = managedProjectGit(stateDirectory);
-  const io = new FeatureGitIo({ repository: project.path, remote: 'origin', stateDirectory: join(stateDirectory, 'projects', project.id, 'setup') });
+export function managedProjectSetupGit(stateDirectory: string, project: ManagedProject, signal: AbortSignal, locations: ManagedProjectLocationPort = managedProjectLocations(stateDirectory)) {
+  const managed = managedProjectGit(stateDirectory, locations);
+  const io = new FeatureGitIo({ repository: project.path, remote: 'origin', stateDirectory: join(project.mode === 'clone' ? locations.placement(project).privateDirectory : join(stateDirectory, 'blocked-external-setup'), 'setup') });
   async function checked() {
-    if (project.mode !== 'clone' || project.path !== managed.location(project.id)) conflict('Workflow setup is available only for worker-owned managed clones. Preserve and configure adopted developer checkouts through their normal Git workflow.');
+    if (project.mode !== 'clone') conflict('Workflow setup is available only for worker-owned managed clones. Preserve external checkout history and register a separate isolated remote clone.');
     if (!(await managed.inspect(project, signal)).ready) conflict('Restore the registered worker checkout before setting up its workflow.');
     return io.root(signal);
   }

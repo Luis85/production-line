@@ -2,6 +2,33 @@
 
 Date: 2026-10-25. Scope: the standalone worker's Git/Markdown delivery workflow and explicitly enabled optional GitHub extension added to PR #53's domain/process concept. This ledger distinguishes the required acceptance target from evidence obtained during implementation. It is not a release approval.
 
+## WerkHome follow-up acceptance — 2026-10-26
+
+The expanded Home/workspace increment changes installation and the primary UI.
+The earlier archive/browser evidence below qualifies its original version-folder
+layout and Taskboard; it does not automatically qualify this replacement. Current
+instructions are [archive to main checkout](../tutorials/worker-home-to-main.md).
+No new public release or live-provider qualification is implied.
+
+| Surface | Required acceptance for this increment | Evidence boundary |
+| --- | --- | --- |
+| Fresh Home | Verify ZIP/TAR inventory; extract directly into an empty Home with root launchers/docs, unversioned runtime, visible projects and private state | Initial flat ZIP browser/native fixture passed against hash `8e6b9759…f8e93de3e`; development sourceCommit is null, final committed artifact remains separate |
+| Stable startup | Invoke root worker from another cwd; Home remains launcher-anchored, one state/worker instance, secure unlock | Initial extracted Home startup/unlock and restart identity/credential smoke passed; final lock/cwd contracts are qualified separately |
+| Projects | Clone remote directly to projects/id; folder/poll configuration drives intake; preview and approve setup, then approve exact committed policy | Initial native/browser run passed real visible clone, setup/policy and committed request handoff; latest configuration/recovery contracts need their own results |
+| Workboard | After setup, open Workboard; create a project Feature Request through committed-template Git authoring; show live stages/activity and review | Initial actual archive/browser flow passed request prepare/edit/readiness/Git publication, progress and review; final responsive/keyboard cases remain separate |
+| Review and integration | Diff/checks/current human outcomes lead; exact main path/branch/head consent produces a confirmed clean merge | Initial actual archive/browser independent-check/human-acceptance/exact-main merge passed with deterministic Claude protocol fixture |
+| Workflow | Project/completion filters, UTC Monday velocity, known samples/unknown coverage, honest unmeasured business outcomes | Recorded-data contracts and browser empty/error/stale/filter cases required; previous metric definitions retain their scope |
+| Adoption | Read-only plan, explicit compatible stopped standalone-state selection, absolute retained paths, ambiguous/live/incompatible refusal | New migration fixtures required; project-installed state needs old-runtime recovery/export, with no relocation/data-loss assurance |
+| Updates | Verified candidate plan and exact guarded apply replace owned payload without replacing projects or unrelated private state | Initial actual CLI selective apply/stop, credential/project preservation, rollback and candidate-launcher runtime-gap recovery passed; no automatic network discovery claim |
+| Native execution | Same new Home journey on Windows with real authenticated Claude Code CLI | Pending until directly observed; deterministic protocol fixtures remain separate |
+
+Initial observed results and two unmodified Workboard screenshots are retained
+in the [flat Home proof](../evidence/werk-home-2026-10-26/README.md). The exact ZIP
+SHA-256 is `8e6b9759aa7eaee019e0f4dd69e88b36bc78e0e434d3e967b710e52f8e93de3e`.
+These Linux/Chromium protocol fixtures do not qualify live Claude or Windows.
+Record final committed-artifact and latest hardening results on the implementation
+PR; preserve both this initial snapshot and earlier version-folder evidence.
+
 ## Primary archive-to-main-checkout journey
 
 The required user journey is literal: obtain the release archive → extract into a dedicated worker home → start the worker → create the Feature Request in its webview → observe Kanban progress, Git commits/pushes, webview activity/notifications and updates to the same Feature Request → review the delivered increment → explicitly allow the worker to merge that exact increment into the displayed main checkout.

@@ -1,3 +1,4 @@
+import { assertManagedProjectIsolation } from './workspace-managed-isolation.js';
 import type { SharedFeatureIntake } from '../application/shared-feature-intake.js';
 import { realpath } from 'node:fs/promises';
 import { DomainError } from '../../shared/errors.js';
@@ -7,7 +8,7 @@ import { runLocalMerge } from '../application/local-merge-runtime.js';
 import type { LocalMergePort } from '../application/local-merge-contracts.js';
 import type { RequestCommand } from '../application/request-gates.js';
 import { createLocalMergeGit } from '../infrastructure/local-merge-git.js';
-import { authorizeDeliveryPolicy } from './workspace-delivery-policy.js';
+import { authorizeIsolatedDeliveryPolicy as authorizeDeliveryPolicy } from './workspace-delivery-policy.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import type { WorkspaceContext } from './workspace-context.js';
 
@@ -17,7 +18,9 @@ export function localMergeActive(workspace: WorkspaceContext, repositoryId: stri
 export async function closeLocalMerges(workspace: WorkspaceContext) { await Promise.allSettled([...operations(workspace).values()].map(value => value.promise)); }
 async function subject(workspace: WorkspaceContext, requestId: string) {
   const request = workspace.sessions.requests.get(requestId), selected = localMergeSubject(request);
-  const assignment = workspace.repositories.resolve(selected.repositoryId), assigned = { ...assignment, path: await realpath(assignment.path) }, task = workspace.board.executionDetail(request.owner.taskId!);
+  const assignment = workspace.repositories.resolve(selected.repositoryId);
+  await assertManagedProjectIsolation(workspace, assignment.id, assignment.path);
+  const assigned = { ...assignment, path: await realpath(assignment.path) }, task = workspace.board.executionDetail(request.owner.taskId!);
   if (task.requestId !== request.id || task.repositoryId !== selected.repositoryId || task.repository !== assigned.path) throw new DomainError('conflict', 'The accepted task no longer belongs to its assigned main checkout.');
   return { request, ...selected, assigned };
 }

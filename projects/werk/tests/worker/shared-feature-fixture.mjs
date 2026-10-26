@@ -9,7 +9,7 @@ import { WorkerRequestJournal } from '../../src/worker/dist/worker/infrastructur
 import { defaultFeatureWorkflow, defaultFeatureCheck, featureGateInput } from '../../src/worker/dist/worker/application/feature-workflow.js';
 import { validateFeatureReadiness, loadFeatureWorkflowSnapshot } from '../../src/worker/dist/worker/infrastructure/features/workflow.js';
 import { validateFeatureReviewEligibility } from '../../src/worker/dist/worker/infrastructure/features/review-eligibility.js';
-import { readReadyReviewResponse } from '../../src/worker/dist/worker/infrastructure/features/ready-review-document.js';
+import { readReadyReviewResponse, writeReadyReviewAnswer } from '../../src/worker/dist/worker/infrastructure/features/ready-review-document.js';
 import { sharedSource, renderSharedSource } from '../../src/worker/dist/worker/infrastructure/features/shared-source.js';
 
 const template = `---
@@ -53,7 +53,7 @@ const patch = 'diff --git a/src/navigation.ts b/src/navigation.ts\n--- a/src/nav
 
 export async function fixture(t, options = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-shared-coordinator-')));
-  const controls = { claimAckBlocked: false, submitAckBlocked: false, patchAckBlocked: false, changeAfterClaim: false, saveBlocked: false, admit: true, inspect: null, repositoryFailures: 0 };
+  const controls = { claimAckBlocked: false, submitAckBlocked: false, patchAckBlocked: false, changeAfterClaim: false, saveBlocked: false, answerSaveAckBlocked: false, admit: true, inspect: null, repositoryFailures: 0 };
   const events = [], repositories = new Map(), tasks = new Map();
   const lifecycleAttempts = [], patchAttempts = [], submits = [], submittedRecords = [];
   let counter = 0, primaryExecutions = 0, featureCommits = 0, journal, requests, headGate, diagnosticGate, reviewSaveGate, reviewConflictGate;
@@ -95,6 +95,7 @@ export async function fixture(t, options = {}) {
         if (controls.claimAckBlocked) throw Error('Fixture lost claim acknowledgment');
         events.push('lifecycle-confirmed'); return result;
       },
+      async publishReadyReviewAnswer(write) { return this.publishLifecycle(write); },
       async publishPatch(write) {
         patchAttempts.push(structuredClone(write)); events.push('patch-attempt');
         let result = repo.features.get(write.operationId);
@@ -109,6 +110,7 @@ export async function fixture(t, options = {}) {
     async save(state) {
       if (controls.saveBlocked) throw Error('Fixture state write failure');
       await journal.save(state);
+      if (controls.answerSaveAckBlocked && state.records.some(record => record.readyReviewAnswers?.some(item => item.status === 'pending'))) throw Error('Fixture lost answer intent save acknowledgement');
       if (reviewConflictGate && state.records.some(record => record.readyReviewState?.status === 'passed' && !record.readyReviewState.implementationReady && record.claimed && !record.pending)) {
         const gate = reviewConflictGate; reviewConflictGate = undefined; gate.enter(); await gate.wait;
       }
@@ -120,7 +122,7 @@ export async function fixture(t, options = {}) {
     loadWorkflow: (repo, commit, configPath) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (at, path) => repo.readBlob(at, path) }),
     readyReview: options.readyReview, resolveSelection: options.resolveSelection, prepare: options.prepare,
     readyReviewEligible: (markdown, snapshot, provider) => validateFeatureReviewEligibility(markdown, snapshot, provider ?? options.defaultProvider?.()),
-    readyReviewResponse: readReadyReviewResponse,
+    readyReviewResponse: readReadyReviewResponse, readyReviewAnswer: writeReadyReviewAnswer,
     ready: (markdown, snapshot, provider) => { options.onReady?.(); return validateFeatureReadiness(markdown, snapshot.readyCheck, provider ?? options.defaultProvider?.(), snapshot.template); },
     source: sharedSource,
     renderSource: renderSharedSource,
@@ -146,7 +148,7 @@ export async function fixture(t, options = {}) {
   await intake.configure(config, 0);
   t.after(async () => { await intake.close(); requests.close(); await rm(directory, { recursive: true, force: true }); });
   return {
-    directory, config, controls, events, repositories, tasks, lifecycleAttempts, patchAttempts, submits, submittedRecords, addRepository, commitFiles,
+    directory, config, controls, ports, events, repositories, tasks, lifecycleAttempts, patchAttempts, submits, submittedRecords, addRepository, commitFiles,
     get intake() { return intake; }, get requests() { return requests; }, get primaryExecutions() { return primaryExecutions; }, get featureCommits() { return featureCommits; },
     async state() { return JSON.parse(await readFile(join(directory, 'shared-intake.json'), 'utf8')); },
     async restart() { await intake.close(); requests.close(); await open(); },

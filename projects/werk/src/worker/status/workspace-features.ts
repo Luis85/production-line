@@ -1,3 +1,4 @@
+import { validateSharedReadyReviewAnswer } from '../application/shared-ready-review-answer.js';
 import { sharedFeaturePolicy } from '../application/shared-feature-policy.js';
 import { gateDigest } from '../application/request-gates.js';
 import { assertLocalMergeBaseline } from './workspace-local-merge-baseline.js';
@@ -58,6 +59,14 @@ export function sharedIntakeView(workspace: WorkspaceContext, projectId?: string
   return { ...(project.primary ? withLocalHint(workspace, project.sharedRuntime.intake.view(blocked)) : project.sharedRuntime.intake.view(blocked)), ...projectView(workspace, project) };
 }
 export async function sharedIntakeCommand(workspace: WorkspaceContext, input: unknown){
+  if (input && typeof input === 'object' && (input as { action?: unknown }).action === 'answer_ready_review') {
+    const command = validateSharedReadyReviewAnswer(input), project = workspace.featureProjects.resolve(command.projectId);
+    assertNativeWorkReady(workspace);
+    if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.repositoriesUpdating) throw new DomainError('unavailable', 'Worker configuration is changing or the worker is stopping.');
+    const intake: SharedFeatureIntake = project.sharedRuntime.intake;
+    const readyReviewAnswer = await intake.answerReadyReview(command);
+    return { ...sharedIntakeView(workspace, workspace.featureProjects.id(project)), readyReviewAnswer };
+  }
   const body = object(input, 'Shared intake command', ['action', 'expectedRevision', 'config', 'id', 'projectId']);
   const projectId = body.projectId === undefined ? undefined : identifier(body.projectId, 'projectId');
   const project = workspace.featureProjects.resolve(projectId);

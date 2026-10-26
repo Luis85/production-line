@@ -3,18 +3,19 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parse } from 'yaml';
+import { legacyProjectFixture } from '../helpers/legacy-project-worker.mjs';
 import { FeatureRequests } from '../../src/worker/dist/worker/application/feature-requests.js';
 import { MarkdownFeatureFolder } from '../../src/worker/dist/worker/infrastructure/features/folder.js';
 import { cli as installed, exec, exists, git, temporary } from './project-worker-uninstall-fixture.mjs';
 
 const installer = resolve('bin/apps/worker/cli.mjs');
 const run = (cwd, entry, ...args) => exec(process.execPath, [entry, ...args], { cwd, timeout: 120000, maxBuffer: 8 * 1048576 }).then(result => JSON.parse(result.stdout));
-const init = (cwd, ...args) => run(cwd, installer, 'init', '--no-npm', ...args);
-const failure = error => String(error.stderr) + String(error.stdout);
+const init = (cwd, ...args) => legacyProjectFixture(cwd, ['--no-npm', ...args]);
+const failure = error => String(error.message) + String(error.stderr ?? '') + String(error.stdout ?? '');
 const front = raw => parse(/^---\n([\s\S]*?)\n---\n/.exec(raw)[1]);
 const read = path => readFile(path, 'utf8');
 
-test('init --intake local writes a local request template, records the choice and reports local commands', async t => {
+test('legacy local-intake fixture retains a local request template, records the choice and reports local commands', async t => {
   const cwd = await temporary(t, 'werk-local-init-'), result = await init(cwd, '--intake', 'local', '--features-dir', 'requests', '--provider', 'claude-cli');
   const template = join(cwd, 'requests/_templates/local-request.md'), raw = await read(template), data = front(raw);
   assert.equal(data.templateId, undefined); assert.equal(data.intent, 'draft'); assert.equal(data.mode, 'patch'); assert.equal(data.provider, 'claude-cli'); assert.equal(data.schema, 'worker.request/v1');
@@ -29,16 +30,16 @@ test('init --intake local writes a local request template, records the choice an
   assert.equal(await exists(join(cwd, '.werk/authoring/feature-request.mjs')), true);
 });
 
-test('repeat init keeps the recorded choice and user edits; a conflicting --intake names the file to edit', async t => {
+test('legacy fixture repair keeps the recorded choice and user edits; a conflicting --intake names the file to edit', async t => {
   const cwd = await temporary(t, 'werk-local-repeat-'); await init(cwd, '--intake', 'local');
-  const entry = join(cwd, 'bin/apps/worker/cli.mjs'), template = join(cwd, 'features/_templates/local-request.md'); await writeFile(template, '# My template\n');
-  const again = await run(cwd, entry, 'init', '--no-npm');
+  const template = join(cwd, 'features/_templates/local-request.md'); await writeFile(template, '# My template\n');
+  const again = await init(cwd);
   assert.equal(again.intake.mode, 'local'); assert.equal(await read(template), '# My template\n');
-  await assert.rejects(run(cwd, entry, 'init', '--no-npm', '--intake', 'shared'), error => /--intake shared differs from features\.intake \W*local\W* in \.werk\/worker\.json/.test(failure(error)));
+  await assert.rejects(init(cwd, '--intake', 'shared'), error => /--intake shared differs from features\.intake \W*local\W* in \.werk\/worker\.json/.test(failure(error)));
   await assert.rejects(init(await temporary(t, 'werk-local-bad-'), '--intake', 'both'), error => /--intake must be shared or local/.test(failure(error)));
 });
 
-test('default init stays shared: no local template, no intake key and the shared connection guidance', async t => {
+test('legacy default fixture stays shared: no local template, no intake key and the shared connection guidance', async t => {
   const cwd = await temporary(t, 'werk-shared-default-'), result = await init(cwd);
   assert.equal(result.intake.mode, 'shared_git'); assert.equal(result.intake.connectionRequired, true); assert.match(result.next, /provider configure|shared setup/);
   assert.equal(await exists(join(cwd, 'features/_templates/local-request.md')), false);
@@ -46,10 +47,10 @@ test('default init stays shared: no local template, no intake key and the shared
   assert.equal((await init(await temporary(t, 'werk-shared-explicit-'), '--intake', 'shared')).intake.mode, 'shared_git');
 });
 
-test('an existing shared installation refuses init --intake local without changing its configuration', async t => {
+test('legacy shared evidence refuses fixture rehydration with --intake local without changing its configuration', async t => {
   const cwd = await temporary(t, 'werk-shared-preserved-'); await init(cwd);
   const config = join(cwd, '.werk/worker.json'), before = await read(config);
-  await assert.rejects(run(cwd, join(cwd, 'bin/apps/worker/cli.mjs'), 'init', '--intake', 'local'), error => {
+  await assert.rejects(init(cwd, '--intake', 'local'), error => {
     assert.match(failure(error), /--intake local differs from features\.intake \W*shared\W* in \.werk\/worker\.json/);
     assert.match(failure(error), /stop the worker.*installed app.*finish owned shared requests and clear the shared repository binding/s);
     return true;
@@ -92,51 +93,53 @@ test('footprint and uninstall treat the local template as a generated authoring 
   assert.ok((await installed(cwd, 'uninstall', '--dry-run')).keep.some(item => item.path === path));
 });
 
-test('the help schema lists init --intake shared|local with the same choices init validates', async t => {
-  const cwd = await temporary(t, 'werk-local-help-'), setup = (await run(cwd, installer, 'help')).projectSetup;
-  assert.match(setup.command, /^init .*\[--intake shared\|local\]/);
-  assert.match(setup.intake, /--intake shared \(default\).*--intake local writes <features-dir>\/_templates\/local-request\.md/);
-  await assert.rejects(init(cwd, '--intake', 'both'), error => /--intake/.test(failure(error)));
+test('public help retires project installation and init leaves the project untouched', async t => {
+  const cwd = await temporary(t, 'werk-retired-init-'), setup = (await run(cwd, installer, 'help')).projectSetup;
+  assert.equal(setup.command, undefined); assert.equal(setup.intake, undefined); assert.match(setup.behavior, /central Werk Home.*retired/);
+  for (const args of [[], ['--intake', 'local'], ['--no-npm', '--features-dir', 'requests']]) {
+    await assert.rejects(run(cwd, installer, 'init', ...args), error => /Project-local worker installation is retired.*Werk Home.*worker\.mjs/s.test(failure(error)));
+    for (const path of ['bin', '.werk', '.env', 'package.json', 'features', 'requests']) assert.equal(await exists(join(cwd, path)), false);
+  }
 });
 
 const excludeLines = async cwd => (await read(join(cwd, '.git/info/exclude')).catch(() => '')).split(/\r?\n/);
 
-test('local init in a git checkout excludes the default review folder once and reports it', async t => {
+test('legacy local fixture in a git checkout excludes the default review folder once and reports it', async t => {
   const cwd = await temporary(t, 'werk-local-exclude-'); await git(cwd, 'init', '-q');
   const first = await init(cwd, '--intake', 'local'); assert.deepEqual(first.intake.excluded, ['/feature-reviews/']); assert.deepEqual(first.intake.warnings, []); assert.match(first.intake.next, /\/feature-reviews\/.*\.git\/info\/exclude/);
-  const again = await run(cwd, join(cwd, 'bin/apps/worker/cli.mjs'), 'init', '--no-npm'); assert.deepEqual(again.intake.excluded, ['/feature-reviews/']);
+  const again = await init(cwd); assert.deepEqual(again.intake.excluded, ['/feature-reviews/']);
   assert.equal((await excludeLines(cwd)).filter(line => line === '/feature-reviews/').length, 1);
 });
 
-test('local init keeps existing exclude entries and adds the line after a missing trailing newline', async t => {
+test('legacy local fixture keeps existing exclude entries and adds the line after a missing trailing newline', async t => {
   const cwd = await temporary(t, 'werk-local-exclude-keep-'); await git(cwd, 'init', '-q'); await writeFile(join(cwd, '.git/info/exclude'), '# mine\n/scratch/');
   await init(cwd, '--intake', 'local'); assert.equal(await read(join(cwd, '.git/info/exclude')), '# mine\n/scratch/\n/feature-reviews/\n');
 });
 
-test('local init in a linked worktree writes the shared exclude file of the main repository', async t => {
+test('legacy local fixture in a linked worktree writes the shared exclude file of the main repository', async t => {
   const main = await temporary(t, 'werk-local-exclude-main-'), linked = join(await temporary(t, 'werk-local-exclude-link-'), 'wt');
   await git(main, 'init', '-q'); await writeFile(join(main, 'README.md'), '# x\n'); await git(main, 'add', 'README.md'); await git(main, 'commit', '-q', '-m', 'init'); await git(main, 'worktree', 'add', '-q', linked);
   const result = await init(linked, '--intake', 'local'); assert.deepEqual(result.intake.excluded, ['/feature-reviews/']);
   assert.ok((await excludeLines(main)).includes('/feature-reviews/'));
 });
 
-test('local init leaves a review folder with tracked files alone and says so', async t => {
+test('legacy local fixture leaves a review folder with tracked files alone and says so', async t => {
   const cwd = await temporary(t, 'werk-local-exclude-tracked-'); await git(cwd, 'init', '-q'); await mkdir(join(cwd, 'feature-reviews')); await writeFile(join(cwd, 'feature-reviews/note.md'), '# kept\n'); await git(cwd, 'add', 'feature-reviews/note.md');
   const result = await init(cwd, '--intake', 'local'); assert.deepEqual(result.intake.excluded, []); assert.match(result.intake.warnings.join('\n'), /feature-reviews.*tracked/);
   assert.equal((await excludeLines(cwd)).includes('/feature-reviews/'), false);
 });
 
-test('local init in a project below the repository root does not touch the repository exclude file', async t => {
+test('legacy local fixture in a project below the repository root does not touch the repository exclude file', async t => {
   const root = await temporary(t, 'werk-local-exclude-sub-'), cwd = join(root, 'app'); await git(root, 'init', '-q'); await mkdir(cwd);
   const result = await init(cwd, '--intake', 'local'); assert.deepEqual(result.intake.excluded, []); assert.equal((await excludeLines(root)).includes('/feature-reviews/'), false);
 });
 
-test('local init refuses an exclude path that is not a regular file', async t => {
+test('legacy local fixture refuses an exclude path that is not a regular file', async t => {
   const cwd = await temporary(t, 'werk-local-exclude-dir-'); await git(cwd, 'init', '-q'); await rm(join(cwd, '.git/info/exclude'), { force: true }); await mkdir(join(cwd, '.git/info/exclude'), { recursive: true });
   await assert.rejects(init(cwd, '--intake', 'local'), error => /regular file/.test(failure(error)));
 });
 
-test('shared init in a git checkout and local init outside git leave exclusion alone', async t => {
+test('legacy shared fixture in a git checkout and local init outside git leave exclusion alone', async t => {
   const repo = await temporary(t, 'werk-shared-exclude-'); await git(repo, 'init', '-q'); const shared = await init(repo);
   assert.equal(shared.intake.excluded, undefined); assert.equal((await excludeLines(repo)).includes('/feature-reviews/'), false);
   const plain = await temporary(t, 'werk-local-nogit-'), result = await init(plain, '--intake', 'local');

@@ -1,56 +1,43 @@
 # Use the worker webview
 
-A worker can run on its own machine without a Factory or orchestrator. From an
-extracted release, with Node 24 installed, start it with one command:
+Extract a verified prebuilt archive directly into a fresh WerkHome and start
+`node worker.mjs`. Node24 and Git are required; no npm install, source checkout or
+project-local worker is needed. The root launcher's directory anchors Home,
+regardless of cwd. Startup prints the secure local URL and private credential-file
+path. Fresh private state is `Home/state/worker`; cloned repositories are visible
+at `Home/projects/<id>`, and replaceable application files are in `Home/runtime`.
 
-```sh
-node bin/apps/worker/cli.mjs run
-```
-
-Open `http://127.0.0.1:4100`. The release includes the built Vue 3 / Nuxt UI
-webview; no npm install or frontend server is needed. State defaults to
-`.werk/worker` in the current project. Use `--state-dir /private/worker` and `--port 4201` for
-another worker. Keep the process running; Ctrl+C stops it gracefully. Each worker
-executes one attempt at a time for its Feature Requests, including conversations,
-approved-file implementations and remote assignments. For parallel work, start
-separate workers; see the
-[native and Docker examples](assemble-independent-components.md#scale-with-separate-workers).
-
-Five primary pages organize the workspace; a request opens its own review page:
+Four primary pages organize the workspace:
 
 | Page | Use it to |
 | --- | --- |
-| Taskboard · `/taskboard` | Give instructions, follow current work and answer questions. |
-| Workflow · `/workflow` | Follow recorded delivery flow, weekly increments and evidence coverage. |
-| Metrics · `/dashboard` | Inspect consumption, execution evidence and worker health. |
-| History · `/history` | Find saved tasks and retained execution evidence. |
-| Feature Request review · `/review?session=…` | Inspect one request’s accepted goal, changes, checks, decision and handoff. |
-| Settings · `/settings` | Configure providers, queues, tools, repositories and intake. |
+| Workboard · `/workboard` | Prepare Feature Requests, follow live stages and open review/merge actions. |
+| Projects · `/projects` | Register a remote clone, inspect its visible path and complete guarded workflow setup. |
+| Workflow · `/workflow` | Inspect recorded delivery flow, weekly increments and measurement coverage. |
+| Settings · `/settings` | Configure provider accounts, capacity, tools and optional integrations. |
 
-Taskboard opens after unlock. Its interaction panel sits beside the board on wide
-screens and follows it on narrow screens. Existing `/chat` bookmarks preserve task
-links; `/monitoring-status` opens Metrics. Earlier Dashboard setup anchors redirect
-to Settings. Choose **Tour** for a replayable introduction; it does not submit
-work or change configuration.
+Workboard opens after unlock/setup. **New Feature Request** opens project Git
+authoring on demand. Metrics (`/dashboard`) and History (`/history`) remain
+secondary evidence links. A request opens its own Review page for diff, checks and
+the current human decision. `/taskboard` and `/chat` bookmarks redirect to
+Workboard preserving their queries; `/monitoring-status` opens Metrics. Choose
+**Tour** for a replayable introduction that changes no worker configuration.
 
 ## Use requests from project files
 
 The Feature Request is the central workflow entity. The webview and Markdown
 notes are ways to create, inspect and respond to it; sessions, attempts, questions
-and review notes belong to that request. [Project setup](project-worker.md) provides
-the app, configuration, request template and Docker launch. A shared repository
+and review notes belong to that request. [Project setup](project-worker.md) previews and commits the project
+workflow/template without installing an app into the project. A shared repository
 uses [shared Git intake](shared-feature-intake.md) for requests from either interface.
-Private workers without that binding retain local intake and the same serial
-execution slot.
+New Home projects use that shared Git handoff. Retained legacy request records
+keep their source authority; they are not an alternative primary submission flow.
 
 ## Unlock the webview
 
-The dedicated unlock screen protects the workspace until access succeeds. For an
-installed project worker, read `WERK_WORKER_TOKEN` in its private project `.env`
-and paste it into **Worker access token**. A process environment override takes
-precedence. The synchronized `<worker-state>/webview-token` remains the local
-credential source for other installations; portable `start`/`status` return its
-private file path.
+The dedicated unlock screen protects the workspace until access succeeds. Read the private credential file named by the Home launcher and paste its token
+into **Worker access token**. The token remains in private effective state; root
+`status` reports its file path. Home startup does not depend on a project `.env`.
 In a system deployment, use
 `<system-state>/lines/<line-id>/workers/worker-1/webview-token`.
 
@@ -82,7 +69,7 @@ Deleting that file cannot override a configured environment token. See
 ## Connect Claude, Codex or Cursor
 
 Use **Settings → Providers & accounts**.
-The task interaction panel links to this editor when a connection needs setup.
+Workboard links directly to this editor when a provider needs setup.
 Worker access and model sign-in are separate: unlocking the webview never signs
 you into a provider. Five connections are supported:
 
@@ -233,7 +220,7 @@ to choose the connection offered for new intake. Each connection also has
 those defaults. Existing provider-save restrictions still apply while work is
 queued or running.
 
-In **New request → Task options**, or **Request options** for a shared draft,
+In **Request options** for a project Feature Request draft,
 choose **Provider**, an optional **Model**, and **Effort**. A reopened shared draft
 exposes the same selection in its request details. Leave Model blank to use a
 compatible instruction-profile model, then the selected provider's default.
@@ -250,103 +237,49 @@ and an observed provider model.
 
 ## Create and follow up on a task
 
-For a connected shared repository, **New request** starts in the chat interaction
-panel and creates the same project Feature Request as the team's authoring skill:
+Choose **Workboard → New Feature Request**, select a ready project and its
+committed template, then describe the observable outcome.
 
-1. Describe the outcome under **Request instructions**. **Request options** lets
-   you choose a provider, optional model and effort, name the request and list
-   approved file paths.
-2. Choose **Prepare request**. This loads the committed project template and
-   places your instructions in the draft; it does not invoke a model or start work.
-3. Complete **Goal**, **Context**, **Acceptance criteria**, **Verification plan**
-   and approved paths. Use **Advanced template editing** for custom template
-   sections, then **Check readiness** against the project's configured rules.
-4. Choose **Save draft to Git** to share unfinished work, or **Mark ready and
-   publish** after readiness passes. Both actions commit and push the note to the
-   displayed shared branch. Only the ready request is eligible for execution.
-5. Open its conversation once this worker owns it. Progress, evidence and Task
-   answers remain attached to that Feature Request. Other teammates can pull and
-   inspect the same note from their clones.
+1. Choose **Prepare request**. It loads the committed template without starting
+   implementation.
+2. Complete Goal, Context, Acceptance criteria, Verification plan and approved
+   paths. Inspect the draft and run **Check readiness**.
+3. Use **Save draft to Git** for unfinished authoring, or **Mark ready and publish**
+   after readiness passes. Both commit and push to the displayed branch; only a
+   ready request can proceed through the shared claim and admission gates.
+4. Follow the same request's live stages, questions and review from Workboard.
+   Use its guarded answer/resume controls for required input. Shared answers are
+   published to Git before the existing response consumer resumes work.
 
-Published drafts can be reopened under **Shared requests**. Unpublished edits stay
-in the current tab until reload or lock. A changed remote request, template or
-binding requires fresh inspection; the worker does not overwrite it silently.
-**Retry same request** retains an unconfirmed publication's exact command and
-identity. Do not start another request to recover that publication.
+New Feature Request is project Git authoring, not generic local-chat dispatch.
+Unpublished edits and unknown acknowledgements stay attached to their original
+command identity. Reconcile or retry that exact operation; do not submit another
+request to recover a missing acknowledgement. A changed remote source, template
+or binding requires fresh inspection rather than overwrite.
 
-Shared intake owns execution admission, remote claims and lifecycle publication;
-accepted work uses the existing queue. Disabling **Accept new shared requests** pauses new claims; it does
-not switch this project to direct chat execution. Ready requests wait for intake,
-capacity and consumption limits to permit a start.
+Changing accepted scope requires the supported rework/successor path. Provider
+completion does not establish acceptance or merge. Open Review to inspect diff,
+independent checks and current-candidate human decisions; verbose execution
+identities remain available through disclosures and History. Passing checks and
+acceptance do not silently mutate the main checkout.
 
-For a worker without a shared repository binding, choose **New request** and
-describe the outcome under **Request instructions**.
-**Task options** shows the selected provider and lets you change it, name the task
-or choose an imported definition/agent. Without an explicit name, the first
-message supplies the title. **Create request** creates the task and starts its
-automatic Markdown tracking. **Repository files · optional** lets you approve
-bounded file input and patch generation in the same interaction; leaving it off
-does not disable the feature-request record. See
-[agent definition profiles](../reference/agent-definitions.md) for compatibility
-and instructions-only adaptation. If creation cannot be confirmed, **Retry same
-request** resends the exact saved command and identity. Keep that request intact
-until its outcome is known; it cannot create a second admission when replayed.
+Legacy conversations, file tasks and assignments remain retained evidence with
+their original source authority. They do not replace new project Feature Request
+authoring. Do not create a local watcher over the same shared queue.
 
-Select a board card to open **Follow up** for that request. The transcript and
-saved model evidence remain scoped to the selection. For a shared request, use
-its answer or resume controls when the worker needs input: submitting publishes
-the linked Task response to Git, and the same Markdown response consumer resumes
-the existing request. Additional scope requires a new Feature Request; accepted
-requirements stay frozen. Private local requests retain a free-form follow-up
-composer. Use **New request** for unrelated work. Additional tasks wait while the worker is occupied or new starts
-are paused. The Running strip identifies the recorded active attempt and its
-model when evidence is available; a configured default is not shown as proof of
-the model used. **Stop task** targets that verified local execution. Upstream
-assignments retain their orchestrator controls, and reviewer runs open the
-request review controls.
+## Answer a Ready Check from Workboard
 
-Every explicit local file task and remote orchestrator assignment also has a
-dedicated session. Sessions retain their transcript and provider affinity across
-restarts and are shared by this worker's operators. Select an existing task
-session to inspect its transcript. Session management supports naming and
-retention; creating or selecting a session does not grant extra execution slots.
-The worker supplies saved successful turns to its model calls. It does not import
-host CLI sessions or transfer native session identifiers between providers.
-Changing selection in another tab makes stale send/stop requests fail rather
-than target the wrong session.
+Open the request's Ready Check card. It selects the exact project/request in
+**Projects → Shared request progress**. Inspect the findings, then use **Answer
+the Ready Check → Your answer to the Ready Check** and **Commit and push answer**.
+The worker commits the canonical answer; normal shared intake rechecks it before
+implementation. The main request Markdown preview remains read-only.
 
-Use **Board** or **List**, search by title or identity, and select a card to
-focus its conversation. Drafts and completed work remain available in their
-own disclosures. Completed model replies render Markdown as readable headings,
-paragraphs, nested lists, quotations, links, tables and code blocks. Code blocks
-keep their original text and offer **Copy code**; wide code and tables scroll
-within the reply on smaller screens. Saved replies use the same formatting.
-In completed model replies, file paths and globs such as `src/**/*.spec.ts`
-stay literal instead of turning into bold or italic text. A validated checkpoint
-in a retained file task, or a change set in a retained proposal task, appears as readable text; its stored form stays under **Raw model
-output**. Older stored text may be shortened. This display does not create a
-pending question or certify that the current saved patch matches an older reply.
-Ordinary JSON examples remain code blocks; they do not imply a saved patch or
-an active checkpoint.
-Your messages and failure notices remain literal text. Model HTML is never
-executed, and images appear as descriptive links rather than loading automatically.
-For private local requests, you can draft a follow-up while work is queued or
-running and send it when the worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
-cancels the pending or active reply. Each provider invocation uses the worker’s
-configured execution limit: six hours by default, configurable from one second
-to 24 hours. `WERK_WORKER_MAX_RUNTIME_MS` overrides saved settings. The limit
-starts when execution begins; queue waiting is separate. Sessions hold at most 60 messages with
-a 48,000-character input budget; user messages are limited to 8,000 characters
-and replies to 32,000. Up to 100 task sessions are retained. Deleting a task session
-requires confirmation; New request preserves the previous transcript. A failed save
-is shown as unsaved. Interrupted requests
-are marked explicitly after restart rather than silently replayed.
-
-Only the worker prompts the model. Instructions alone do not grant repository
-access. Use the optional repository-file approval below when a request needs
-captured inputs and a review patch. Repository file tools additionally require
-a worker grant and an approved task worktree; commands, web access and MCP tools
-follow their separately saved grants.
+A lost acknowledgement exposes **Retry same answer publication**, preserving the
+exact body and operation identity. If the checkpoint changes while you type, your
+draft remains until you explicitly discard it and inspect the current questions.
+A retained pending/published receipt blocks another answer for that checkpoint,
+including after reopening. Do not submit a new Feature Request to recover it.
 
 ## Inspect the feature-request record
 
@@ -371,71 +304,28 @@ synchronization. See the [tracking contract](../reference/feature-requests.md#au
 
 ## Assign and watch repositories
 
-An unassigned Git checkout in the worker’s project folder appears on unlocked
-Taskboard as **Use this Git repository?**. Review the full checkout path, branch
-and remote. **Use repository** saves an assignment and enables safe watching when
-a branch and remote exist. Without either, watching stays off and committed file
-tasks can still use worktrees. Finish queued/running work before accepting.
+Open **Projects → Add a project** to clone the configured remote/branch.
+New registration is clone-only; it does not adopt an arbitrary existing checkout
+or infer that Home is a source repository. The visible destination is
+`Home/projects/<id>`. Choose a repository-relative **Feature Request folder**
+(default `features`) and polling interval (default 30 seconds; allowed 1–300 seconds).
 
-**Don’t use** saves a decline and removes the Taskboard prompt. It does not block
-Chat or unrelated work. Revisit the choice in **Settings → Repositories →
-Use the repository you skipped?**. Until accepted or explicitly assigned, the
-detected checkout is not fetched, pulled or used for task worktrees. The worker
-does not automatically select a parent directory’s repository. Choices survive
-restart; replacing the repository requires a fresh choice.
+Preview project workflow setup, inspect its exact files/baseline, approve the
+commit/push, separately approve the committed delivery policy and recheck setup.
+Projects exposes status and recovery for incomplete setup. Existing tracked
+customization remains preserved. Unknown pushes reconcile before a new operation.
 
-In **Settings → Repositories**, open **Manage repository assignments** to assign
-existing Git checkouts to this worker.
-Choose stable IDs and paths on the worker machine, then configure the remote,
-optional branch and watching. Finish queued/running work before changing the list.
-Repository status reports fetched commits and conditions that prevent a safe
-fast-forward. **Check & pull** refreshes an assignment without waiting for the
-polling interval. Use **Save assignments** to persist edits. Dirty changes and
-local/divergent commits are preserved.
-
-Each assigned coding task receives a detached worktree beneath the selected repository's
-`.werk/worktrees` directory, or beneath **Task worktree folder** when set to an
-absolute folder outside the checkouts. Worktrees are retained across restart. See
-[repository configuration](../reference/configuration.md#assigned-git-repositories)
-for startup seeds, saved-setting precedence, polling and cleanup.
+Retained legacy clone locations remain verified at their exact saved paths and
+are labelled as retained locations, never moved automatically. External adopted
+legacy rows do not authorize new execution. Private ownership markers, outboxes
+and task worktrees stay beneath effective worker state rather than in the
+visible clone. See [project setup](project-worker.md).
 
 ## Run local coding tasks
 
-The controls below apply to private workers without a shared repository binding.
-For a shared project, approve paths in the Feature Request draft above and publish
-it through the shared queue. Both use the existing approved-file executor.
-
-In **New request**, keep your instructions in the same composer and expand
-**Repository files · optional**. Enable **Allow changes to approved repository
-files**, choose an assigned repository and list the relative paths the request
-may use. Provider, task name and agent choices remain in Task options. Submit
-with **Create request**; the same request retains its instructions and tracking.
-
-**Create request** keeps your original instructions and request identity while
-showing background preparation progress. This progress is not yet confirmation
-that a task or Markdown record was saved. The composer waits for the admitted
-session before showing its task and tracking state. A failed or unconfirmed
-preparation retains your instructions and offers **Retry same request**; status
-polling never submits the request again. The task board also shows preparation
-progress and lets you dismiss a failed entry.
-
-Deleting an admitted task removes its worktree when it is clean and its ownership
-is verified; clear the confirmation checkbox to retain it. Changed, locked or
-otherwise protected worktrees remain available for inspection.
-
-The worker captures approved files from a pinned worktree when accepting the
-request. When no repositories are assigned, the absolute-directory input remains
-available. Git roots require the saved consent above. Legacy non-Git directories
-retain bounded snapshots without Git provenance. The preceding conversation is
-not copied into a new request's approved-file input.
-
-After interrupted preparation, **Retry same request** can reuse only a worker-owned,
-unchanged worktree bound to the original request. If that checkout changed or
-cannot be proven unchanged, the worker preserves its files and saves a failed
-task with a Markdown record; no file snapshots were accepted. Inspect the retained
-worktree path, then use **New request** to approve current repository files.
-The failed request cannot resume, retry execution or accept follow-ups. Repeating
-its original creation returns that same failed record without executing it.
+The following limits describe retained local approved-file records and their
+legacy executor. New Home work starts with the project's Feature Request draft
+and shared Git handoff above; this is not a second primary creation flow.
 
 The file-change path supports up to 32 approved paths. Exact-file input snapshots
 are limited to 24,000 bytes per file and 48,000 characters in total. Implementation
@@ -528,7 +418,7 @@ work. Background reads retain focus and unsubmitted answers.
 
 ### Recover a provider attempt without a delivery run
 
-If Taskboard shows **Provider processes need inspection**, an uncertain readiness, advisory-review or older provider attempt still reserves capacity, including after restart. Open its attempt evidence, inspect the host and stop any surviving provider processes and development services. Select the exact attempt, acknowledge that inspection and enter a note before **Record operator-confirmed stop**. The worker refuses confirmation while it observes a live controller, owned process or service.
+If Workboard shows **Provider processes need inspection**, an uncertain readiness, advisory-review or older provider attempt still reserves capacity, including after restart. Open its attempt evidence, inspect the host and stop any surviving provider processes and development services. Select the exact attempt, acknowledge that inspection and enter a note before **Record operator-confirmed stop**. The worker refuses confirmation while it observes a live controller, owned process or service.
 
 A lost response offers **Retry same stop confirmation**, retaining the run, recovery revision, note and operation ID. Confirmation releases the reservation but preserves the model's unknown outcome and unavailable usage. Retry the Ready Check or continue the request separately when safe. Delivery-owned executions use their request's existing recovery controls. [Headless commands](../reference/portable-apps.md#recover-an-uncertain-provider-attempt) reach the same checks.
 
@@ -558,7 +448,7 @@ The orchestrator remains the authority for assigned tasks. Its task state calls
 leased assignments `running`, while the worker distinguishes queued from
 executing. Both services must support the queue extension to enable extra places.
 
-**Pause new starts** on Taskboard holds new execution starts, including Chat, file tasks and
+**Pause new starts** on Workboard holds new execution starts, including Chat, file tasks and
 already accepted remote assignments. The active task can finish; waiting work
 remains queued until resumed. Pausing display updates in the header is separate:
 it only pauses refresh of the webview. Reducing queue limits does not discard
@@ -566,7 +456,7 @@ accepted work. Configure project concurrency through the [delivery policy](../re
 and the private machine ceiling. Unknown execution reservations count toward
 capacity but are shown separately from observed active processes.
 
-Taskboard shows local admission usage separately from accepted remote
+Workboard shows local admission usage separately from accepted remote
 assignments. Drafts, finished tasks and ready project notes awaiting admission are not
 occupied places. A full local admission limit holds new submissions; a manual
 pause or token limit can hold execution while additional work still fits in the
@@ -621,7 +511,7 @@ semantics. Project provider choices belong to **Settings → Project delivery**;
 3. Choose **Save profiles**. Before first registration, the change takes effect
    immediately. A registered worker shows **Waiting for the orchestrator** until
    the same orchestrator accepts the update; the old profiles remain active.
-4. Once the update is accepted, choose **Resume new starts** on Taskboard when ready.
+4. Once the update is accepted, choose **Resume new starts** on Workboard when ready.
 
 Offline changes are saved and retried automatically. While pending, new local and
 remote work, queue resume and further profile edits are blocked. Restart preserves
@@ -752,7 +642,7 @@ No environment-variable values or credentials are shown.
 The taskboard places a pending question or escalation in **Needs you** and opens its answer controls in **Follow up**.
 Read its reason/choices, enter your response and submit through the pending-input
 control. Generic follow-up sending is held until that decision is resolved.
-Taskboard and History identify requests needing input and link back to the selected task on the taskboard.
+Workboard and History identify requests needing input and link back to the selected task on the taskboard.
 
 Inspect the saved checkpoint before resuming a compatible failed or interrupted
 turn. Canonical cancelled or accepted requests require explicit reopening. Continuation replays saved context in a fresh invocation and may consume

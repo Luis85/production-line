@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { cli, exists, git, project } from './project-worker-uninstall-fixture.mjs';
-import { seedWorkerPackage, workerNpmScripts } from '../../scripts/runtime/portable/npm-package.mjs';
+import { workerNpmScripts } from '../../scripts/runtime/portable/npm-package.mjs';
+import { seedLegacyWorkerPackage } from '../helpers/legacy-project-package.mjs';
 
 const options = { timeout: 180000 };
 
@@ -35,7 +36,7 @@ test('a configured authoring path through an internal directory link stays untou
 
 test('custom metadata in a generated npm manifest belongs to the team', options, async t => {
   const cwd = await project(t);
-  await seedWorkerPackage(cwd);
+  await seedLegacyWorkerPackage(cwd);
   const path = join(cwd, 'package.json'), manifest = JSON.parse(await readFile(path, 'utf8'));
   const customized = JSON.stringify({ ...manifest, description: 'Team workspace', license: 'UNLICENSED', custom: { owner: 'team' } }, null, 2) + '\n';
   await writeFile(path, customized);
@@ -73,7 +74,7 @@ test('uninstall keeps environment values when only the root .env is ignored', op
 
 test('generated npm entrypoints include inventory and removal and unchanged manifests are removed', options, async t => {
   const cwd = await project(t);
-  await seedWorkerPackage(cwd);
+  await seedLegacyWorkerPackage(cwd);
   const manifest = JSON.parse(await readFile(join(cwd, 'package.json'), 'utf8'));
   for (const command of ['footprint', 'uninstall']) {
     assert.equal(workerNpmScripts()[command], 'node scripts/runtime/portable/npm-entry.mjs ' + command);

@@ -144,7 +144,7 @@ trusted evidence followed by evaluation.
 
 ## CLI and private API
 
-For an installed project, use `node bin/apps/worker/cli.mjs` with
+For an installed project, use `node runtime/bin/apps/worker/cli.mjs --state-dir state/worker` with
 `--state-dir .werk/worker`. Read commands are `request list`, `get`, `events`,
 `schema` and `policy`. Mutations are `set-policy`, `evaluate`, `execute`, `assign`,
 `rework`, `attest`, `resolve`, `propose`, `accept` and `cancel`.

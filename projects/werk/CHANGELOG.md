@@ -9,11 +9,18 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Added
 
+- WerkHome extracts directly into one transparent workspace with stable root launchers, visible project clones and private worker state separated from replaceable runtime files. Workboard prioritizes project Feature Requests, live delivery and review; Projects and Workflow remain primary navigation, with Metrics and History as secondary evidence.
+- Ready Check questions can be answered from Workboard/Projects with an exact-checkpoint Git publication; uncertain acknowledgements retain the same answer operation before normal intake rechecks.
+- Explicit migration planning/adoption retains compatible stopped standalone state at its original absolute path; project-installed state requires old-runtime recovery/export. Home updates inspect a verified candidate plan before replacing owned application files.
 - A dedicated Workflow page shows recorded Feature Request stage pressure, project/time filters, UTC-week confirmed-increment velocity, measured lead/cycle times and explicit evidence coverage. Evidence-based management separates operational delivery proxies from unmeasured business outcomes; Metrics retains host, consumption and submission-cohort observations.
 
 ### Changed
 
 - Dashboard mutation testing has a separate three-module advisory scope with retained receipts and residual findings. Four added contracts raise the strict score to 72.04% over 998 mutants, retaining all prior kills and recording 264 survivors, 13 uncovered and two timeouts; an independent advisory CI job retains dashboard reports, and existing authority and workflow baselines remain unchanged.
+
+### Changed
+
+- New worker project-local installation is retired. New projects clone their remote into `Home/projects/<id>` with configurable watched folder/poll interval, and Workboard request creation uses committed templates and Git publication rather than generic local chat.
 
 ## [0.16.0] - 2026-10-25
 

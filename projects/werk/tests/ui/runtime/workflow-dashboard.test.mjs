@@ -52,9 +52,9 @@ test('velocity coverage describes temporal buckets and does not claim exhaustive
   assert.equal(workflowDuration(null), 'Unmeasured'); assert.equal(workflowDuration(0), '0 ms'); assert.equal(workflowDuration(86_400_000), '1 day');
 });
 
-test('production and isolated shell navigation expose a dedicated Workflow destination without replacing resource Metrics', () => {
-  assert.deepEqual(workerLinks.map(item => item.path), ['/taskboard', '/workflow', '/dashboard', '/history', '/settings']);
-  assert.equal(workerLinks.find(item => item.path === '/workflow').label, 'Workflow'); assert.equal(workerLinks.find(item => item.path === '/dashboard').label, 'Metrics');
+test('production and isolated shell navigation expose a dedicated Workflow destination alongside project setup', () => {
+  assert.deepEqual(workerLinks.map(item => item.path), ['/workboard', '/projects', '/workflow', '/settings']);
+  assert.equal(workerLinks.find(item => item.path === '/workflow').label, 'Workflow');
 });
 
 

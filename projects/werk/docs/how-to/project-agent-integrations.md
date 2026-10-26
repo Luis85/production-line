@@ -1,14 +1,17 @@
 # Use Werk from Claude Code or Codex
 
-Project setup installs a small, manually invoked skill for each supported project
-agent. These skills delegate task intake, questions and evidence inspection to
-Werk’s installed CLI. They do not start another worker or execute another model
+Optional advanced integration tooling writes a small, manually invoked skill for
+a selected project agent. These skills delegate task intake, questions and evidence
+inspection to the explicitly configured central CLI. They do not start another worker or execute another model
 invocation automatically.
 
 ## Install and inspect
 
-Run the [project worker setup](project-worker.md) from the project directory.
-Setup creates missing integration files and reports existing-file conflicts.
+Start with [central Home project setup](project-worker.md). Optional raw
+`integrations status`, `plan` and `sync` commands require explicit
+`--project-dir /absolute/project` and the effective `--state-dir`. They create no
+worker copy or project runtime installation. Preview missing integration files
+and existing-file conflicts separately from the primary workflow setup.
 It preserves existing agent instructions, settings, permissions and hooks.
 
 The integration uses these project files:
@@ -40,15 +43,15 @@ worker should produce setup guidance rather than an invented task result.
 Inspect integration status or preview a synchronization from the project root:
 
 ```sh
-node bin/apps/worker/cli.mjs integrations status
-node bin/apps/worker/cli.mjs integrations plan
-node bin/apps/worker/cli.mjs integrations sync --dry-run
+node runtime/bin/apps/worker/cli.mjs integrations status --project-dir /absolute/project --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs integrations plan --project-dir /absolute/project --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs integrations sync --project-dir /absolute/project --dry-run --state-dir state/worker
 ```
 
 Review the returned files and `planId`, then synchronize that exact plan:
 
 ```sh
-node bin/apps/worker/cli.mjs integrations sync --if-match PLAN_ID
+node runtime/bin/apps/worker/cli.mjs integrations sync --project-dir /absolute/project --if-match PLAN_ID --state-dir state/worker
 ```
 
 Add `--project-dir /path/to/project` when invoking the installed CLI from elsewhere.
@@ -81,8 +84,8 @@ companion does not submit an answer. See [answer and resume](answer-and-resume-w
 Inspect the running worker from its installed CLI:
 
 ```sh
-node bin/apps/worker/cli.mjs resource status
-node bin/apps/worker/cli.mjs resource events --after 0 --limit 100
+node runtime/bin/apps/worker/cli.mjs resource status --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs resource events --after 0 --limit 100 --state-dir state/worker
 ```
 
 Use `nextAfter` as the next event cursor, follow `hasMore`, and handle `gap`

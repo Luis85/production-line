@@ -7,9 +7,10 @@ import { emptyFeatureAuthoringEditor } from '../feature-authoring-editor';
 const editorState = reactive(emptyFeatureAuthoringEditor());
 const emptySeed = () => ({ title: '', message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', paths: '', selectionEdited: false, executionProfile: '', priority: 3, templateId: '' });
 const seed = reactive(emptySeed());
+const draftProject = reactive({ id: '' });
 watchPrivateDraft(() => workerState.draftEpoch, () => {
   Object.assign(editorState, emptyFeatureAuthoringEditor());
-  Object.assign(seed, emptySeed());
+  Object.assign(seed, emptySeed()); draftProject.id = '';
 }, { flush: 'sync' });
 </script>
 <script setup lang="ts">
@@ -29,15 +30,17 @@ import { sharedReadyReviewView } from '../shared-ready-review-view';
 import { splitFeatureRequestMarkdown } from '../feature-request-note';
 import type { FeatureAuthoringResult } from '../../application/feature-authoring-contracts';
 import { featurePriorityOptions } from '../feature-priority';
-const props = defineProps<{ initialProjectId?: string }>();
+const props = defineProps<{ initialProjectId?: string; registeredProjects?: { id: string; label: string; enabled: boolean }[] }>();
 const emit = defineEmits<{ project: [id: string]; created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
-const projectId = ref(props.initialProjectId ?? ''), projectProfiles = ref(false), projectTemplates = ref(false);
-watch(projectId, id => { seed.templateId = ''; emit('project', id); });
+const projectId = ref(editorState.result?.binding.repositoryId || draftProject.id || props.initialProjectId || '');
+if (!draftProject.id) draftProject.id = projectId.value;
+const projectProfiles = ref(false), projectTemplates = ref(false);
+watch(projectId, id => { draftProject.id = id; seed.templateId = ''; emit('project', id); });
 watch(() => props.initialProjectId, value => { if (!editorState.result && !seed.message.trim()) projectId.value = value ?? ''; });
 const projectSnapshot = useWorkerSnapshot(() => request<NonNullable<NonNullable<typeof state.environment>['sharedIntake']>>('/api/shared-intake' + (projectId.value ? '?projectId=' + encodeURIComponent(projectId.value) : '')), [projectId]);
-const projectChoices = computed(() => projectSnapshot.data.value?.projects ?? state.environment?.sharedIntake?.projects ?? []);
+const projectChoices = computed(() => props.registeredProjects ?? projectSnapshot.data.value?.projects ?? state.environment?.sharedIntake?.projects ?? []);
 const view = computed(() => projectSnapshot.data.value ?? (!projectId.value ? state.environment?.sharedIntake : undefined));
-const binding = () => view.value?.config.repositoryId ? { repositoryId: view.value.config.repositoryId, remote: view.value.config.remote, branch: view.value.config.branch, workflowPath: view.value.config.workflowPath } : null;
+const binding = () => view.value?.config.repositoryId && (!props.registeredProjects || props.registeredProjects.some(project => project.id === projectId.value) && view.value.config.repositoryId === projectId.value) ? { repositoryId: view.value.config.repositoryId, remote: view.value.config.remote, branch: view.value.config.branch, workflowPath: view.value.config.workflowPath } : null;
 const editor = createFeatureAuthoringEditor({ state: editorState, binding, active: () => state.unlocked,
   epoch: () => state.draftEpoch, uuid: () => crypto.randomUUID(), command: command => request<FeatureAuthoringResult>('/api/features', 'POST', { ...command, projectId: command.expectedBinding?.repositoryId ?? projectId.value }) });
 const locked = computed(() => editorState.busy || !!editorState.pending || state.workspaceBusy || !state.unlocked);
@@ -83,7 +86,7 @@ defineExpose({ focusInstructions });
   <section class="shared-feature-composer" aria-labelledby="shared-feature-title" :aria-busy="editorState.busy">
     <h3 id="shared-feature-title">Create a feature request</h3>
     <p class="composer-intro">Describe the outcome here. Your request uses the same project template, Markdown queue and checks as your team.</p>
-    <label for="shared-project-choice">Project</label><select id="shared-project-choice" v-model="projectId" :disabled="locked || !!editorState.result || !!seed.message.trim()"><option value="">Worker installation project</option><option v-for="project in projectChoices" :key="project.id" :value="project.id">{{ project.label }}{{ project.enabled ? '' : ' · intake paused' }}</option></select><p v-if="projectSnapshot.error.value" role="alert" class="error-text">{{ projectSnapshot.error.value }}</p><p v-if="view && !view.config.repositoryId" class="notice">Shared Git intake is not configured for this project. Add requests to its local feature folder, or configure shared intake.</p>
+    <label for="shared-project-choice">Project</label><select id="shared-project-choice" v-model="projectId" :disabled="locked || !!editorState.result || !!seed.message.trim()"><option v-if="!registeredProjects" value="">Retained legacy project</option><option v-for="project in projectChoices" :key="project.id" :value="project.id">{{ project.label }}{{ project.enabled ? '' : ' · intake paused' }}</option></select><p v-if="projectSnapshot.error.value" role="alert" class="error-text">{{ projectSnapshot.error.value }}</p><p v-if="view && !view.config.repositoryId" class="notice">Shared Git intake is not configured for this project. Finish project setup and recheck its shared intake before preparing a request.</p>
     <p class="destination">{{ view?.config.repositoryId }} · {{ view?.config.remote }} / {{ view?.config.branch }}</p>
     <p v-if="view && !view.config.enabled" class="notice">Shared intake is paused. You can publish requests; execution waits until intake resumes.</p>
     <form v-if="!editorState.result" :aria-busy="editorState.busy" @submit.prevent="prepare">
@@ -107,7 +110,7 @@ defineExpose({ focusInstructions });
       <UButton type="submit" :loading="editorState.busy" :disabled="locked || !seed.message.trim() || !binding() || !projectProfiles && !seed.provider">Prepare request</UButton>
     </form>
     <template v-else>
-      <div class="request-identity"><strong>{{ editorState.result.name }}</strong><span>{{ editorState.result.revision ? 'Published ' + editorState.result.status : 'Unpublished draft' }}</span></div>
+      <div class="request-identity"><strong>{{ seed.title || seed.message.slice(0, 80) || editorState.result.name }}</strong><span>{{ editorState.result.revision ? 'Published ' + editorState.result.status : 'Unpublished draft' }}</span></div>
       <p v-if="!current" class="error-text" role="alert">The shared connection changed. This draft still belongs to {{ editorState.result.binding.repositoryId }} / {{ editorState.result.binding.branch }}. Restore that connection to continue.</p>
       <p v-if="editorState.notice" class="notice" role="status">{{ editorState.notice }}</p>
       <template v-if="editable">
@@ -127,7 +130,7 @@ defineExpose({ focusInstructions });
       <template v-else-if="current">
         <p class="notice">{{ selectedReview ? selectedReview.description : selected?.owner ? selected.isLocal ? 'This worker owns the request. Continue in its conversation or answer its Task note.' : 'Another worker owns this request. Follow its progress in the shared Markdown notes.' : 'Your request is in the shared queue. It starts after validation, ownership and capacity checks.' }}</p>
         <UButton v-if="selected && sessionId(selected.taskId)" :disabled="locked" @click="openConversation(selected.taskId)">Open conversation</UButton>
-        <RouterLink v-else to="/settings#shared-intake">Inspect shared progress</RouterLink>
+        <RouterLink v-else to="/workboard">Follow request on Workboard</RouterLink>
       </template>
       <details class="request-preview"><summary>Preview Feature Request</summary><MessageContent :text="preview" /></details>
       <UButton v-if="!editorState.pending" color="neutral" variant="ghost" :disabled="locked" @click="newRequest">{{ unsaved ? 'Discard unpublished edits' : 'Start another request' }}</UButton>
@@ -145,7 +148,7 @@ defineExpose({ focusInstructions });
       <ul v-else><li v-for="item in requests" :key="item.id"><div><strong>{{ item.title || item.name }}</strong><span>{{ item.status.replaceAll('_', ' ') }} · {{ item.name }}</span></div>
         <UButton v-if="!item.owner && item.status === 'draft'" color="neutral" variant="outline" :disabled="locked || unsaved" @click="reopen(item.name)">Open draft</UButton>
         <UButton v-else-if="item.isLocal && sessionId(item.taskId)" color="neutral" variant="outline" :disabled="locked" @click="openConversation(item.taskId)">Open conversation</UButton>
-        <RouterLink v-else to="/settings#shared-intake">Inspect progress</RouterLink>
+        <RouterLink v-else :to="'/projects?project=' + encodeURIComponent(projectId) + '#shared-progress'">Inspect progress</RouterLink>
       </li></ul>
     </details>
     <p class="privacy">Unpublished edits stay in this tab until you reload or lock it. Saved drafts remain in Git.</p>

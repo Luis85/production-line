@@ -1,3 +1,4 @@
+import { readyReviewAnswerPublicationAllowed } from './ready-review-document.js';
 import { sharedFeaturePublicationIssue, sharedFeaturePublicationLimits } from '../../application/shared-feature-publication-limits.js';
 import type { FeatureRequestPublication } from '../../application/feature-authoring-contracts.js';
 import { approvedPathMatch, approvedPathsCollide } from '../../application/approved-paths.js';
@@ -119,6 +120,13 @@ export class GitFeatureRepository {
       unchangedRequest(originals.get(input.request.path)!.content, input.request.content);
     });
   }
+  publishReadyReviewAnswer(value: GitLifecyclePublication, signal?: AbortSignal): Promise<GitFeaturePublication> {
+    const input = structuredClone(value), changes = this.validateLifecycle(input), bounded = this.signal(signal);
+    if (input.artifacts?.length) throw new GitFeatureError('invalid_input', 'Ready Check answers cannot publish other artifacts.');
+    return this.publishGuarded(input.operationId, changes, bounded, async (_root, _head, originals) => {
+      if (!readyReviewAnswerPublicationAllowed(originals.get(input.request.path)!.content, input.request.content, this.options.workerId)) throw new GitFeatureError('conflict', 'Ready Check answer publication requires this worker’s unchanged report, identity and request with append-only Answers.');
+    });
+  }
   publishRequest(value: FeatureRequestPublication, signal?: AbortSignal): Promise<GitFeaturePublication> {
     const input = structuredClone(value), bounded = this.signal(signal);
     operation(input.operationId);
@@ -178,7 +186,7 @@ export class GitFeatureRepository {
         const confirmed = await this.receipt(root, confirmedHead, marker, receipt, operationId, bounded);
         if (confirmed) return { ...confirmed, replayed: false };
       }
-      throw new GitFeatureError('conflict', 'Shared intake advanced repeatedly. Publication remains pending and can be retried.');
+      throw new GitFeatureError('unavailable', 'Shared intake advanced repeatedly. Publication remains pending and can be retried.');
     });
   }
   private async branchReceipt(root: RepositoryRoot, head: string, input: GitPatchPublication, digest: string, expectedTree: string, signal: AbortSignal) {

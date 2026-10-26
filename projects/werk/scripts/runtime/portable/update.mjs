@@ -49,6 +49,10 @@ async function outsideApp(app) {
   if (!inside || (!isAbsolute(inside) && inside !== '..' && !inside.startsWith('..' + sep))) throw inputError('Run update from the project directory, not from inside the app folder (for example node bin/apps/worker/cli.mjs update apply).');
 }
 async function appVersion(app, kind) {
+  for (let ancestor = app; dirname(ancestor) !== ancestor; ancestor = dirname(ancestor)) {
+    const manifest = join(ancestor, 'release-manifest.json');
+    if (await exists(manifest) && JSON.parse(await readFile(manifest, 'utf8')).layout === 'werk-home-v1') throw inputError('This application belongs to Werk Home. Update the complete owned payload with node worker.mjs update plan/apply from Home; individual app replacement would invalidate its manifest.');
+  }
   let info;
   try { info = JSON.parse(await readFile(join(app, 'package.json'), 'utf8')); }
   catch { throw inputError(`${app} is not a complete portable app folder (package.json is missing or invalid).`); }

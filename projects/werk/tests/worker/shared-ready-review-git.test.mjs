@@ -1,6 +1,8 @@
+import { featureGitIo } from './runtime-fixtures.mjs';
 import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -152,4 +154,43 @@ test('changed worker-owned Ready Check output is preserved remotely and cannot t
   assert.equal(f.reviewCalls.length, 1); assert.equal(f.submissions.length, 0);
   assert.equal(git(f.remote, 'rev-parse', 'main'), head); assert.equal(f.remoteSource(), tampered.trim() + '\n');
   assert.equal(git(f.repository, 'status', '--porcelain=v1'), '');
+});
+
+
+test('web Ready Check answer commits only canonical Answers with guarded identity and survives restart without duplicate publication', { timeout: 120000 }, async t => {
+  const f = await fixture(t), checkoutHead = git(f.repository, 'rev-parse', 'HEAD'), checkoutIndex = git(f.repository, 'write-tree');
+  await f.until(() => f.reviewCalls.length === 1); f.complete(waitingResult); await f.until(() => f.runtime.intake.view().requests[0].status === 'waiting_ready_input');
+  const record = f.runtime.intake.view().requests[0], subject = record.readyReview.answerSubject; assert.ok(subject);
+  const command = { action: /** @type {const} */ ('answer_ready_review'), requestId: record.id, operationId: 'web-export-answer', ...subject, answer: 'Export the order ID and total fields.' };
+  const before = git(f.remote, 'rev-list', '--count', 'main'), source = parseFeature(f.remoteSource()), result = await f.runtime.intake.answerReadyReview(command);
+  const answered = parseFeature(f.remoteSource()); assert.equal(answered.data.status, 'ready'); assert.deepEqual(answered.data.werk, source.data.werk); assert.match(answered.body, /Export the order ID and total fields/); assert.ok(answered.body.includes(question));
+  assert.equal(Number(git(f.remote, 'rev-list', '--count', 'main')), Number(before) + 1); assert.equal(f.reviewCalls.length, 1); assert.equal(f.submissions.length, 0);
+  assert.equal(git(f.repository, 'rev-parse', 'HEAD'), checkoutHead); assert.equal(git(f.repository, 'write-tree'), checkoutIndex); assert.equal(git(f.repository, 'status', '--porcelain'), '');
+  await f.restart(); assert.deepEqual(await f.runtime.intake.answerReadyReview(command), result); assert.equal(Number(git(f.remote, 'rev-list', '--count', 'main')), Number(before) + 1);
+  await f.until(() => f.reviewCalls.length === 2); assert.match(f.reviewCalls[1].source.markdown, /Export the order ID and total fields/); assert.equal(f.submissions.length, 0);
+  assert.deepEqual(await f.runtime.intake.answerReadyReview(command), result); assert.equal(f.reviewCalls.length, 2);
+});
+
+
+test('three unrelated remote branch races retain the exact answer outbox and a later retry publishes once', { timeout: 120000 }, async t => {
+  const f = await fixture(t); await f.until(() => f.reviewCalls.length === 1); f.complete(waitingResult); await f.until(() => f.runtime.intake.view().requests[0].status === 'waiting_ready_input');
+  const record = f.runtime.intake.view().requests[0], subject = record.readyReview.answerSubject; assert.ok(subject);
+  const command = { action: /** @type {const} */ ('answer_ready_review'), requestId: record.id, operationId: 'answer-after-contention', ...subject, answer: 'Export order ID and total.' };
+  const sourceBefore = f.remoteSource(), sourceCommits = git(f.remote, 'rev-list', '--count', 'main', '--', sourcePath);
+  const adapters = Reflect.get(f.runtime, 'adapters'); assert.ok(adapters instanceof Map); const restore = []; let races = 0;
+  for (const adapter of adapters.values()) {
+    const io = featureGitIo(adapter), push = io.push.bind(io); restore.push(() => { io.push = push; });
+    io.push = async (...args) => {
+      races++; git(f.producer, 'pull', '--ff-only', 'origin', 'main'); const path = 'teammate-' + races + '.txt'; await f.saveProducer(path, 'Unrelated teammate work ' + races + '\n');
+      git(f.producer, 'add', '--', path); git(f.producer, 'commit', '-m', 'Unrelated concurrent branch update'); git(f.producer, 'push', 'origin', 'main');
+      return push(...args);
+    };
+  }
+  try { await assert.rejects(f.runtime.intake.answerReadyReview(command), { code: 'unavailable' }); } finally { for (const release of restore) release(); }
+  assert.equal(races, 3); const saved = (await f.state()).records[0]; assert.ok(saved.pending); assert.equal(saved.readyReviewAnswers[0].status, 'pending'); assert.equal(f.remoteSource(), sourceBefore); assert.equal(git(f.remote, 'rev-list', '--count', 'main', '--', sourcePath), sourceCommits); assert.equal(f.reviewCalls.length, 1);
+  const operationId = saved.pending.operationId, receiptPath = f.configuration.reviewDirectory + '/_operations/' + createHash('sha256').update(operationId).digest('hex') + '.json';
+  assert.equal(git(f.remote, 'ls-tree', '--name-only', 'main', '--', receiptPath), '');
+  const result = await f.runtime.intake.answerReadyReview(command); assert.equal(result.operationId, command.operationId); assert.match(f.remoteSource(), /Export order ID and total/);
+  assert.equal(Number(git(f.remote, 'rev-list', '--count', 'main', '--', sourcePath)), Number(sourceCommits) + 1); assert.equal(JSON.parse(git(f.remote, 'show', 'main:' + receiptPath)).operationId, operationId); assert.equal(git(f.remote, 'rev-list', '--count', 'main', '--', receiptPath), '1');
+  const head = git(f.remote, 'rev-parse', 'main'); assert.deepEqual(await f.runtime.intake.answerReadyReview(command), result); assert.equal(git(f.remote, 'rev-parse', 'main'), head); assert.equal(f.reviewCalls.length, 1); assert.equal(f.submissions.length, 0);
 });

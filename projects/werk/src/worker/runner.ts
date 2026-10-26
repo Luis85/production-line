@@ -25,6 +25,7 @@ export function reportWithRetry<T>(
 export interface WorkerConfig {
   url?: string;
   stateDir: string;
+  homeDir?: string;
   enrollmentToken: string;
   /** Private local access token; never included in public status. */
   webviewToken?: string;

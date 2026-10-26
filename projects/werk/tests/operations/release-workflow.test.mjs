@@ -90,9 +90,9 @@ test('stable publication uploads the complete draft before selecting latest', { 
   assert.match(notes, /https:\/\/github.com\/example\/werk\/releases\/latest\/download\/install.mjs/);
   assert.match(notes, /\$LASTEXITCODE -eq 0/);
   assert.match(notes, /werk-storybook-0\.1\.0\.zip/);
-  assert.ok(notes.includes('node ./werk-0.1.0/worker.mjs'));
-  assert.ok(notes.includes('node .\\werk-0.1.0\\worker.mjs'));
-  assert.match(notes, /dedicated worker home/);
+  assert.ok(notes.includes('node ./worker.mjs'));
+  assert.ok(notes.includes('node .\\worker.mjs'));
+  assert.match(notes, /dedicated WerkHome/);
   assert.match(notes, /optional Factory demo.*simulated/);
   assert.match(notes, /handbook\/index\.html/);
   assert.match(notes, /storymap\/index\.html/);

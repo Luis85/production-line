@@ -1,13 +1,14 @@
+import { legacyProjectFixture } from '../helpers/legacy-project-worker.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, readFile, writeFile, realpath, stat } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 import { waitForInstalledNativeWork } from '../helpers/native-cli-readiness.mjs';
-const execute = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
+const execute = promisify(execFile);
 
 test('installed worker retains repository consent and edited profiles, then uses an owned task worktree', { timeout: 120000 }, async t => {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), 'werk-install-consent-')));
@@ -19,7 +20,7 @@ test('installed worker retains repository consent and edited profiles, then uses
   await git('init', '-b', 'main'); await git('config', 'core.autocrlf', 'false');
   await writeFile(join(cwd, 'approved.txt'), 'Committed input\n');
   await git('add', 'approved.txt'); await git('commit', '-m', 'Initial fixture');
-  await execute(process.execPath, [installer, 'init'], { cwd, timeout: 40000 });
+  await legacyProjectFixture(cwd);
   const schema = await cli('schema');
   for (const name of ['repository status', 'repository accept', 'repository decline', 'profile list', 'profile set']) assert.ok(schema.commands[name], name);
   await cli('start', '--port', '0'); running = true;

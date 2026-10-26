@@ -65,11 +65,11 @@ test('clone failure retains identity, sanitizes diagnostics and requires an expl
   await assert.rejects(h.manager.command({ action: 'retry', id: command.id, operationId: 'retry-ready' }, signal()), /unattached clone/);
 });
 
-test('adoption inspects the existing checkout without cloning and rejects reuse with another command', async t => {
-  const h = await harness(t); h.ready(true);
-  const result = await h.manager.command({ action: 'adopt', id: 'adopted', operationId: 'adopt-first', path: h.directory }, signal());
-  assert.equal(result.mode, 'adopt'); assert.equal(result.path, h.directory); assert.equal(h.clones, 0);
-  await assert.rejects(h.manager.command({ ...command, id: 'another', operationId: 'adopt-first' }, signal()), /another immutable/);
+test('new external checkout adoption is rejected before inspection or durable registration', async t => {
+  const h = await harness(t); let inspected = 0;
+  h.ports.adopt = async () => { inspected++; throw Error('External checkout must remain untouched.'); };
+  await assert.rejects(h.manager.command({ action: 'adopt', id: 'adopted', operationId: 'adopt-first', path: h.directory }, signal()), /isolated|cloning/);
+  assert.equal(inspected, 0); assert.equal(h.clones, 0); assert.equal((await h.storage.load()).projects.length, 0);
 });
 
 test('operator input rejects unsafe transport, paths, IDs, private intake and recovery mutations', async t => {

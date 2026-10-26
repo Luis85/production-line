@@ -45,6 +45,9 @@ export async function environment(workspace: WorkspaceContext){
     sharedIntake: sharedIntakeView(workspace),
     featureTracking: workspace.featureTracking.status(),
     stateDirectory: resolve(workspace.config.stateDir),
+    homeDirectory: workspace.config.homeDir ?? null,
+    projectsDirectory: workspace.config.homeDir ? join(workspace.config.homeDir, 'projects') : join(workspace.config.stateDir, 'projects'),
+    homeLayout: workspace.config.homeDir ? resolve(workspace.config.stateDir) === join(workspace.config.homeDir, 'state', 'worker') ? 'central' : 'legacy' : null,
     projectDirectory: workspace.config.projectDir
       ? resolve(workspace.config.projectDir)
       : null,

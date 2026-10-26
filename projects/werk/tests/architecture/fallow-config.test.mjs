@@ -47,6 +47,8 @@ test('generated build mappings preserve app ownership and reject traversal, abso
   ]) assert.throws(() => generatedImportSource(root, importer, specifier), undefined, specifier);
   assert.equal(generatedImportSource(root, join(root, 'worker.mjs'), './bin/apps/worker/scripts/runtime/portable/home.mjs'), 'scripts/runtime/portable/home.mjs');
   assert.throws(() => generatedImportSource(root, join(root, 'worker.mjs'), './bin/apps/worker/scripts/runtime/portable/missing.mjs'), /cannot traverse|does not match/);
+  assert.equal(generatedImportSource(root, join(root, 'worker.mjs'), './runtime/bin/apps/worker/scripts/runtime/portable/home.mjs'), 'scripts/runtime/portable/home.mjs');
+  for (const specifier of ['./runtime/bin/apps/worker/scripts/runtime/portable/missing.mjs', './runtime/bin/apps/factory/scripts/runtime/portable/home.mjs', './runtime/bin/apps/worker/scripts/runtime/portable/../portable/home.mjs']) assert.throws(() => generatedImportSource(root, join(root, 'worker.mjs'), specifier), /cannot traverse|does not match/);
   const mutationImporter = join(root, 'scripts/mutation/suites/fixture.test.mjs');
   assert.equal(generatedImportSource(root, mutationImporter, '../../../.mutation-build/shared/request-gate.js'), 'src/shared/request-gate.ts');
   assert.throws(() => generatedImportSource(root, mutationImporter, '../../../.mutation-build/worker/runner.js'), /configured mutation target/);

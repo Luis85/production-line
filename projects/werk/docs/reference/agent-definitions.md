@@ -77,7 +77,7 @@ import JSON or the **Shared reference** field in the webview), or assign it to a
 existing definition:
 
 ```sh
-node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
+node runtime/bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer --state-dir state/worker
 ```
 
 Assigning a reference that another definition holds moves it; importing a
@@ -86,8 +86,8 @@ profile in place, preview the new YAML against the profile and then apply it
 with the current revision:
 
 ```sh
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION
+node runtime/bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION --state-dir state/worker
 ```
 
 A `--file` ending in `.yaml` or `.yml` (any case) is read as the YAML profile
@@ -188,12 +188,12 @@ into Werk task sessions.
 The portable worker exposes the same workflow to users, CI and AI agents:
 
 ```sh
-node bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml
-node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer" --ref project-reviewer
-node bin/apps/worker/cli.mjs definition list
-node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
-node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
+node runtime/bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer" --ref project-reviewer --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition list --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID --state-dir state/worker
 ```
 
 A `.yaml` or `.yml` file is the profile itself; import requires `--name` with it.
@@ -211,8 +211,8 @@ operation ID and profile reference, for example in `prepare.json`:
 ```
 
 ```sh
-node bin/apps/worker/cli.mjs feature prepare --file prepare.json
-node bin/apps/worker/cli.mjs feature publish --file publish.json
+node runtime/bin/apps/worker/cli.mjs feature prepare --file prepare.json --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs feature publish --file publish.json --state-dir state/worker
 ```
 
 Complete the returned Markdown template and readiness requirements before

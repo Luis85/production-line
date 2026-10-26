@@ -16,7 +16,7 @@ const storymap = (summary: string) => ({ app: 'Worker', summary, covers: ['pages
 function render(variant: ReviewFixture = 'verified') {
   return () => ({ setup() {
     fixture = installReviewFixture(variant);
-    return () => h(UApp, null, { default: () => h(WorkerShell, { links: workerLinks, homePath: '/taskboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
+    return () => h(UApp, null, { default: () => h(WorkerShell, { links: workerLinks, homePath: '/workboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
       identity: () => h('div', { class: 'worker-identity' }, [h('div', [h('strong', 'Example worker'), h('span', 'Fictional review data')])]),
       default: () => h(ReviewPage), footer: () => 'Illustrative review · no model call, command or Git write occurred',
     }) });

@@ -1,3 +1,4 @@
+import { assertManagedProjectIsolation } from './workspace-managed-isolation.js';
 import { dispatchSharedReviewRework } from './workspace-review-rework.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { resolve } from 'node:path';
@@ -33,7 +34,14 @@ export function createProjectFeatureRuntime(workspace: WorkspaceContext, config:
       if (config.id && id !== config.id) throw new DomainError('conflict', 'Shared intake must use the selected project repository.');
       return workspace.repositories.resolve(id);
     },
-    allowed: path => { assertNativeWorkReady(workspace); return workspace.repositoryDiscovery.assertAllowed(path); },
+    allowed: async path => {
+      assertNativeWorkReady(workspace);
+      if (workspace.config.homeDir) {
+        const assigned = workspace.settings.value.repositories.items.find(item => resolve(item.path) === resolve(path));
+        await assertManagedProjectIsolation(workspace, assigned?.id, path, { allowPendingAttachment: true });
+      }
+      return workspace.repositoryDiscovery.assertAllowed(path);
+    },
     canAdmit: () => !sharedFeatureAdmissionHold(workspace),
     admissionHold: () => sharedFeatureAdmissionHold(workspace),
     submit: record => submitSharedFeature(workspace, record),

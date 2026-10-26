@@ -4,7 +4,7 @@ Use this workflow when an attached model should change project code, run your ch
 
 ## Prepare the project and worker
 
-1. Commit the project's starting state. In **Settings → Repositories**, assign the repository to the worker and accept its use if it was discovered locally.
+1. Commit the project's starting state. In **Projects**, register its remote clone, preview/approve workflow publication and separately approve the committed delivery policy.
 2. Configure an attached provider under **Settings → Providers & accounts**. For a CLI provider, sign in using the stock CLI on the worker machine. Provider availability and sign-in do not grant repository tools.
 3. Pause new starts and drain queued/running work. In **Settings → Tools & MCP**, enable task-worktree file access.
 4. Add a fixed command preset for each check the feature must pass. Use an absolute executable path and a JSON array of fixed arguments. Enable the preset and mark **Required feature check**, then save.
@@ -28,18 +28,15 @@ Mark only meaningful verification commands as required. A help command that exit
 ## Submit one feature request
 
 For a worker bound to shared Git intake, create a draft from the committed project
-template in your editor or through **Taskboard → New request → Prepare request**.
+template in your editor or through **Workboard → New Feature Request → Prepare request**.
 Complete its approved paths and acceptance criteria, check readiness, then mark
 it ready and commit/push it. In the webview, **Mark ready and publish** performs
 that publication. The shared watcher claims the same Feature Request; the chat
 interface does not bypass Git or create a second implementation workflow.
 
-For a standalone local worker without a shared binding, describe the behavior in
-**Taskboard → New request**. Expand **Repository files · optional**, enable
-**Allow changes to approved repository files**, choose the repository and list
-the files the implementation may change. Both paths use the same execution and
-verification contracts. Include intended new files and deletions; a request
-cannot widen its own approved scope.
+New Home work uses this project Git-authoring flow. Include intended new files
+and deletions in the approved scope; a request cannot widen its own authority.
+Retained legacy approved-file tasks keep their saved execution contract.
 
 For a team batch, follow the [evening handoff and morning review](shared-feature-intake.md#work-during-the-day-implement-overnight).
 

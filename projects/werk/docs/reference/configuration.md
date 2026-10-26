@@ -1,23 +1,36 @@
 # Runtime configuration and state
 
-The default state directory is `.werk` beside the release launcher. Select another
-location with `--state-dir PATH` and reuse that argument for every operation.
+For the central worker, Home is the directory containing root `worker.mjs`,
+independent of cwd; `--home PATH` explicitly overrides it. Fresh private state is
+`Home/state/worker`, visible repositories are `Home/projects/<id>`, and replaceable
+programs are `Home/runtime/`. Explicit standalone-state adoption can select an
+original absolute legacy path in private `Home/state/home.json`; it does not move
+that state. Raw application CLI commands must explicitly name the effective
+`--state-dir`.
+
+The optional Home single-line operator uses `Home/state/line`; hierarchy
+`up`/`system` uses `Home/state/system`, and independent Factory/Orchestrator uses
+`Home/state/factory`/`Home/state/orchestrator`. Explicit flags/env/dotenv defaults
+remain available for those advanced component launchers. Select
+another location with `--state-dir PATH` and reuse it for every line operation.
 Native and Docker launchers share the configuration/credential format and require
 an explicit runtime choice; sharing a format is not permission to run both at once.
 
 For a Factory hierarchy, use the [system definition](system-definition.md) and
-its separate `.werk-system/<id>` state. The format below configures one line.
+its separate hierarchy state (`Home/state/system` by default). The format below configures one line.
 
 ## Project environment files
 
-Independent Factory, orchestrator and worker apps support a project-root `.env`
-and a credential-free `.env.example`. Project worker `init` creates them
-automatically. For any copied app, initialize its section explicitly:
+Independent Factory/orchestrator apps and legacy raw app operation support
+project `.env` and credential-free `.env.example` files. Central Home startup
+ignores project dotenv/startup defaults: its explicit Home authority wins. New
+project worker `init` is retired. The following is advanced/legacy environment
+configuration, not the primary Home setup:
 
 ```sh
-node bin/apps/worker/cli.mjs env init --project-dir /absolute/project --state-dir /absolute/project/.werk/worker
-node bin/apps/orchestrator/cli.mjs env init --project-dir /absolute/project --state-dir /absolute/project/.werk/orchestrator
-node bin/apps/factory/cli.mjs env init --project-dir /absolute/project --state-dir /absolute/project/.werk/factory
+node runtime/bin/apps/worker/cli.mjs env init --project-dir /absolute/project --state-dir /absolute/project/.werk/worker
+node runtime/bin/apps/orchestrator/cli.mjs env init --project-dir /absolute/project --state-dir /absolute/project/.werk/orchestrator
+node runtime/bin/apps/factory/cli.mjs env init --project-dir /absolute/project --state-dir /absolute/project/.werk/factory
 ```
 
 Each app reads only its supported keys from `.env` in `--project-dir`, otherwise
@@ -80,7 +93,7 @@ owns the running process.
 
 | Variable | Consumer / default |
 | --- | --- |
-| `WERK_STATE_DIR` | Default for `--state-dir` on native single-line and system actions; absent uses `.werk` or `.werk-system/<id>` beside the release |
+| `WERK_STATE_DIR` | Default for `--state-dir` on native single-line and system actions; Home wrapper defaults are `state/line` or `state/system`; matching older raw runtimes retain their own defaults |
 | `WERK_SYSTEM_FILE` | Default for native `system --file`; required for plan/setup/start/up unless an explicit file is supplied |
 | `WERK_LOG_OUTPUT` | Default for native `start` and `system up/start --log-output`: `file`, `stream` or `both`; absent uses `file` |
 
@@ -331,9 +344,10 @@ refresh and reconcile on conflict. `settings get`, `settings set --file`
 and `provider configure --file` use those routes.
 
 `defaultProvider` must be `codex-cli`, `claude-cli`, `openai-api`, `anthropic-api`
-or `cursor-cli`. `features.intake` in `.werk/worker.json` is `shared` (default) or
-`local`; `init --intake local` writes the local setup preset and makes the detected
-checkout default to `watch: false`. An explicitly saved shared repository binding
+or `cursor-cli`. Legacy `features.intake` in `.werk/worker.json` was `shared`
+(default) or `local`; its local preset made detected checkouts default to
+`watch: false`. New project-local init is retired; Home registration uses shared
+Git intake and does not discover that external startup configuration. An explicitly saved shared repository binding
 takes precedence over this preset, even when paused; changing `features.intake`
 alone does not disconnect it. The legacy startup `features.provider` is a seed only
 when no saved default exists. A template or request with an explicit provider continues
@@ -390,35 +404,20 @@ endpoint for changing another worker.
 
 ## Detected installation repository
 
-At startup the worker locally inspects its integration project directory, otherwise
-`--project-dir`, otherwise its startup working directory. The resolved directory
-must itself be a Git checkout root with a `.git` directory or regular Git file;
-linked worktrees are supported. It never walks upward to select an ancestor.
-Detection does not fetch, pull or create worktrees.
+Central Home launch has explicit Home authority and does not infer a project
+from its launcher directory, cwd or a project dotenv file. New registration clones
+the configured remote through Projects; existing-checkout adoption is not offered.
 
-An unconfigured candidate requires an explicit saved accept/decline. Acceptance
-adds a generated assignment ID and enables watching only when a current branch
-and remote exist; detached HEAD or no remote gives `watch: false`. Such checkouts
-can still supply committed file-task inputs. Add/configure a remote or select a
-branch yourself, then enable watching through repository settings. A first commit
-is required before task worktrees can be created.
-
-Both decisions persist privately in `repository-discovery.json`. Decline hides
-the Taskboard prompt; Settings → Repositories lets the operator reconsider. Acceptance requires
-idle queues and preparations; decline can be recorded while unrelated work runs.
-Existing explicit repository assignments, including a matching configured legacy
-Codex repository, count as authorization. Explicitly assigning a skipped checkout
-also accepts it. Removing an assignment does not erase its saved acceptance;
-legacy use remains subject to the ordinary repository-selection rules below.
-The worker revalidates repository identity before watching and task preparation;
-replacing the checkout at the same path requires a fresh choice. Neither a pending
-nor a declined checkout can be used through the legacy absolute-directory input.
+Legacy discovery/assignment records preserve the exact saved checkout identity
+and explicit consent history. They never authorize a new central watcher merely
+because a path exists. External adopted legacy rows remain disabled for new
+execution; old project startup configuration requires old-runtime recovery/export.
 
 ## Assigned Git repositories
 
-A worker can own up to 64 existing Git checkouts. Add a top-level `repositories`
-object to worker JSON (for example `.werk/worker.json`), or set it through the
-private worker settings API. Native single-line `config.json` accepts the same
+A worker can retain up to 64 assigned Git checkouts. The following `repositories`
+shape describes advanced/legacy saved assignments, not new Home registration.
+New projects use the remote-clone Projects flow and committed workflow setup. Native single-line `config.json` accepts the same
 object; system YAML uses `productionLines[].workers.repositories`.
 
 ```json

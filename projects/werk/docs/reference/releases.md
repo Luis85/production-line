@@ -1,60 +1,73 @@
 # Release artifacts and verification
 
-Version 0.16.0 is packaged as `werk-0.16.0.tar.gz` and `werk-0.16.0.zip`. Each archive
-has one top directory, `werk-0.16.0/`. Obtain it and `SHA256SUMS` from a delivery
-source you trust. Checksums detect corruption or mismatch; an unsigned checksum
+The current WerkHome runtime is packaged as `werk-VERSION.tar.gz` and
+`werk-VERSION.zip`. Archive entries extract directly into the chosen Home; there
+is no inner version directory. This is the current candidate layout, not a claim
+that an older published 0.16 archive has changed. Obtain the matching archive and
+`SHA256SUMS` from a delivery source you trust. Checksums detect corruption or mismatch; an unsigned checksum
 file does not independently authenticate its publisher.
 
 ## Start a standalone worker
 
 Download either verified runtime archive and `SHA256SUMS`, then extract it into a
-new dedicated worker home. From the outer home, start the prebuilt worker with
+new dedicated WerkHome. Start the prebuilt worker with
 Node.js 24:
 
 ```sh
-node ./werk-0.16.0/worker.mjs
+node ./worker.mjs
 ```
 
 The worker opens its secure local webview and retains private state in
-`<home>/.werk/worker`. Follow [archive to main checkout](../tutorials/worker-home-to-main.md)
+`<home>/state/worker`, visible cloned repositories in `<home>/projects/<id>` and
+replaceable application files in `<home>/runtime`. The Home is anchored to the
+launcher directory regardless of the shell working directory. Follow [archive to main checkout](../tutorials/worker-home-to-main.md)
 for provider/project setup, Feature Request delivery and explicit merge consent.
 No source checkout, npm install or Factory fleet is required.
 
-## Optional Factory fleet installer
+## Verified Home installer
 
-With Node.js 24, curl and tar on PATH, run in your chosen installation directory:
+With Node.js 24, curl and tar on PATH, download the matching installer outside
+the new empty Home. Select that Home explicitly:
 
 ```sh
-curl -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs && node werk-install.mjs
+curl -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs && node werk-install.mjs --directory ./WerkHome
 ```
 
 In Windows PowerShell:
 
 ```powershell
-curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs; if ($LASTEXITCODE -eq 0) { node werk-install.mjs }
+curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs; if ($LASTEXITCODE -eq 0) { node werk-install.mjs --directory .\WerkHome }
 ```
 
-The installer is executable code from this repository's GitHub release. Review it before running if needed. It contains the exact version and tar.gz SHA-256 from the candidate build; all subsequent downloads use that immutable version URL. No GitHub API token is required for public release assets. A missing release (404), failed download, wrong checksum or invalid extracted inventory fails before startup. Downloaded bytes and extraction are staged in a temporary directory and removed on failure. An existing `werk-<version>` directory is refused, preserving its files and state.
+The installer is executable code from this repository's GitHub release. Review it before running if needed. It contains the exact version and tar.gz SHA-256 from the candidate build; all subsequent downloads use that immutable version URL. No GitHub API token is required for public release assets. A missing release (404), failed download, wrong checksum or invalid extracted inventory fails before startup. Downloaded bytes and extraction are staged in a temporary directory and removed on failure. Installation targets the selected Home directly. Existing nonempty destinations
+require the documented safe update/adoption path; never extract over runtime,
+projects or state to perform an upgrade.
 
 | Installer option | Behavior |
 | --- | --- |
-| `--directory PATH` | Parent installation directory; defaults to the current directory |
+| `--directory PATH` | The WerkHome destination itself, not a parent for a version folder |
 | `--no-start` | Verify and install without starting services |
 | `--no-open` | Start without opening a browser |
-| `--file PATH` | Start using your system YAML instead of the packaged example |
-| `--state-dir PATH` | Explicit persistent state directory for startup |
 | `--help` | Print options without downloading |
 
 For a specific version or prerelease, download `install.mjs` from `/releases/download/v<version>/install.mjs`. Prereleases are excluded from the stable `latest` download. The one-command native path requires tar (provided by current Windows/macOS and most Linux installations); curl is only needed for the initial installer download. Docker-only users can manually download either archive and use its existing Docker launchers without host Node.
 
-After manual extraction or installation, run `node werk.mjs up` from the installed directory. This is shorthand for `node werk.mjs system up --file examples/system.yaml`, resolving the default YAML relative to the installed launcher. `--file` or `WERK_SYSTEM_FILE` overrides that default; existing system options still apply. State defaults to `.werk-system/demo-system/` inside that version, including private Factory and per-line credentials. Startup opens the Factory after health checks; Ctrl+C stops all services. Port conflicts are reported by the runtime. Installation is retained if startup fails, so correct the problem and restart locally. New downloaded releases check stable GitHub releases on subsequent native startup; see [automatic updates](updates.md) for policy, backups, recovery and one-time adoption from 0.1.0. The installer itself still creates a separate version directory; select old state explicitly when adopting it.
+The current installer starts the central worker. Its legacy `--file` and
+`--state-dir` options do not select central Home state. Configure projects/providers
+through the webview; use explicit standalone-state adoption where compatible.
+Do not treat a latest installer predating this layout as the new Home installer.
+
+## Optional Factory demonstration
+
+To start a separate optional Factory demonstration, run `node werk.mjs up` from Home. This is shorthand for `node werk.mjs system up --file runtime/examples/system.yaml`, resolving the default YAML relative to the installed launcher. `--file` or `WERK_SYSTEM_FILE` overrides that default; existing system options still apply. Home hierarchy state defaults to `state/system`, including private Factory and per-line credentials. Startup opens the Factory after health checks; Ctrl+C stops all services. Port conflicts are reported by the runtime. Installation is retained if startup fails, so correct the problem and restart locally. Home runtime replacement uses [explicit verified-candidate update plans](updates.md#central-worker-home), separate from legacy Factory version-selection behavior. The current Home installer uses its destination directly; old version-directory
+installations require explicit retained-state adoption rather than an overwrite.
 
 ## Verify before extraction
 
 Compare the SHA-256 of your chosen archive with its exact entry in `SHA256SUMS`.
-For example, Linux provides `sha256sum werk-0.16.0.tar.gz`, macOS provides
-`shasum -a 256 werk-0.16.0.tar.gz`, and PowerShell provides
-`Get-FileHash ./werk-0.16.0.zip -Algorithm SHA256`. A mismatch means stop and obtain
+For example, Linux provides `sha256sum werk-VERSION.tar.gz`, macOS provides
+`shasum -a 256 werk-VERSION.tar.gz`, and PowerShell provides
+`Get-FileHash ./werk-VERSION.zip -Algorithm SHA256`. A mismatch means stop and obtain
 the correct artifact. Extract into a new directory; do not overwrite a running
 installation or its state.
 
@@ -66,15 +79,18 @@ It neither publishes a release nor creates a VM. The quick-start URL becomes ava
 
 ## Contents
 
-The root contains `werk.mjs`, the Docker shell/PowerShell launchers, release
-Compose/image definitions (including the Windows named-volume overlay), runtime support scripts, prebuilt application `dist`
-trees, release documentation, the maintained [CHANGELOG](../../CHANGELOG.md) and
-`release-manifest.json`. The distribution
+The human-facing root contains `worker.mjs`, `werk.mjs`, README/documentation, the
+maintained [CHANGELOG](../../CHANGELOG.md) and `release-manifest.json`. The
+replaceable `runtime/` payload contains the prebuilt applications at
+`runtime/bin/apps/<kind>`, shared code, scripts, examples and deployment assets.
+Fresh user data lives in visible `projects/` and private `state/`; those directories
+are not part of a replaceable application payload. The distribution
 contains no user state, credentials, provider login, imported source ZIP or npm
 development environment. Native use requires Node 24; Docker use requires
 Docker/Compose and a shell. Neither path requires building the source project.
 
-`release-manifest.json` records `schemaVersion`, `version`, required Node version,
+`release-manifest.json` records `schemaVersion`, `layout: "werk-home-v1"`,
+`updateProtocol: 2`, `version`, required Node version,
 `sourceCommit` (null when no repository revision is available), and an inventory of file `path`, byte count, SHA-256 and mode.
 `SHA256SUMS` is a sidecar covering both archives and the standalone `install.mjs` asset. Keep the manifest and checksum
 record with deployment evidence. Source revision and passing package checks do
@@ -82,8 +98,9 @@ not establish live-provider or production deployment qualification.
 
 Native installations support [automatic updates and explicit update commands](updates.md).
 For Docker, managed VMs and manual recovery, follow [upgrade and backup](../how-to/upgrade-backup.md).
-The complete distribution is the unit of installation; do not copy only a CLI
-file and discard its shared code, dependencies, assets or runtime helpers.
+The complete distribution is the unit of installation. Do not copy a worker CLI
+into a project or discard its runtime dependencies. For an existing 0.16 worker,
+use [retained-state adoption](../how-to/project-worker.md#existing-standalone-installations).
 
 ## Illustrated Storybook and storymaps
 
@@ -226,12 +243,13 @@ VM report records the Werk, Node and Ubuntu image hashes, the accelerator used,
 and acceptance results. An arm64 image and Windows/macOS Docker are not covered
 by the VM/Linux Docker gates.
 
-Maintainers can run the VM gate on a disposable Linux machine after installing
+Maintainers run the following commands from the source checkout on a disposable
+Linux machine after installing
 QEMU, `cloud-localds`, OpenSSH, OpenSSL, curl and `nc` (netcat):
 
 ```text
 node scripts/release/extract.mjs release /tmp/werk-candidate
-node scripts/release/cloud-init-smoke.mjs --root /tmp/werk-candidate/werk-0.16.0 --archives release
+node scripts/release/cloud-init-smoke.mjs --root /tmp/werk-candidate --archives release
 ```
 
 The gate downloads the official Ubuntu Noble cloud image and checks its digest

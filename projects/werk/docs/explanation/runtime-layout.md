@@ -23,10 +23,17 @@ start one line without requiring a Factory hierarchy.
 
 ## Programs and data have different lifetimes
 
-The release archive contains versioned programs and assets. The selected state
-directory contains changing configuration, credentials, task history and worker
-evidence. Keeping state outside versioned release directories makes upgrades
-clearer, but it does not make live state copies consistent.
+The central WerkHome has stable root launchers and documentation, a replaceable
+unversioned `runtime/` payload, visible Git repositories in `projects/`, and private
+credentials/journals/worktrees in `state/`. Fresh worker state is `state/worker`.
+The archive name identifies a version; its entries extract directly into Home.
+A runtime update must not treat projects or changing private state as payload.
+Keeping those lifetimes separate does not make live state copies consistent.
+
+Legacy standalone Home adoption explicitly selects an original absolute state
+path without moving it. Project-installed state depends on external startup
+configuration and is refused for central adoption; its matching old runtime is
+needed for recovery/export. Existing retained paths stay significant after adoption.
 
 Native and Docker launchers share the versioned setup format. The configuration
 records which runtime owns it so the other launcher cannot silently reuse it.

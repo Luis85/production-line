@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "observedDate": "2026-10-26",
+  "qualification": "initial_flat_home_development_candidate",
+  "finalCommittedArtifact": false,
+  "publicRelease": false,
+  "host": "Linux",
+  "browser": {
+    "fixture": "Deterministic Claude CLI protocol; no real provider login or inference",
+    "liveProvider": false,
+    "checks": [
+      "Verified archive starts in an empty dedicated home and unlocks through the real browser without source/npm/init.",
+      "Browser prepares, completes, checks and commits/pushes a ready Feature Request before any inference.",
+      "Real candidate tools, committed verification, feature commit/push and Markdown pull request appear before browser acceptance; explicit exact-main consent merges into checkout."
+    ],
+    "screenshots": [
+      "01-first-worker-home",
+      "02-published-feature-request",
+      "03-taskboard-in-progress",
+      "04-taskboard-review-ready",
+      "05-markdown-candidate-review",
+      "06-main-checkout-merge-confirmed"
+    ],
+    "pageErrors": [],
+    "version": "0.16.0",
+    "sourceCommit": null,
+    "archiveSha256": "8e6b9759aa7eaee019e0f4dd69e88b36bc78e0e434d3e967b710e52f8e93de3e",
+    "manifestSha256": "f2f9f96a087abae66986f969926a0e3d732eeabf88973eefdb637453c23dbc3d",
+    "candidateCommit": "a216926a35110c5a9f7996a9b42cda201fcc8021",
+    "publishedFeatureCommit": "ed95cdf7466ec2876ca29035c0bcb486c7d87f00",
+    "mergedCommit": "a216926a35110c5a9f7996a9b42cda201fcc8021",
+    "reviewNote": "feature-reviews/fr-952b9848bda29854fa4b2e36-bb9ce29db68a.md",
+    "providerInvocations": [
+      {
+        "fixture": true,
+        "mode": "ready-review"
+      },
+      {
+        "fixture": true,
+        "mode": "candidate-tools"
+      }
+    ]
+  },
+  "liveProvider": false,
+  "nativeWindowsQualified": false,
+  "nativeSmoke": {
+    "ok": true,
+    "journey": "central-werk-home-native",
+    "extractedHome": true,
+    "installedWithoutNpm": true,
+    "projectCloneVisible": true,
+    "featureCommittedBeforeInference": true,
+    "verifiedCandidatePushed": true,
+    "markdownReviewPublished": true,
+    "mainCheckoutUnchanged": true,
+    "identityAndCredentialsPreserved": true,
+    "restartPreserved": true,
+    "providerProtocolFixture": true,
+    "liveProvider": false
+  },
+  "homeUpdateSmoke": {
+    "ok": true,
+    "journey": "flat-home-selective-update",
+    "previousVersionFixture": "0.0.0",
+    "exactPreviewApplied": true,
+    "authenticatedStop": true,
+    "credentialsAndSelectionPreserved": true,
+    "visibleProjectPreserved": true,
+    "rollbackVerified": true,
+    "runtimeGapRecoveredThroughCandidateLauncher": true,
+    "finalStartConfirmed": true
+  },
+  "retainedScreenshots": [
+    {
+      "path": "01-first-workboard.png",
+      "sha256": "21da562aea8db287a64bee753fbfca87bf49b07fd97a30cbe483c45795cfb946",
+      "bytes": 133705,
+      "source": "01-first-worker-home.png",
+      "modified": false
+    },
+    {
+      "path": "04-review-ready-workboard.png",
+      "sha256": "4ad26bd98111fb004f7e86d2d7bb63c5c25e7a4a7a72fb0be537888995c8645d",
+      "bytes": 168393,
+      "source": "04-taskboard-review-ready.png",
+      "modified": false
+    }
+  ],
+  "limits": [
+    "sourceCommit is null for this developmental archive; final committed artifact rerun remains separate.",
+    "Claude authentication, version and inference use an explicit deterministic protocol fixture; no real account/model.",
+    "Native smoke uses a POSIX fixture and does not qualify Windows execution.",
+    "Initial archive predates later final hardening; results qualify only its recorded hash."
+  ],
+  "browserEngine": "Chromium"
+}

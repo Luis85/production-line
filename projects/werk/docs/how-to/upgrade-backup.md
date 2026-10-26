@@ -2,7 +2,20 @@
 
 Native downloaded releases from 0.2.0 onward provide [automatic startup updates](../reference/updates.md), with verified downloads, stopped-state backups and retained previous releases. Use `node werk.mjs update check` to inspect availability and `update disable` to opt out. Running systems are not restarted by a background timer.
 
-The procedures below cover manual adoption from 0.1.0, Docker/VM upgrades and backup recovery. The installer creates a new version directory; use `--no-start` and explicitly select existing stopped state when moving from an older installation. Keep a working old release and verified backup. See [release contents](../reference/releases.md).
+For the central worker, keep a verified stopped-state backup and use root
+`worker.mjs update plan --from VERIFIED_CANDIDATE_HOME`, then apply that exact
+plan with `--if-match PLAN_ID` and explicit `--stop` if needed. Runtime/root/docs
+are replaceable payload; visible projects and private state are not archive
+replacement targets. Never extract over a populated Home. Legacy 0.16 standalone
+state requires [explicit adoption](project-worker.md#existing-standalone-installations)
+without relocation; project-installed state needs its old runtime for recovery.
+
+For a failed Home runtime swap, follow [interrupted Home update recovery](../reference/updates.md#recover-an-interrupted-home-update). Inspect updater locks, reserved state locks and foreground component leases; verify dead matching ownership before removing only abandoned records. If the active runtime is missing, use a separate verified candidate launcher with `update status --home ACTIVE_HOME` then `update rollback --home ACTIVE_HOME`.
+
+The procedures below cover the separate Factory/line operator's manual adoption
+from 0.1.0, Docker/VM upgrades and backup recovery. Its older installer/version
+selection conventions do not describe central Home worker installation. Keep a
+working old release and verified backup. See [release contents](../reference/releases.md).
 
 ## Verified native maintenance commands
 

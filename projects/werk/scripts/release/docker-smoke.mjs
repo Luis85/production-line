@@ -1,13 +1,16 @@
 /** Real release lifecycle gate. Docker wrappers run without host Node in PATH. */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, symlink, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, symlink, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import assert from 'node:assert/strict';
 const exec = promisify(execFile);
 const root = resolve(process.env.WERK_DOCKER_RELEASE_ROOT ?? '.');
+const runtime = join(root, 'runtime');
+await access(join(runtime, 'Dockerfile.release'));
+await access(join(root, 'werk-docker.sh'));
 const scratch = await mkdtemp(join(tmpdir(), 'werk-docker-release-'));
 const state = join(scratch, 'private state with spaces');
 const image = 'werk-release:smoke-' + process.pid;
@@ -63,7 +66,7 @@ try {
   for (const token of Object.values(JSON.parse(credentials))) assert.ok(logs.every(log => !log.includes(token)), 'Credentials leaked to command output');
   console.log(JSON.stringify({ ok:true, journey:'docker-release', hostNodeInWrapperPath:false, setupRepeated:true, healthy:true, taskPersisted:true, workerIdentityPreserved:true, credentialOutput:false }));
 } finally {
-  if (project) await exec('docker',['compose','--project-directory',root,'--env-file',join(state,'docker.env'),'--file',join(root,'compose.release.yaml'),'--project-name',project,'down','--remove-orphans'],{env:{...process.env,WERK_DOCKER_IMAGE:image,WERK_DOCKER_STATE_DIR:state,WERK_DOCKER_UID:String(process.getuid?.()??1000),WERK_DOCKER_GID:String(process.getgid?.()??1000)},timeout:60000}).catch(()=>{});
+  if (project) await exec('docker',['compose','--project-directory',runtime,'--env-file',join(state,'docker.env'),'--file',join(runtime,'compose.release.yaml'),'--project-name',project,'down','--remove-orphans'],{env:{...process.env,WERK_DOCKER_IMAGE:image,WERK_DOCKER_STATE_DIR:state,WERK_DOCKER_UID:String(process.getuid?.()??1000),WERK_DOCKER_GID:String(process.getgid?.()??1000)},timeout:60000}).catch(()=>{});
   await exec('docker',['image','rm',image],{timeout:30000}).catch(()=>{});
   await rm(scratch,{recursive:true,force:true});
 }
