@@ -7,8 +7,14 @@ const rootFiles = ['worker.mjs', 'werk.mjs', 'werk-docker.sh', 'werk-docker.ps1'
 export const ownedName = name => ['runtime', 'docs', ...rootFiles].includes(name);
 export async function exists(path) { try { await lstat(path); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; } }
 export async function ordinary(path, create = false) {
-  if (create) { const parent = dirname(path); if (parent !== path) await ordinary(parent, true); await mkdir(path, { mode: 0o700 }).catch(error => { if (error.code !== 'EEXIST') throw error; }); }
-  const info = await lstat(path); if (!info.isDirectory() || info.isSymbolicLink()) throw Error('Home update paths must be ordinary directories without symbolic links.');
+  const existing = await lstat(path).catch(error => { if (create && error.code === 'ENOENT') return null; throw error; });
+  if (existing && (!existing.isDirectory() || existing.isSymbolicLink())) throw Error('Home update paths must be ordinary directories without symbolic links.');
+  const parent = dirname(path);
+  if (create && parent !== path) await ordinary(parent, true);
+  // Drive and filesystem roots already exist. Never attempt mkdir on those existing ancestors.
+  if (!existing && create && parent !== path) await mkdir(path, { mode: 0o700 }).catch(error => { if (error.code !== 'EEXIST') throw error; });
+  const info = await lstat(path);
+  if (!info.isDirectory() || info.isSymbolicLink()) throw Error('Home update paths must be ordinary directories without symbolic links.');
   return path;
 }
 export async function readRegular(path, limit = 32 * 1024 * 1024) {

@@ -7,6 +7,8 @@ import WorkflowTimeline from '../src/worker/webview/components/WorkflowTimeline.
 import ManagedProjectsPanel from '../src/worker/webview/components/ManagedProjectsPanel.vue';
 import App from '../src/worker/webview/App.vue';
 import TaskboardPage from '../src/worker/webview/pages/TaskboardPage.vue';
+import ProjectsPage from '../src/worker/webview/pages/ProjectsPage.vue';
+import { router } from './router';
 import type { LocalMergeView } from '../src/worker/application/local-merge-contracts';
 import type { GateCommandFields } from '../src/worker/webview/request-gate-controller';
 import { state } from '../src/worker/webview/store';
@@ -86,9 +88,28 @@ export const NotifyRequestProgress: Story = {
 
 export const FirstWorkerHome: Story = {
   name: 'Find the first project and provider setup from an empty worker home',
-  parameters: { storymap: storymap('A fresh standalone worker includes its untouched default conversation. That placeholder does not hide provider, repository and policy setup before the first Feature Request.', ['pages/TaskboardPage']) },
-  render: () => ({ setup() { installWorkerFixture('empty'); state.status!.mode = 'mock'; state.status!.state = 'standalone'; state.environment!.orchestratorUrl = null; state.environment!.chat.provider = 'claude-cli'; state.environment!.chat.configured = false; state.settings!.defaultProvider = 'claude-cli'; state.sessions!.selected = 'default'; state.sessions!.records.push({ id: 'default', taskId: 'default', kind: 'chat', title: 'New task', provider: 'claude-cli', createdAt: '2026-10-25T12:00:00Z', archived: false, status: 'draft', messages: 0, busy: false, interaction: { schemaVersion: 1, sessionId: 'default', revision: 0, phase: 'idle', pending: null, latestTurn: null, turns: [], totalTurns: 0 } }); return () => h(UApp, null, { default: () => h(KeepAlive, null, { default: () => h(TaskboardPage) }) }); } }),
-  play: async ({ canvasElement }) => { const q = within(canvasElement); await q.findByRole('heading', { name: 'Prepare your first Feature Request' }); for (const [name, href] of [['Set up a provider', '/settings#provider-connections'], ['Add a project', '/settings#repositories'], ['Approve the project delivery policy', '/settings#delivery-policy']]) { if (q.getByRole('link', { name }).getAttribute('href') !== href) throw Error('First-use navigation lost its setup destination.'); } await ready(canvasElement); }
+  parameters: { storymap: { ...storymap('A fresh standalone worker keeps its untouched placeholder out of request activity. First-use links lead to provider settings and the central Home project setup, where clone fields and policy approval remain explicit.', ['pages/TaskboardPage', 'pages/ProjectsPage', 'components/ManagedProjectsPanel', 'components/DeliveryPolicyPanel']), route: '/workboard' } },
+  render: () => ({ setup() { installWorkerFixture('empty'); state.status!.mode = 'mock'; state.status!.state = 'standalone'; state.environment!.orchestratorUrl = null; state.environment!.chat.provider = 'claude-cli'; state.environment!.chat.configured = false; state.settings!.defaultProvider = 'claude-cli'; state.sessions!.selected = 'default'; state.sessions!.records.push({ id: 'default', taskId: 'default', kind: 'chat', title: 'New task', provider: 'claude-cli', createdAt: '2026-10-25T12:00:00Z', archived: false, status: 'draft', messages: 0, busy: false, interaction: { schemaVersion: 1, sessionId: 'default', revision: 0, phase: 'idle', pending: null, latestTurn: null, turns: [], totalTurns: 0 } }); return () => h(UApp, null, { default: () => h(KeepAlive, null, { default: () => h(router.currentRoute.value.path === '/projects' ? ProjectsPage : TaskboardPage) }) }); } }),
+  play: async ({ canvasElement }) => {
+    const q = within(canvasElement);
+    await q.findByRole('heading', { name: 'Prepare your first Feature Request' });
+    for (const [name, href] of [['Set up a provider', '/settings#provider-connections'], ['Add a project', '/projects'], ['Approve the project delivery policy', '/projects#delivery-policy']]) {
+      if (q.getByRole('link', { name }).getAttribute('href') !== href) throw Error('First-use navigation lost its exact Home setup destination: ' + name);
+    }
+    await userEvent.click(q.getByRole('link', { name: 'Add a project' }));
+    await q.findByRole('heading', { name: 'Projects' });
+    if (router.currentRoute.value.fullPath !== '/projects') throw Error('Add project did not navigate to the central Projects page.');
+    await userEvent.click(q.getByText('Add a project', { exact: true }));
+    for (const label of ['Project ID', 'Git repository URL', 'Shared branch', 'Feature Request folder', 'Check for new requests every · seconds']) {
+      const field = q.getByLabelText(label);
+      if (!field.checkVisibility()) throw Error('Home clone setup did not expose ' + label);
+    }
+    const clone = q.getByRole('button', { name: 'Clone and add project' }) as HTMLButtonElement;
+    if (!clone.disabled) throw Error('An empty clone registration must not be submitted.');
+    if (q.queryByLabelText('Absolute checkout directory')) throw Error('New Home projects must use isolated clones.');
+    await q.findByRole('heading', { name: 'Project delivery policy' });
+    await ready(canvasElement);
+  }
 };
 function renderRetainedSetup(resume: boolean) { return () => ({ setup() {
   const base = installManagedProjectsFixture(), project = base.projects.projects[0]; project.workflow.configured = false;

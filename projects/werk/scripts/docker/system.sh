@@ -23,6 +23,7 @@ command -v docker >/dev/null || { echo 'Docker with Compose is required; host No
 docker compose version >/dev/null
 [[ "$release_dir" != *','* && "$release_dir" != *$'\n'* ]] || { echo 'Release path cannot contain commas or line breaks' >&2; exit 2; }
 helper=(docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --user "$(id -u):$(id -g)" --mount "type=bind,source=$release_dir,target=/release,readonly")
+# Bash 3 nounset requires conditional expansion for an empty optional array.
 helper_options=()
 if [[ -n "$definition_file" ]]; then
   [[ -f "$definition_file" && ! -L "$definition_file" ]] || { echo 'Definition must be a regular YAML file' >&2; exit 2; }
@@ -35,11 +36,11 @@ fi
 base_image="${WERK_DOCKER_BASE_IMAGE:-node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df}"
 if [[ "$action" == plan ]]; then
   [[ -n "$definition_file" ]] || { echo 'system plan requires --file' >&2; exit 2; }
-  "${helper[@]}" --entrypoint node "$base_image" /release/scripts/docker/system.mjs plan "${helper_options[@]}"
+  "${helper[@]}" --entrypoint node "$base_image" /release/scripts/docker/system.mjs plan ${helper_options[@]+"${helper_options[@]}"}
   exit 0
 fi
 if [[ -n "$definition_file" ]]; then
-  system_id="$("${helper[@]}" --entrypoint node "$base_image" /release/scripts/docker/system.mjs id "${helper_options[@]}")"
+  system_id="$("${helper[@]}" --entrypoint node "$base_image" /release/scripts/docker/system.mjs id ${helper_options[@]+"${helper_options[@]}"})"
 fi
 if [[ -z "$state_dir" ]]; then
   [[ -n "$definition_file" ]] || { echo 'Specify --file or --state-dir' >&2; exit 2; }
@@ -55,7 +56,7 @@ helper+=(--entrypoint node "$base_image" /release/scripts/docker/system.mjs)
 if [[ "$action" == setup || "$action" == up ]]; then
   setup_options=(--host-state "$state_dir" --uid "$(id -u)" --gid "$(id -g)")
   if [[ -n "${WERK_DOCKER_IMAGE:-}" ]]; then setup_options+=(--image "$WERK_DOCKER_IMAGE"); fi
-  setup_result="$("${helper[@]}" setup "${helper_options[@]}" "${setup_options[@]}")"
+  setup_result="$("${helper[@]}" setup ${helper_options[@]+"${helper_options[@]}"} "${setup_options[@]}")"
   IFS= read -r image < "$state_dir/docker-image"
   docker build --file "$release_dir/Dockerfile.release" --tag "$image" "$release_dir" >&2
   if [[ "$action" == setup ]]; then printf '%s\n' "$setup_result"; exit 0; fi
@@ -66,7 +67,7 @@ done
 IFS= read -r project < "$state_dir/docker-project"
 [[ "$project" =~ ^werk-system-[a-f0-9]{16}$ ]] || { echo 'Invalid Docker system project' >&2; exit 1; }
 compose=(docker compose --project-directory "$release_dir" --file "$state_dir/docker-compose.json" --project-name "$project")
-if [[ "$action" == start || ( -n "$definition_file" && "$action" != up ) ]]; then "${helper[@]}" verify "${helper_options[@]}" >/dev/null; fi
+if [[ "$action" == start || ( -n "$definition_file" && "$action" != up ) ]]; then "${helper[@]}" verify ${helper_options[@]+"${helper_options[@]}"} >/dev/null; fi
 if [[ "$action" == start ]]; then
   IFS= read -r image < "$state_dir/docker-image"
   docker build --file "$release_dir/Dockerfile.release" --tag "$image" "$release_dir" >&2

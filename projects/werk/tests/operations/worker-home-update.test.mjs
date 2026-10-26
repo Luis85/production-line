@@ -1,18 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, rm, rename, lstat, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, rename, lstat, symlink, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, parse } from 'node:path';
 import { createHash } from 'node:crypto';
 import { apply, preview, rollback, homeUpdateStatus } from '../../scripts/runtime/home-update/transaction.mjs';
 import { withHomeRuntimeLock, withHomeRuntimeLease } from '../../scripts/runtime/home-update/guard.mjs';
 import { verifyRelease } from '../../scripts/release/verify.mjs';
-import { withStoppedRuntime } from '../../scripts/runtime/home-update/ownership.mjs';
+import { ordinary, withStoppedRuntime } from '../../scripts/runtime/home-update/ownership.mjs';
 import { applyUpdate, checkUpdate } from '../../scripts/runtime/portable/update.mjs';
 import { homeUpdate } from '../../scripts/runtime/home-update.mjs';
 const sha = value => createHash('sha256').update(value).digest('hex');
 async function fixture(t) {
-  const root = await mkdtemp(join(tmpdir(), 'werk-home-update-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-home-update-'))); t.after(() => rm(root, { recursive: true, force: true }));
   async function release(name, version) {
     const path = join(root, name); await mkdir(path);
     const files = [];
@@ -139,4 +139,13 @@ test('foreground components coexist with Home startup but their durable leases e
     assert.equal((await homeUpdateStatus(home)).status, 'none'); await retained();
   }));
   assert.equal((await apply(home, candidate)).status, 'confirmed');
+});
+
+test('private directory creation validates existing filesystem roots without recreating drive ancestors', async t => {
+  const { root } = await fixture(t), filesystemRoot = parse(root).root;
+  assert.equal(await ordinary(filesystemRoot, true), filesystemRoot);
+  const nested = join(root, 'existing/new/private'); await mkdir(join(root, 'existing'));
+  assert.equal(await ordinary(nested, true), nested); assert.equal((await lstat(nested)).isDirectory(), true);
+  await writeFile(join(nested, 'retained'), 'preserved'); await ordinary(nested, true); assert.equal(await readFile(join(nested, 'retained'), 'utf8'), 'preserved');
+  await writeFile(join(root, 'ordinary-file'), 'user data'); await assert.rejects(ordinary(join(root, 'ordinary-file'), true), /ordinary directories/); assert.equal(await readFile(join(root, 'ordinary-file'), 'utf8'), 'user data');
 });

@@ -84,6 +84,9 @@ for (const bootstrap of [false, true]) test('plain Git managed shared workflow p
   t.after(async () => { await close(); await rm(root, { recursive: true, force: true }); });
   let worker = await open();
   await worker.updateSettings({ defaultProvider: 'claude-cli', provider: { id: 'claude-cli', authenticationMode: 'cli-account', executable: process.execPath, model: 'fixture-inference-only' }, board: { paused: true } });
+  // Finish machine configuration before any managed intake can start background Git synchronization.
+  const grant = worker.settings.toolPolicy();
+  await worker.updateToolAccess({ expectedRevision: grant.revision, builtins: { ...grant.builtins, files: true, commands: [{ id: 'plain-check', name: 'Verify actual exported value', executable: process.execPath, args: ['tests/value.mjs'], enabled: true, verification: true }] }, mcp: [] });
   const registered = await worker.managedProjectCommand({ action: 'register', operationId: 'plain-register', id: 'plain', repository: pathToFileURL(remote).toString() });
   assert.equal(registered.projects[0].status, 'ready'); assert.equal(registered.projects[0].intakeEnabled, false);
   const checkout = registered.projects[0].path;
@@ -100,8 +103,6 @@ for (const bootstrap of [false, true]) test('plain Git managed shared workflow p
   const enabled = await worker.managedProjectCommand({ action: 'reconcile', operationId: 'plain-enable', id: 'plain' });
   assert.equal(enabled.projects[0].intakeEnabled, true);
   const github = enabled.diagnostics.find(item => item.id === 'github'); assert.equal(github.required, false); assert.equal(github.applicable, false);
-  const grant = worker.settings.toolPolicy();
-  await worker.updateToolAccess({ expectedRevision: grant.revision, builtins: { ...grant.builtins, files: true, commands: [{ id: 'plain-check', name: 'Verify actual exported value', executable: process.execPath, args: ['tests/value.mjs'], enabled: true, verification: true }] }, mcp: [] });
   const draft = await worker.featureCommand({ action: 'prepare', projectId: 'plain', operationId: 'plain-draft', seed: { title: 'Plain Git value change', provider: 'claude-cli', message: 'Change the exported value to two within the approved candidate.', paths: ['src/value.mjs'] } });
   const markdown = draft.markdown
     .replace('<!-- Describe constraints, relevant behavior, and what is outside this request. -->', 'Preserve unrelated source and the committed verification definition.')

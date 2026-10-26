@@ -77,6 +77,7 @@ test('packaged flat Home Docker launcher builds the internal runtime without req
   }
   const calls = join(root, 'docker-calls');
   await writeFile(join(tools, 'docker'), `#!/bin/sh
+for arg in "$@"; do [ -n "$arg" ] || { echo 'Unexpected empty Docker argument' >&2; exit 91; }; done
 printf '%s\n' "$*" >> "$WERK_DOCKER_FIXTURE_CALLS"
 case "$1" in
   compose|build) exit 0 ;;
@@ -96,10 +97,15 @@ esac
   assert.equal(JSON.parse(defaultResult.stdout).configured, true);
   assert.deepEqual(JSON.parse(await readFile(join(defaultState, 'config.json'), 'utf8')), { fixture: true });
   assert.deepEqual(JSON.parse(await readFile(join(state, 'config.json'), 'utf8')), { fixture: true });
+  const forwardedResult = await exec('/bin/bash', [join(home, 'werk-docker.sh'), 'setup', '--state-dir', state, '--project', 'demo', '--json'], {
+    cwd: root, env: { ...process.env, PATH: tools, WERK_DOCKER_FIXTURE_CALLS: calls },
+  });
+  assert.equal(JSON.parse(forwardedResult.stdout).configured, true);
   const observed = (await readFile(calls, 'utf8')).trim().split('\n');
   assert.ok(observed.some(call => call.includes('--file ' + join(home, 'runtime', 'Dockerfile.release')) && call.endsWith(join(home, 'runtime'))));
   assert.ok(observed.some(call => call.includes('source=' + state + ',target=/state')));
   assert.ok(observed.some(call => call.includes('source=' + defaultState + ',target=/state')));
+  assert.ok(observed.some(call => call.endsWith('setup --host-state ' + state + ' --project demo')));
   assert.equal(observed.some(call => call.includes(join(home, 'runtime', '.werk'))), false);
   await assert.rejects(stat(join(tools, 'node')), error => testErrorCode(error) === 'ENOENT');
   await assert.rejects(stat(join(home, 'runtime', '.werk')), error => testErrorCode(error) === 'ENOENT');
