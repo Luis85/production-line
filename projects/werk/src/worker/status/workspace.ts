@@ -108,14 +108,14 @@ export class WorkerWorkspace {
     if (action === 'templates') return featureTemplateView(this.context, (input as { projectId?: string }).projectId);
     return this.observed(() => action === 'prepare' || action === 'publish' ? authorFeature(this.context, input) : featureCommand(this.context, input));
   }
-  createTaskboard(input: unknown) {
+  async createTaskboard(input: unknown) {
     assertNativeWorkReady(this.context);
-    assertDirectFeatureCreation(this.context, input);
+    await assertDirectFeatureCreation(this.context, input);
     return this.observed(() => withRepositoryAdmission(this.context, () => this.board.create(input)));
   }
   async sessionCommand(input: unknown) {
     const body = input as { action?: unknown; id?: unknown } | null;
-    if (body?.action === 'create') assertDirectFeatureCreation(this.context, input);
+    if (body?.action === 'create') await assertDirectFeatureCreation(this.context, input);
     if (body?.action === 'rename' && typeof body.id === 'string' && isSharedFeatureSession(this.context, body.id))
       throw new DomainError('conflict', 'This title belongs to the published Feature Request. Its accepted scope and title remain fixed.');
     const result = await this.sessions.action(input);

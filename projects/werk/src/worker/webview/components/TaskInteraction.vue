@@ -14,11 +14,12 @@ import InteractionPanel from './InteractionPanel.vue';
 import type { InteractionTurn, InteractionView } from '../../application/interactions';
 import { state, chatAction, date, request, taskStatus, workspaceAction, getCapacityFreshness } from '../store';
 import { buildWorkerCapacityView } from '../worker-capacity';
+const props = defineProps<{ existingOnly?: boolean }>();
 const emit = defineEmits<{ busy: [boolean]; board: [] }>();
 const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness(), state.environment?.repositories?.nativeWork));
-const mode = ref<'new' | 'followup'>('new');
-const savedRequest = ref('');
-watch(() => state.unlocked, unlocked => { if (!unlocked) savedRequest.value = ''; }, { flush: 'sync' });
+const mode = ref<'new' | 'followup'>(props.existingOnly ? 'followup' : 'new');
+const savedRequest = ref(''), checkpointRecovery = ref(false);
+watch(() => state.unlocked, unlocked => { if (!unlocked) { savedRequest.value = ''; checkpointRecovery.value = false; } }, { flush: 'sync' });
 const evidenceOpen = ref(false), router = useRouter();
 const intake = ref<InstanceType<typeof TaskIntake> | null>(null);
 const sending = ref(false), intakeBusy = ref(false), interactionBusy = ref(false), settingsBusy = ref(false);
@@ -43,7 +44,7 @@ const failedAdmission = computed(() => {
 const connection = computed(() => state.settings?.providers.find(item => item.id === current.value?.provider));
 const executing = computed(() => !!current.value && state.sessions?.execution.currentSessionId === current.value.id);
 const busy = computed(() => sending.value || intakeBusy.value || interactionBusy.value || settingsBusy.value);
-const checkpointBlocked = computed(() => !!interaction.value?.pending || !!interaction.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(interaction.value.phase));
+const checkpointBlocked = computed(() => checkpointRecovery.value || !!interaction.value?.pending || !!interaction.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(interaction.value.phase));
 const available = computed(() => state.unlocked && !!current.value && !sharedRequest.value && state.chat?.available && !state.workspaceBusy && !busy.value && !checkpointBlocked.value && !failedAdmission.value && !current.value?.busy && !state.chat?.busy && !executing.value);
 const firstMessage = computed(() => !state.chat?.messages.length);
 // A review link reflects a retained artifact, independently of the reply's wording.
@@ -54,7 +55,7 @@ const patchReply = computed(() => {
 const phase = computed(() => state.chat?.phase ?? 'idle');
 watch(busy, value => emit('busy', value));
 watch(() => current.value?.id, (id, previous) => {
-  interaction.value = null; savedModel.value = ''; modelError.value = false; modelGeneration++;
+  interaction.value = null; checkpointRecovery.value = false; savedModel.value = ''; modelError.value = false; modelGeneration++;
   removing.value = false; settingsError.value = ''; evidenceOpen.value = false;
   if (id && previous && id !== previous) mode.value = 'followup';
 });
@@ -71,19 +72,23 @@ watch(() => [active.value, state.unlocked, current.value?.id, interaction.value?
   } catch { if (generation === modelGeneration && state.unlocked) modelError.value = true; }
 });
 async function openNewTask() {
+  if (props.existingOnly) { await router.push('/requests/new'); return; }
   if (busy.value || state.workspaceBusy) return;
   mode.value = 'new'; await nextTick(); await intake.value?.focusInstructions();
 }
 async function focusConversation() {
   mode.value = 'followup';
-  await nextTick(); document.getElementById('chat-task-title')?.focus();
+  await nextTick(); document.getElementById(props.existingOnly ? 'task-interaction-title' : 'chat-task-title')?.focus();
 }
 async function focusControls() {
   mode.value = 'followup';
   if (current.value) await router.push(reviewHref.value);
 }
 async function focusComposer() { await nextTick(); const composer = document.getElementById('chat-message'); composer?.focus({ preventScroll: true }); composer?.scrollIntoView({ block: 'center' }); }
+function recoveryChanged(value: { sessionId: string; required: boolean }) { if (value.sessionId === current.value?.id) checkpointRecovery.value = value.required; }
 function toggleEvidence(event: Event) {
+  const disclosure = event.currentTarget as HTMLDetailsElement;
+  if (checkpointRecovery.value && !disclosure.open) { disclosure.open = true; return; }
   if (!checkpointBlocked.value) evidenceOpen.value = (event.target as HTMLDetailsElement).open;
 }
 async function created(sessionId: string, previousSessionId: string) {
@@ -133,22 +138,22 @@ defineExpose({ openNewTask, focusConversation, focusControls });
 </script>
 <template>
   <aside class="task-interaction" aria-labelledby="task-interaction-title">
-    <header class="interaction-heading"><h2 id="task-interaction-title" tabindex="-1">Task interaction</h2><button type="button" class="back-to-board" @click="emit('board')"><UIcon name="i-lucide-arrow-up" />Back to taskboard</button></header>
-    <p v-if="savedRequest" class="interaction-notice" role="status">Your feature request was saved. <RouterLink :to="'/taskboard?session=' + encodeURIComponent(savedRequest)">Open saved request</RouterLink></p>
-    <div class="interaction-tabs" role="tablist" aria-label="Task interaction mode" @keydown="tabKey">
+    <header class="interaction-heading"><h2 id="task-interaction-title" tabindex="-1">{{ props.existingOnly ? 'Conversation' : 'Task interaction' }}</h2><button type="button" class="back-to-board" @click="emit('board')"><UIcon name="i-lucide-arrow-up" />Back to Workboard</button></header>
+    <p v-if="savedRequest" class="interaction-notice" role="status">Your feature request was saved. <RouterLink :to="'/request?session=' + encodeURIComponent(savedRequest)">Open saved request</RouterLink></p>
+    <div v-if="!props.existingOnly" class="interaction-tabs" role="tablist" aria-label="Task interaction mode" @keydown="tabKey">
       <button id="new-task-tab" role="tab" :aria-selected="mode === 'new'" :tabindex="mode === 'new' ? 0 : -1" aria-controls="new-task-pane" :disabled="busy || state.workspaceBusy" @click="switchMode('new')"><UIcon name="i-lucide-plus" />New request</button>
       <button id="followup-task-tab" role="tab" :aria-selected="mode === 'followup'" :tabindex="mode === 'followup' ? 0 : -1" aria-controls="followup-task-pane" :disabled="!current || busy || state.workspaceBusy" @click="switchMode('followup')"><UIcon name="i-lucide-message-circle" />Follow up</button>
     </div>
-    <div v-show="mode === 'new'" id="new-task-pane" role="tabpanel" aria-labelledby="new-task-tab">
+    <div v-if="!props.existingOnly" v-show="mode === 'new'" id="new-task-pane" role="tabpanel" aria-labelledby="new-task-tab">
       <TaskIntake ref="intake" @created="created" @busy="intakeBusy = $event" /><p v-if="state.actionError" class="error-text" role="alert">{{ state.actionError }}</p>
     </div>
-    <div v-show="mode === 'followup'" id="followup-task-pane" role="tabpanel" aria-labelledby="followup-task-tab">
+    <div v-show="mode === 'followup'" id="followup-task-pane" :role="props.existingOnly ? undefined : 'tabpanel'" :aria-labelledby="props.existingOnly ? 'task-interaction-title' : 'followup-task-tab'">
       <template v-if="current">
         <header class="pinned-task">
-          <div class="pinned-task-meta"><UIcon name="i-lucide-pin" /><span>Selected task</span><UBadge :color="['waiting_input', 'escalated', 'review', 'needs_rework'].includes(current.status) ? 'warning' : current.status === 'running' ? 'primary' : 'neutral'" variant="subtle">{{ taskStatus(current.status) }}</UBadge></div>
-          <h3 id="chat-task-title" tabindex="-1">{{ current.title }}</h3>
+          <div class="pinned-task-meta"><UIcon name="i-lucide-pin" /><span>{{ props.existingOnly ? 'Request status' : 'Selected task' }}</span><UBadge :color="['waiting_input', 'escalated', 'review', 'needs_rework'].includes(current.status) ? 'warning' : current.status === 'running' ? 'primary' : 'neutral'" variant="subtle">{{ taskStatus(current.status) }}</UBadge></div>
+          <h3 v-if="!props.existingOnly" id="chat-task-title" tabindex="-1">{{ current.title }}</h3>
           <p>{{ connection?.label ?? current.provider }}<span v-if="savedModel"> · {{ savedModel }}</span></p>
-          <p class="model-source">{{ failedAdmission ? 'No model call started for this request' : savedModel ? 'Model recorded in the latest conversation request' : modelError ? 'Saved conversation model unavailable · refresh this worker to retry' : 'Conversation model not yet recorded' }}</p>
+          <p v-if="!props.existingOnly" class="model-source">{{ failedAdmission ? 'No model call started for this request' : savedModel ? 'Model recorded in the latest conversation request' : modelError ? 'Saved conversation model unavailable · refresh this worker to retry' : 'Conversation model not yet recorded' }}</p>
           <button v-if="!sharedRequest && !checkpointBlocked && !failedAdmission" type="button" class="composer-jump" :disabled="busy || state.workspaceBusy" @click="focusComposer">{{ firstMessage ? 'Write task instructions' : 'Write a follow-up' }}<UIcon name="i-lucide-arrow-down" /></button>
         </header>
         <FeatureRequestNote v-if="current.id !== 'default' || current.requestId || current.messages" :key="current.id" :session="current" />
@@ -165,7 +170,7 @@ defineExpose({ openNewTask, focusConversation, focusControls });
         <p v-if="state.paused && state.chat?.busy" class="interaction-notice" role="status">Task updates are paused. Resume updates in the header to see progress.</p>
         <details v-if="!failedAdmission" class="task-checkpoint" :class="{ 'has-checkpoint': checkpointBlocked }" :open="checkpointBlocked || evidenceOpen" @toggle="toggleEvidence">
           <summary>Saved task context &amp; evidence</summary>
-          <InteractionPanel :current-status="current.status" @change="interaction = $event" @busy="interactionBusy = $event" />
+          <InteractionPanel :current-status="current.status" @change="interaction = $event" @busy="interactionBusy = $event" @recovery="recoveryChanged" />
         </details>
         <p v-if="firstMessage && !failedAdmission" class="followup-empty">Describe the outcome you need. The worker records it in this feature request.</p>
         <div v-else-if="!firstMessage" :key="current.id" class="task-conversation" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Task conversation" tabindex="0">

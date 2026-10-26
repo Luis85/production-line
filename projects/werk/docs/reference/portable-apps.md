@@ -1,45 +1,29 @@
-# Portable Node applications
+# Prebuilt applications and automation
 
-The runtime release contains `bin/apps/factory`, `bin/apps/orchestrator` and
-`bin/apps/worker`. Copy any complete folder into another project's `bin/apps/`.
-Each includes its compiled application, webview, CLI and runtime dependencies.
-Only **Node.js 24.x** is required. No npm install, source checkout, Docker or sibling
-application is needed. CLI subscription providers additionally need their installed,
-authenticated executable on the worker machine. Claude Code and Cursor CLIs run
-on Linux, macOS and Windows; Codex CLI requires Linux or macOS. API providers need a configured key and selected model.
+The release is a central WerkHome: root `worker.mjs` and `werk.mjs` launchers,
+replaceable `runtime/`, visible `projects/` and private `state/`. Start the worker
+with `node worker.mjs`; its Home is anchored to the launcher directory regardless
+of cwd. Use root `status`/`stop` for that same Home. Node24 and Git are required;
+provider CLIs need their own installation and login. No npm/source build is needed.
 
-From the destination project directory:
+The full raw application CLI is `runtime/bin/apps/<kind>/cli.mjs`. Every raw
+worker command must explicitly select the effective `--state-dir`: fresh
+`Home/state/worker` or the retained absolute path selected during adoption.
+Raw CLI defaults do not resolve `state/home.json`. Current examples run from Home;
+substitute the adopted absolute path where necessary. The primary request flow is
+**Workboard → New Feature Request**, using committed project templates and Git.
 
-```sh
-node bin/apps/worker/cli.mjs start --state-dir .werk/worker-a --port 4100
-node bin/apps/worker/cli.mjs start --state-dir .werk/worker-b --port 4101
-node bin/apps/orchestrator/cli.mjs start --state-dir .werk/line --port 3000 --project demo
-node bin/apps/factory/cli.mjs start --state-dir .werk/factory --port 3100
-```
-
-Start any subset in any order. `start` returns JSON when the app and authenticated
-control endpoint are ready; `run` stays in the foreground for CI, systemd, launchd,
-Windows services or containers. Use `--port 0` for an available port and read `url`
-from the result. Workers open Taskboard first; Factory and orchestrators open Dashboard.
-`start` waits up to 120 s for the app to report ready. On a busy host raise the deadline
-with `--startup-timeout-ms` (5000–900000) or the process environment variable
-`WERK_STARTUP_TIMEOUT_MS`; the option wins over the variable. A start that fails (deadline,
-startup error or lost IPC channel) asks the launched process to stop, waits up to 10 s,
-then ends that process and its children by PID (`taskkill /PID <pid> /T /F` on Windows, its
-process group on POSIX) and removes the `portable.json` and lock it left; the error names
-the log, or the PID when the process could not be stopped.
-Startup returns the private credential **file path**, never its contents. Open the
-returned URL and unlock the webview using that file locally. The CLI reads local
-credentials itself. Workers may enroll later through `settings set`; Factory can
-register an already running orchestrator as a line.
+Factory and Orchestrator remain independently deployable advanced components.
+Copy their complete app folders with dependencies if needed; worker project-local
+copy/install is retired. See [independent components](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/assemble-independent-components.md).
 
 ## Project environment and local access
 
-Run `node bin/apps/worker/cli.mjs env init --project-dir /absolute/project`
+Run `node runtime/bin/apps/worker/cli.mjs env init --project-dir /absolute/project --state-dir state/worker`
 to create that app's private project `.env` and credential-free `.env.example`.
 Factory and orchestrator expose the same command. When adopting existing state,
-pass its `--state-dir /absolute/state` so setup reuses its credentials. Project
-worker `init` performs this step automatically. Existing values/comments are
+pass its `--state-dir /absolute/state` so setup reuses its credentials. Worker Home launch does not use project `.env` setup; this section describes
+advanced component/legacy environment configuration. Existing values/comments are
 preserved; missing keys are appended and the private file is ignored by Git.
 Initialization prints paths and key names only.
 
@@ -62,55 +46,30 @@ to that URL. No npm install or dotenv package is required.
 
 ## Initialize a project worker
 
-Run the release worker's `cli.mjs init --project-dir /absolute/project` to install
-the app into that project's `bin/apps/worker`, create `.env`/`.env.example`,
-`.werk/worker.json`, a draft
-feature-request template and `.werk/compose.worker.yaml`. Use `--features-dir` to
-choose a project-relative folder and `--provider` to choose its default connection.
-`--workflow-dir DIR` places the Feature Requests Base, reviews, tasks and check files
-under `DIR` (see [keep the project root tidy](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md#keep-the-project-root-tidy));
-`--no-npm` skips the root `package.json` and reports `npm: { skipped: true }`.
-`--intake shared|local` (default `shared`) chooses the request source. `local` is for an operator-only
-worker: it writes `<features-dir>/_templates/local-request.md` (no `templateId`, `status: draft`,
-`mode: patch`, your provider, commented `paths` and `definitionRef`), records `features.intake: "local"` in
-`.werk/worker.json`, appends `/feature-reviews/` to the checkout's `.git/info/exclude` when the project is a Git
-checkout root and the folder has no tracked files, and reports
-`intake: { mode: "local", connectionRequired: false, template, commands, excluded, warnings, next }`
-instead of `shared_git`. Such a worker's detected checkout is accepted with `watch: false` unless
-`repository accept --watch true` says otherwise, and `shared status` and `feature list` add
-`intake: "local"` and a `hint` until a shared repository binding is saved. That binding
-takes precedence over the local preset, even when paused; existing repository watch
-settings remain unchanged. Repeated `init` preserves the recorded preset and refuses
-a conflicting explicit choice. See
-[operator-only setup](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md#set-up-an-operator-only-worker).
-Run or start from the project directory; the installed worker discovers its project
-configuration. `feature template` prints a fresh Markdown template without a running
-worker; `feature list` reads the authenticated watcher state. Template output is
-Markdown, an intentional exception to JSON CLI output.
+Project-local worker `init` is retired and refused by the new runtime. Use
+[central Home project setup](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md), with remote clones in
+visible `projects/`, guarded workflow publication and separate policy approval.
+Offline `feature setup --project-dir PATH` remains an authoring-kit operation; it
+does not copy a worker or create private runtime state in a source repository.
 
-See the [project worker guide](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md)
-and [feature request contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/feature-requests.md).
-Each watched folder belongs to one worker state; choose separate feature folders,
-state directories and ports for additional workers.
+For an existing 0.16 installation, inspect migration plan and explicitly adopt
+only compatible stopped standalone Home state. Project-installed state requires
+old-runtime recovery/export. Retained paths are not moved. See
+[adoption](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md#existing-standalone-installations).
 
 ## Assign repositories to a worker
 
-If the installation/project folder is a Git root, the worker offers it on
-Taskboard before using it. Review `repository status`, then explicitly choose
-`repository accept --discovery-id ID` or `repository decline --discovery-id ID`.
-The saved choice survives restart; acceptance adds an assignment. No remote or
-detached HEAD leaves watching off. Discovery never selects an unrelated ancestor.
+New Home projects use **Projects → Add a project → Clone and add project**.
+Select the remote, shared branch, Feature Request folder and polling interval.
+New clones are visible at `Home/projects/<id>`; arbitrary checkout adoption is not
+a new registration path. Preview workflow publication, approve its commit/push,
+then approve the exact committed policy and recheck setup.
 
-Use **Settings → Repositories** or
-`settings set --file repositories.json` with a top-level
-`repositories` object: `{pollMs: 30000, items: [{id, path, remote, branch?, watch}]}`.
-Assign existing local Git checkouts; the worker watches/fetches each enabled
-repository and only fast-forwards clean bases. Coding tasks use retained worktrees
-under each checkout's `.werk/worktrees`, or under the optional absolute
-`repositories.worktreeDirectory` outside every checkout so project tools do not
-scan task copies. Drain tasks before changing assignments.
-Worker JSON passed through `--config` can seed assignments; saved private settings
-take precedence after the first start. Git must be installed on the worker host.
+Retained legacy repository assignments remain inspectable at their verified
+absolute paths. They are not silently moved, duplicated or reauthorized. External
+legacy adopted rows do not enable new execution. Raw repository commands below
+support retained evidence/maintenance rather than replacing project registration.
+Private managed ownership/worktrees live under effective state.
 
 Use `repository status` to inspect assignments and `repository sync --id app`
 to check/pull one assignment; omit `--id` for all. `worktrees list` shows the task
@@ -188,10 +147,10 @@ recorded elsewhere, such as in a Docker container sharing the state; its
 Use `health` and `monitoring` to inspect application readiness and current conditions.
 
 ```sh
-node bin/apps/worker/cli.mjs schema
-node bin/apps/worker/cli.mjs status --state-dir .werk/worker-a
-node bin/apps/worker/cli.mjs monitoring --state-dir .werk/worker-a
-node bin/apps/worker/cli.mjs stop --state-dir .werk/worker-a
+node runtime/bin/apps/worker/cli.mjs schema
+node runtime/bin/apps/worker/cli.mjs status --state-dir .werk/worker-a
+node runtime/bin/apps/worker/cli.mjs monitoring --state-dir .werk/worker-a
+node runtime/bin/apps/worker/cli.mjs stop --state-dir .werk/worker-a
 ```
 
 `stop` authenticates the specific instance and drains/cancels work through the
@@ -212,175 +171,36 @@ writers before backing up.
 
 ## Update a copied app
 
-A copied app folder from 0.9.0 onward replaces itself with a verified release.
-Run update commands from the project directory, never from inside the app folder:
+The central worker updates through its root Home launcher, not the raw copied-app
+updater. Obtain a verified candidate in a separate directory and inspect the plan:
 
 ```sh
-node bin/apps/worker/cli.mjs update check
-node bin/apps/worker/cli.mjs update apply --stop
-node bin/apps/worker/cli.mjs update status
-node bin/apps/worker/cli.mjs update rollback --stop
+node worker.mjs update plan --from /path/to/verified-candidate-home
+node worker.mjs update apply --from /path/to/verified-candidate-home --if-match PLAN_ID --stop
 ```
 
-`check` reads the stable `SHA256SUMS` from GitHub and reports `current`, `target`
-and `available` without changing files. `--version X.Y.Z` selects that release's
-own checksum file instead of the latest. `apply` downloads the pinned archive into
-a temporary directory outside the project, checks its SHA-256 against `SHA256SUMS`,
-extracts it and verifies the complete release inventory, exactly like `install.mjs`.
-The release must declare update protocol 1 and state format 1, and must be newer:
-an older `--version` is refused (use `rollback`). Without network access, extract a
-release you verified yourself and pass `--from /path/werk-X.Y.Z`; its own release
-manifest is verified. The same route works when extraction is too slow on your
-machine: extract the archive yourself, then apply with `--from`.
+Use the exact plan identity from the first response. Application requires the
+worker stopped, or explicit `--stop`. The adapter replaces owned runtime/root/docs
+payload only; project repositories and unrelated private state remain outside that
+payload. Staging and backups are under `Home/state/updates`. Inspect saved status
+and recovery before repeating an uncertain update. This offline candidate path
+does not claim automatic network update discovery or a newly published release.
 
-Before anything changes, `apply` copies the release's `bin/apps/<app>` into a
-staging folder beside the app, verifies every staged file against the release
-manifest and runs the staged CLI once. Then it:
+Never extract an archive over a populated Home to upgrade it. Existing 0.16
+standalone state requires [explicit adoption](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md#existing-standalone-installations)
+when entering the new layout; adoption itself is not a runtime replacement.
+Project-installed states require matching old-runtime recovery/export.
 
-1. refuses while the selected instance runs, unless `--stop` was given; `--stop`
-   uses the normal graceful `stop`, which drains or cancels running work, so pause
-   the queue and let work finish first;
-2. holds the instance's application lock so it cannot start during the update;
-3. copies the complete state directory into a new, checksum-verified backup at
-   `<state>.updates/backups/<UTC timestamp>-<previous version>` (skipped for a
-   state directory without files);
-4. renames the current folder to `bin/apps/.<app>-update/<version>-<timestamp>`
-   and the staged folder into place. Both renames stay on one volume; if the second
-   fails, the previous folder is moved back;
-5. restarts the instance only if this command stopped it. A `start`ed instance is
-   restarted with its recorded working directory and resolved non-secret options,
-   including options supplied through the environment. The selected state directory
-   stays pinned during restart. Instances started by
-   0.8 or earlier recorded none: they restart with the state directory, project
-   defaults and previous port. A foreground `run` is left for its terminal or
-   service manager. `--no-restart` skips the restart. The restart does not replay
-   `--startup-timeout-ms`; set `WERK_STARTUP_TIMEOUT_MS` in the environment of
-   `update apply` to give it a longer startup deadline.
+Independent copied Factory/orchestrator operation remains supported. Their old
+copied-app updater requires `updateProtocol: 1` and refuses new protocol-2 Home
+archives; use verified manual replacement and old recovery. An app beneath a Home
+also refuses an individual app update before network access and directs operators
+to root `worker.mjs update plan/apply`. Keep complete old apps and a consistent
+stopped-state backup until verified. Worker project-copy installation is retired.
 
-If another process holds the app folder open and must keep running, so the folder
-cannot be renamed (the `Could not move` error described below), pass
-`--in-place` explicitly. It is never chosen automatically:
-
-```sh
-node bin/apps/worker/cli.mjs update apply --stop --in-place
-```
-
-`--in-place` first ships in 0.14.0. An installed 0.13.x or earlier launcher cannot
-use that flag for its first upgrade: stop the process holding the directory and
-use the normal update, or stop the app and replace its complete app folder from a
-verified release while preserving external state. Once 0.14.0 is installed, future
-updates and rollbacks support `--in-place`. Running a newer release's launcher with
-`--project-dir` does not target an older app folder; that option selects the project,
-and an update replaces the app containing the invoked launcher.
-
-Release verification, staging, the preflight, `--stop`, the state lock, the state
-backup and the history record are the same. Step 4 changes: the updater copies the
-current folder to `bin/apps/.<app>-update/<version>-<timestamp>` and verifies the
-copy, then writes changed and added files from the verified staged release into the
-app folder, deletes files the release manifest does not list and removes directories
-that become empty. A directory that cannot be removed because a process holds it
-open is left empty and listed in `inPlace.emptyDirectoriesLeft`; this is not an
-error. Finally every file in the app folder is compared with the release manifest,
-byte for byte, and extra or missing files fail the update. For failures caught by
-the updater, it attempts to write the retained copy back and verify it. A successful
-restore removes that redundant copy, reports that the previous files were restored
-and restarts the previous version as below. If restoration also fails, the app stays
-stopped and the error names the retained copy for manual recovery. `package.json`
-and `cli.mjs` are written last when upgrading and first when downgrading, but this
-ordering does not make the update atomic.
-
-A forced termination, host shutdown or power loss can interrupt a file write or
-leave a mixture of versions. The installed launcher and update command may no
-longer load; rerunning `update apply` is not a guaranteed repair. Keep the app
-stopped and preserve its state and all update folders. After verifying the updater
-and every process using the app have exited, restore the complete previous app
-from the retained folder under `bin/apps/.<app>-update/`: replace the app folder
-with that copy, or copy its files back and remove app files absent from the retained
-copy. Do not merge it over the interrupted tree without removing extra files. If
-termination occurred while creating the retained copy, that copy may be incomplete;
-use a separately downloaded and verified release of the previous version instead.
-Only after restoring a complete app, remove the stale `update.lock` and application
-maintenance lock if their owning processes have exited, then inspect status and
-start the app with its original state directory. No history entry is guaranteed
-for an interrupted operation, so `update rollback` may still refer to an earlier
-update. Keep the retained folder until the restored app has been checked.
-
-The result reports
-`method: "in-place"` (otherwise `"swap"`) and `inPlace` with `written`, `removed`
-and `emptyDirectoriesLeft` (otherwise `null`); the history entry records
-`method: "in-place"`.
-Files you added inside the app folder are removed by an in-place update and kept in
-the retained copy. A Docker Compose worker that mounts the folder still needs to be
-stopped and recreated.
-
-The JSON result names the new version, the retained folder, the backup and the
-restart outcome. A failed restart exits 1 after a successful replacement; start the
-app manually. If an update fails after stopping the app and its original folder is
-intact or restored, the updater attempts to restart that version unless
-`--no-restart` was given. If automatic folder recovery fails or another instance
-owns the state lock, it reports recovery instructions without attempting another start.
-Progress records go to stderr.
-
-The state directory is never modified, and project files, `.env`, feature folders
-and agent integrations are not written. Review `integrations plan` after updating
-for new templates. For a worker, also run `feature setup`. It refreshes an
-unmodified `.werk/authoring/feature-request.mjs` recorded in
-`.werk/authoring/manifest.json`. It reports `authoring_script_outdated` with a
-`revision` for a changed or unrecorded script, which `feature setup --if-match REVISION`
-replaces; see
-[Refresh the authoring script after an upgrade](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/team-feature-authoring.md#refresh-the-authoring-script-after-an-upgrade).
-`bin/apps/.<app>-update/` and `<state>.updates/` contain a
-`.gitignore` that excludes them from Git; backups contain credentials, so keep
-them private. Retained folders and backups are not deleted automatically; remove
-old ones after the new version is confirmed. Files you added inside the app folder
-remain in the retained folder only.
-
-`rollback` swaps back the folder retained by the last update or rollback, so a
-second rollback returns to the newer version. `update rollback --stop --in-place`
-restores the same retained folder by the in-place method instead: it retains a
-verified copy of the current files, copies the retained files back into the app
-folder, verifies them and keeps the retained folder it copied from. Rollback never
-changes state. If the newer version already changed state, stop the app, restore
-the update's backup into a new directory and start with that state:
-
-```sh
-node bin/apps/worker/cli.mjs update restore --from .werk/worker.updates/backups/BACKUP --to .werk/worker-restored
-node bin/apps/worker/cli.mjs start --state-dir .werk/worker-restored
-```
-
-`update status` lists the installed version, running state, retained folders and
-last operation. Explicit `--state-dir` and `--project-dir` select the instance as for
-`status`. Only one update per app folder runs at a time
-(`bin/apps/.<app>-update/update.lock`); after a crash, verify that process exited
-before removing that lock.
-
-The command checks one instance. Stop every other instance that runs from the same
-app folder (for example a second worker state, or the Docker Compose worker, which
-mounts the folder read-only) before updating, then recreate the container. On
-Windows, a terminal, editor, indexer or antivirus scan holding a file in the app
-folder blocks the rename; the update retries for ten seconds and then fails without
-replacing anything. Use the direct `node bin/apps/worker/cli.mjs update ...`
-commands above on Windows; an npm parent process can keep the app folder open.
-
-If the update fails with
-`Could not move ... Another process holds a file or directory open inside it`,
-something holds a handle inside the app folder, typically a long-running process
-started from the project folder. Windows Restart Manager does not report directory
-handles, so the tools that list locked files can show nothing. Look for
-long-running processes whose working directory is the project: agent MCP servers,
-language servers and file watchers started from the project folder. Stop them and
-run the update again. Nothing was replaced; if the update stopped the app, it
-restarts the previous version and reports whether that worked. If you cannot stop
-that process, for example the MCP servers of agent sessions you keep open, run
-`update apply --stop --in-place` (or `update rollback --stop --in-place`), as the
-error suggests. It replaces the files inside the folder, verifies them against the
-release manifest and reports directories it had to leave empty.
-
-Downloads and extraction use the system temporary directory to keep paths short.
-
-Version 0.8.0 and earlier have no `update` command. Upgrade those once by hand: stop,
-back up the state directory, replace the complete app folder with a verified 0.9.0
-or later copy, then start with the same state and launch options.
+Startup/update ownership and explicit runtime-gap recovery are documented in
+[interrupted Home update recovery](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/updates.md#recover-an-interrupted-home-update).
+Do not remove retained locks/leases while their ownership is live or unknown.
 
 ## Give a worker tasks from an AI agent or CI
 
@@ -408,11 +228,11 @@ Then write a task document, for example `task.json`:
 ```
 
 ```sh
-node bin/apps/worker/cli.mjs settings set --state-dir .werk/worker-a --file provider.json
-node bin/apps/worker/cli.mjs task create --state-dir .werk/worker-a --file task.json
-node bin/apps/worker/cli.mjs task get --state-dir .werk/worker-a --id ci-architecture-001
-node bin/apps/worker/cli.mjs task send --state-dir .werk/worker-a --id ci-architecture-001 --file followup.json
-node bin/apps/worker/cli.mjs task cancel --state-dir .werk/worker-a --id ci-architecture-001
+node runtime/bin/apps/worker/cli.mjs settings set --state-dir .werk/worker-a --file provider.json
+node runtime/bin/apps/worker/cli.mjs task create --state-dir .werk/worker-a --file task.json
+node runtime/bin/apps/worker/cli.mjs task get --state-dir .werk/worker-a --id ci-architecture-001
+node runtime/bin/apps/worker/cli.mjs task send --state-dir .werk/worker-a --id ci-architecture-001 --file followup.json
+node runtime/bin/apps/worker/cli.mjs task cancel --state-dir .werk/worker-a --id ci-architecture-001
 ```
 
 `followup.json` contains `{"message":"Describe the next step."}`. Each task owns one
@@ -482,14 +302,14 @@ Cursor uses the worker OS account's `agent login` or a private API key; see
 for native permissions, model selection and unavailable usage counters.
 
 ```sh
-node bin/apps/worker/cli.mjs provider check --id codex-cli
-node bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml
-node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer" --ref project-reviewer
-node bin/apps/worker/cli.mjs definition list
-node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION
-node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
+node runtime/bin/apps/worker/cli.mjs provider check --id codex-cli --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer" --ref project-reviewer --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition list --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID --state-dir state/worker
 ```
 
 A `--file` ending in `.yaml` or `.yml` (any case) is sent as the YAML profile
@@ -535,9 +355,9 @@ retries. Intake creation also requires a key. Example Factory creation:
 ```
 
 ```sh
-node bin/apps/factory/cli.mjs factory create --file factory.json --key factory-main
-node bin/apps/factory/cli.mjs factory list
-node bin/apps/factory/cli.mjs routing get --id main
+node runtime/bin/apps/factory/cli.mjs factory create --file factory.json --key factory-main
+node runtime/bin/apps/factory/cli.mjs factory list
+node runtime/bin/apps/factory/cli.mjs routing get --id main
 ```
 
 Before starting Factory, supply each line credential through its named environment
@@ -578,8 +398,8 @@ to accept queued work. Use `schema` to discover command methods and required fla
 The bounded `api` command exposes other existing endpoints, including pagination:
 
 ```sh
-node bin/apps/orchestrator/cli.mjs api --path '/v1/tasks?limit=100'
-node bin/apps/factory/cli.mjs api --path '/v1/intake?factoryId=main'
+node runtime/bin/apps/orchestrator/cli.mjs api --path '/v1/tasks?limit=100'
+node runtime/bin/apps/factory/cli.mjs api --path '/v1/intake?factoryId=main'
 ```
 
 For remote management use `--url` plus a private plain-text `--token-file` or
@@ -646,7 +466,7 @@ authenticated requests API. Save `{"action":"execution_recovery"}` in
 `inspect-recovery.json`, then run:
 
 ```sh
-node bin/apps/worker/cli.mjs api --path /api/requests --method POST --file inspect-recovery.json
+node runtime/bin/apps/worker/cli.mjs api --path /api/requests --method POST --file inspect-recovery.json --state-dir state/worker
 ```
 
 After inspecting the host and stopping any surviving processes and development
@@ -668,7 +488,7 @@ must be nonempty and at most 4,000 characters; the operation ID allows letters,
 digits, underscores and hyphens, up to 100 characters. Submit it with:
 
 ```sh
-node bin/apps/worker/cli.mjs api --path /api/requests --method POST --file confirm-stop.json
+node runtime/bin/apps/worker/cli.mjs api --path /api/requests --method POST --file confirm-stop.json --state-dir state/worker
 ```
 
 The worker checks the exact recovery revision and refuses a live controller,
@@ -750,11 +570,11 @@ approved-file requests use the same ledger; follow-ups and retries add new attem
 Original orchestrator lease snapshots remain separate under `history`.
 
 ```sh
-node bin/apps/worker/cli.mjs run list --session-id SESSION_ID --limit 50
-node bin/apps/worker/cli.mjs run get --id RUN_ID
-node bin/apps/worker/cli.mjs run analyze --provider codex-cli --since 2026-10-14T00:00:00Z
-node bin/apps/worker/cli.mjs run export --session-id SESSION_ID --format json
-node bin/apps/worker/cli.mjs run export --session-id SESSION_ID --format csv
+node runtime/bin/apps/worker/cli.mjs run list --session-id SESSION_ID --limit 50 --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs run get --id RUN_ID --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs run analyze --provider codex-cli --since 2026-10-14T00:00:00Z --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs run export --session-id SESSION_ID --format json --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs run export --session-id SESSION_ID --format csv --state-dir state/worker
 ```
 
 `list`, `analyze` and `export` accept `--session-id`, `--task-id`, `--provider`,
@@ -799,13 +619,13 @@ sign-in, available quota or task completion.
 Use the same named commands for a human terminal session or AI automation:
 
 ```sh
-node bin/apps/worker/cli.mjs feature template
-node bin/apps/worker/cli.mjs feature create --name request.md --markdown draft.md
-node bin/apps/worker/cli.mjs feature get --name request.md
-node bin/apps/worker/cli.mjs feature validate --name request.md
-node bin/apps/worker/cli.mjs feature submit --name request.md --if-match REVISION
-node bin/apps/worker/cli.mjs feature wait --name request.md --timeout-ms 60000
-node bin/apps/worker/cli.mjs feature result --name request.md
+node runtime/bin/apps/worker/cli.mjs feature template
+node runtime/bin/apps/worker/cli.mjs feature create --name request.md --markdown draft.md --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs feature get --name request.md --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs feature validate --name request.md --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs feature submit --name request.md --if-match REVISION --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs feature wait --name request.md --timeout-ms 60000 --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs feature result --name request.md --state-dir state/worker
 ```
 
 `feature template` prints Markdown and needs no running instance. Save and edit
@@ -846,9 +666,9 @@ successful execution. Native thread/session IDs are not interchangeable with
 Werk worker session IDs.
 
 ```sh
-node bin/apps/worker/cli.mjs capabilities
-node bin/apps/worker/cli.mjs interaction get --id SESSION_ID
-node bin/apps/worker/cli.mjs interaction turn --id SESSION_ID --turn-id TURN_ID
+node runtime/bin/apps/worker/cli.mjs capabilities --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs interaction get --id SESSION_ID --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs interaction turn --id SESSION_ID --turn-id TURN_ID --state-dir state/worker
 ```
 
 `interaction get` returns `schemaVersion: 1`, `sessionId`, a numeric `revision`,
@@ -868,7 +688,7 @@ yet completed; they do not imply model success.
 For durable automation notifications, poll normalized events:
 
 ```sh
-node bin/apps/worker/cli.mjs interaction events --id SESSION_ID --after 0 --limit 50
+node runtime/bin/apps/worker/cli.mjs interaction events --id SESSION_ID --after 0 --limit 50 --state-dir state/worker
 ```
 
 The response is `{schemaVersion:1,sessionId,events,nextAfter,hasMore}`. `after`
@@ -892,7 +712,7 @@ stable operation ID you choose. Replace the placeholders with values read from
 SHA-256 revision.
 
 ```sh
-node bin/apps/worker/cli.mjs interaction answer --id SESSION_ID --question-id PENDING_ID --if-match NUMERIC_REVISION --key answer-001 --file answer.json
+node runtime/bin/apps/worker/cli.mjs interaction answer --id SESSION_ID --question-id PENDING_ID --if-match NUMERIC_REVISION --key answer-001 --file answer.json --state-dir state/worker
 ```
 
 For a short non-sensitive answer, `--message "Use the existing layout"` replaces
@@ -906,7 +726,7 @@ To decline a pending decision without racing another operator's answer, use the
 same target/revision guards with a distinct operation ID:
 
 ```sh
-node bin/apps/worker/cli.mjs interaction cancel --id SESSION_ID --question-id PENDING_ID --if-match NUMERIC_REVISION --key decline-001
+node runtime/bin/apps/worker/cli.mjs interaction cancel --id SESSION_ID --question-id PENDING_ID --if-match NUMERIC_REVISION --key decline-001 --state-dir state/worker
 ```
 
 Pending decisions are separate from running execution. Use the owning task or
@@ -926,8 +746,8 @@ To continue a supported stopped interaction, read its retained turn, then resume
 with the current revision and a new stable operation ID:
 
 ```sh
-node bin/apps/worker/cli.mjs interaction resume --id SESSION_ID --turn-id PRIOR_TURN_ID --if-match NUMERIC_REVISION --key resume-001
-node bin/apps/worker/cli.mjs task resume --id SESSION_ID --turn-id PRIOR_TURN_ID --if-match NUMERIC_REVISION --key resume-001 --file continuation.json
+node runtime/bin/apps/worker/cli.mjs interaction resume --id SESSION_ID --turn-id PRIOR_TURN_ID --if-match NUMERIC_REVISION --key resume-001 --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs task resume --id SESSION_ID --turn-id PRIOR_TURN_ID --if-match NUMERIC_REVISION --key resume-001 --file continuation.json --state-dir state/worker
 ```
 
 `task resume` is an alias of `interaction resume`. Optional continuation input is

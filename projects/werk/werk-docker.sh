@@ -8,6 +8,8 @@ if (($#)); then shift; fi
 state_dir="$release_dir/.werk"
 no_open=false
 json=false
+# Bash 3 treats an empty array as unset under nounset. Conditional expansions
+# below preserve zero forwarded arguments without inserting an empty argument.
 forward=()
 while (($#)); do
   case "$1" in
@@ -36,7 +38,7 @@ if [[ "$command_name" == setup || "$command_name" == start ]]; then
 fi
 operator=(docker run --rm --user "$WERK_DOCKER_UID:$WERK_DOCKER_GID" --mount "type=bind,source=$state_dir,target=/state" "$WERK_DOCKER_IMAGE")
 if [[ "$command_name" == setup ]]; then
-  "${operator[@]}" setup --host-state "$state_dir" "${forward[@]}"
+  "${operator[@]}" setup --host-state "$state_dir" ${forward[@]+"${forward[@]}"}
   exit 0
 fi
 [[ -f "$state_dir/docker.env" && ! -L "$state_dir/docker.env" ]] || { echo 'Docker setup metadata is missing; run setup first.' >&2; exit 1; }
@@ -44,7 +46,7 @@ compose=(docker compose --project-directory "$release_dir" --env-file "$state_di
 # Compose substitutes COMPOSE_PROJECT_NAME from this explicit nonsecret CLI option.
 project_name="$(docker run --rm --user "$WERK_DOCKER_UID:$WERK_DOCKER_GID" --mount "type=bind,source=$state_dir,target=/state,readonly" --entrypoint node "$WERK_DOCKER_IMAGE" -e 'const fs=require("node:fs");const s=fs.readFileSync("/state/docker.env","utf8");const m=/^WERK_DOCKER_PROJECT=(werk-[a-f0-9]{12})$/m.exec(s);if(!m)process.exit(2);process.stdout.write(m[1]);')"
 compose+=(--project-name "$project_name")
-if [[ "$command_name" != cli && ${#forward[@]} -ne 0 ]]; then echo 'Unknown options for Docker command' >&2; exit 2; fi
+if [[ "$command_name" != cli && -n "${forward[0]+set}" ]]; then echo 'Unknown options for Docker command' >&2; exit 2; fi
 case "$command_name" in
   start)
     "${compose[@]}" up --detach --wait --wait-timeout 90 orchestrator worker >&2
@@ -60,5 +62,5 @@ case "$command_name" in
   logs)
     if [[ "$json" == true ]]; then "${compose[@]}" logs --no-color --tail 100 orchestrator worker | docker run --rm -i "$WERK_DOCKER_IMAGE" logs-json
     else "${compose[@]}" logs --no-color --tail 100 orchestrator worker; fi ;;
-  cli) "${compose[@]}" exec -T orchestrator node /app/scripts/docker/operator.mjs cli "${forward[@]}" ;;
+  cli) "${compose[@]}" exec -T orchestrator node /app/scripts/docker/operator.mjs cli ${forward[@]+"${forward[@]}"} ;;
 esac

@@ -7,6 +7,31 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-26
+
+Qualification: native archive, browser, Git, Docker and VM checks use labelled protocol fixtures. Real Windows/Claude-account execution and live worker-managed GitHub Release publication remain separately qualified in the [acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md).
+
+### Added
+
+- WerkHome extracts directly into one transparent workspace with stable root launchers, visible project clones and private worker state separated from replaceable runtime files. Workboard prioritizes project Feature Requests, live delivery and review; Projects and Workflow remain primary navigation, with Worker health and History as secondary evidence.
+- Ready Check questions open an exact focused request from Workboard with an exact-checkpoint Git publication; uncertain acknowledgements retain the same answer operation before normal intake rechecks.
+- Explicit migration planning/adoption retains compatible stopped standalone state at its original absolute path; project-installed state requires old-runtime recovery/export. Home updates inspect a verified candidate plan before replacing owned application files.
+- A dedicated Workflow page shows recorded Feature Request stage pressure, project/time filters, UTC-week confirmed-increment velocity, measured lead/cycle times and explicit evidence coverage. Evidence-based management separates operational delivery proxies from unmeasured business outcomes; Worker health retains host and consumption observations; delivery-quality cohorts have their own Workflow evidence view.
+
+### Changed
+
+- Documentation follows the released Home workflow, with current qualified screenshots for focused views. Historical evidence is indexed under `docs/evidence/archive`; 55 unreferenced images were removed with recovery hashes, while validation and mutation receipts remain intact.
+
+- Worker pages now follow one user goal per focused view: choose work, author a request, advance its conversation, decide a review, choose/register a project, complete an explicit setup stage, inspect retained evidence or edit one setting. Attention leads mobile Workboard; advanced options and secondary evidence are disclosed progressively. Legacy bookmarks preserve exact project/request identity.
+- History inspection no longer selects or restores archived sessions. Capacity, time limits, provider connections and default provider are independent cached editors with retained drafts and exact conflict/retry protection.
+- Dashboard mutation testing has a separate three-module advisory scope with retained receipts and residual findings. Four added contracts raise the strict score to 72.04% over 998 mutants, retaining all prior kills and recording 264 survivors, 13 uncovered and two timeouts; an independent advisory CI job retains dashboard reports, and existing authority and workflow baselines remain unchanged.
+- New worker project-local installation is retired. New projects clone their remote into `Home/projects/<id>` with configurable watched folder/poll interval, and Workboard request creation uses committed templates and Git publication rather than generic local chat.
+
+### Fixed
+
+- A lost checkpoint-answer acknowledgement keeps its recovery controls visible after the server advances; retry replays the same immutable command once before another response is allowed. Project setup stays on the chosen goal through publication and retains uncertain operations with their original project.
+- Review names passed required checks separately from pending human acceptance. Project next-step links retain readable text and focused task/history controls meet the 44 px target. Long unbroken project names wrap within narrow screens.
+
 ## [0.16.0] - 2026-10-25
 
 Qualification: native Windows with a real Claude Code CLI account and worker-managed live GitHub Release publication remain pending; source, provider-protocol and host-API fixtures qualify only their observed boundaries. See the [workflow acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md).

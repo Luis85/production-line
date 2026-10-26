@@ -10,7 +10,7 @@ an npm dependency installation.
 From a downloaded Werk release, run the portable worker CLI against your project:
 
 ```sh
-node /path/to/werk/bin/apps/worker/cli.mjs feature setup --project-dir /path/to/project
+node /path/to/werk/runtime/bin/apps/worker/cli.mjs feature setup --project-dir /path/to/project
 ```
 
 Use `--features-dir requests/features` to choose a different queue,
@@ -18,9 +18,11 @@ Use `--features-dir requests/features` to choose a different queue,
 folder instead of the project root (a new workflow only; an existing
 `.werk/feature-workflow.json` wins and a differing folder is reported as a warning) and
 `--provider claude-cli` to seed a new template for Claude (otherwise `codex-cli`).
-Existing templates are preserved. Setup also
-runs during [project worker initialization](project-worker.md). When a worker
-configuration already exists, standalone setup adopts its feature directory.
+Existing templates are preserved. This optional offline-kit command is separate
+from [central Home project setup](project-worker.md), which previews the core
+workflow/policy/template/Base/check files without generating agent skills or the
+authoring CLI. When workflow configuration already exists, offline setup adopts
+its feature directory.
 Repeating setup preserves existing files and team customization; only an
 unmodified authoring script is refreshed (see below). A configured
 folder mismatch or malformed check file is reported before setup writes files.
@@ -65,14 +67,14 @@ happens when the team changed the script, or when the project was set up before
 Werk 0.10.0 and has no manifest. Compare the two files:
 
 ```sh
-git diff --no-index .werk/authoring/feature-request.mjs bin/apps/worker/src/worker/dist/worker/authoring/feature-request.mjs
+git diff --no-index .werk/authoring/feature-request.mjs /path/to/WerkHome/runtime/bin/apps/worker/src/worker/dist/worker/authoring/feature-request.mjs
 ```
 
 If the bundled script should replace the committed one, name the revision you
 inspected. Setup refuses the replacement if the file changed since then:
 
 ```sh
-node bin/apps/worker/cli.mjs feature setup --if-match REVISION
+node /path/to/WerkHome/runtime/bin/apps/worker/cli.mjs feature setup --project-dir /path/to/project --if-match REVISION
 ```
 
 The replacement also records the new script in the manifest, so later upgrades
@@ -93,7 +95,7 @@ new draft. Existing requests are never overwritten. Fill in Goal, Context,
 Acceptance criteria, and Verification plan. Keep the Markdown body within 8,000
 characters. Shared implementation requests use `mode: patch`; replace the empty
 `paths` list with the project-relative files you approve for this request.
-New templates include the provider chosen at worker initialization (or `codex-cli`
+New templates retain their committed provider choice (or `codex-cli`
 for authoring-only setup). Preserve that selection unless the operator has
 configured another connection; creating a request does not configure its provider.
 
@@ -159,24 +161,15 @@ Ready Check response in your editor. Use a successor draft for changed work afte
 implementation admission and retain the original ID with its history. Human review
 is still required before merging implementation changes; a worker publication or completion check is not a merge approval.
 
-If you also have a project worker, its CLI exposes the same implementation through
+The central Home runtime exposes the same authoring implementation through
 `feature author create`, `feature author validate`, and `feature author ready`.
 The existing `feature create` and `feature validate` commands remain part of the
 live worker API. The standalone script remains sufficient for authors.
 
-The portable app also supplies npm aliases without an npm install:
-
-```sh
-npm --prefix bin/apps/worker run feature:author:create -- --name search.md --title "Find matching requests"
-npm --prefix bin/apps/worker run feature:author:validate -- --file features/search.md
-```
-
-Use `feature:setup` and `feature:author:ready` for setup and guarded readiness.
-When worker initialization creates a previously missing project `package.json`,
-it adds equivalent root aliases prefixed with `worker:`, such as
-`npm run worker:feature:author:validate -- --file features/search.md`. Existing
-project manifests are preserved. Authoring-only setup does not add an app or a
-package manifest, so the standalone Node commands remain the portable option.
+Use the project's standalone `.werk/authoring/feature-request.mjs` commands above
+for portable authoring. A runtime does not need to be installed in the project,
+and new setup does not create project worker npm aliases. Existing legacy aliases
+are retained project files, not current Home installation instructions.
 
 ## Follow progress and answer the worker
 
@@ -228,7 +221,7 @@ vary by provider and model; Cursor CLI accepts only `default`.
 
 For Cursor, select `provider: cursor-cli` after the operator configures its native
 CLI connection. For portable team defaults, the operator can edit **Settings →
-Providers & accounts**; an omitted provider uses that worker's default. Explicit
+Provider connections**; an omitted provider uses that worker's default. Explicit
 provider values already in committed templates remain explicit.
 
 Once claimed, provider, model and effort remain fixed through Ready Check answers,
@@ -252,8 +245,8 @@ The worker operator imports the profile YAML and assigns the same reference on
 each worker that processes the team's requests:
 
 ```sh
-node bin/apps/worker/cli.mjs definition list
-node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
+node runtime/bin/apps/worker/cli.mjs definition list --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer --state-dir state/worker
 ```
 
 Keep the profile YAML in the repository if the team reviews it, for example under
@@ -262,8 +255,8 @@ the operator imports it after reviewing the preview. After a reviewed change, th
 operator updates the profile in place on each worker, keeping the reference:
 
 ```sh
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION
+node runtime/bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION --state-dir state/worker
 ```
 
 A `--file` ending in `.yaml` or `.yml` is sent as the profile itself, so the

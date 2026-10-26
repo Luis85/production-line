@@ -6,8 +6,25 @@ Linux [Codex policy](../how-to/run-codex-task.md) launches the configured provid
 for explicitly opted-in trusted tasks.
 
 The [system operator](system-definition.md#operator-actions) starts a complete
-Factory hierarchy from one YAML file. `node werk.mjs up` sets up and starts the complete example system in one command; `--file PATH` selects your own YAML. Its state belongs to `.werk-system/`, and it stops with Ctrl+C or `node werk.mjs system stop --file examples/system.yaml`. The commands below describe the separate
-single-line operator and its `.werk` state.
+Factory hierarchy from one YAML file. `node werk.mjs up` sets up and starts the complete example system in one command; `--file PATH` selects your own YAML. Its default Home state is `state/system`, and it stops with Ctrl+C or `node werk.mjs system stop --file runtime/examples/system.yaml`. The commands below describe the separate
+single-line operator and its `state/line` Home state.
+
+## Central worker Home
+
+Run root `node worker.mjs` (or `start`), `status` and `stop`. Its directory anchors
+Home regardless of cwd; `--home PATH` explicitly selects another Home. Fresh state
+is `state/worker`, repositories are `projects/<id>`, and prebuilt payload is
+`runtime/`. New project worker `init` and public `werk.mjs worker ...` commands
+are refused. Use `worker.mjs` for authoritative Home worker lifecycle.
+
+`migration plan [--state-dir ABSOLUTE_OLD_STATE]` inspects bounded legacy discovery.
+`migration adopt --state-dir ABSOLUTE_OLD_STATE` explicitly selects compatible
+stopped standalone state without relocation. Project-installed state is refused;
+use its old runtime for recovery/export. See [adoption](../how-to/project-worker.md#existing-standalone-installations).
+
+Advanced raw worker commands use `runtime/bin/apps/worker/cli.mjs` with an explicit
+effective `--state-dir`; they do not resolve Home adoption selection themselves.
+The Factory/single-line commands below are separate from this primary worker flow.
 
 ## Native operator
 
@@ -23,7 +40,10 @@ Entry point: `node werk.mjs`. Requires Node 24.x.
 | `open` | Open a token-free loopback application URL; authentication remains in the login form |
 
 `--state-dir PATH` selects persistent state and is available for every action.
-Default: `.werk` beside the release launcher. Setup accepts `--project`, `--port`,
+Default in Home: `state/line`; hierarchy `up`/`system` uses `state/system`, and
+independent Factory/Orchestrator uses `state/factory`/`state/orchestrator`.
+Explicit flags, environment and their advanced dotenv configuration retain
+precedence; central worker Home authority remains separate. Setup accepts `--project`, `--port`,
 `--worker-port`, `--workers`, and `--runtime native|docker`; native is the default.
 Worker count is 1–8 for native execution. Ports are integers 1–65535; the
 orchestrator and contiguous worker-status ports must not overlap. Start accepts
@@ -90,9 +110,9 @@ Application-client exit codes and output belong to that invoked client.
 The packaged clients remain independently usable:
 
 ```text
-node src/factory/dist/factory/cli.js --help
-node src/orchestrator/dist/orchestrator/cli.js --help
-node src/worker/dist/worker/cli.js --help
+node runtime/src/factory/dist/factory/cli.js --help
+node runtime/src/orchestrator/dist/orchestrator/cli.js --help
+node runtime/src/worker/dist/worker/cli.js --help
 ```
 
 Each complete `dist` tree contains its runtime dependencies. Factory hierarchy
@@ -102,20 +122,20 @@ management is optional and is not started by the single-line operator. See
 
 ## Worker repositories and execution profiles
 
-Use the portable worker client from the installed project with the same
-`--state-dir` as startup when overriding its default. It reads the selected
+Use the raw worker client from Home and always pass the effective
+`--state-dir` selected at startup. It reads the selected
 worker’s local credentials; stdout is JSON and no command prompts for a choice.
 
-| Command after `node bin/apps/worker/cli.mjs` | Contract |
+| Command after `node runtime/bin/apps/worker/cli.mjs` (append explicit `--state-dir`) | Contract |
 | --- | --- |
 | `repository status` | Inspect assignments and the detected project checkout without fetching |
 | `repository sync [--id ASSIGNMENT_ID]` | Fetch and safely fast-forward one assignment, or all when omitted; waits up to 120 s |
-| `repository accept --discovery-id ID [--watch true|false]` | Accept the exact detected checkout and save an assignment; requires idle work. `--watch` sets background fetching for the new assignment; default `false` when `features.intake` is `local`, otherwise `true` for a checkout with a remote and branch. `true` without a remote is refused, and so is `--watch` for a checkout that is assigned already: change its watching in **Settings → Repositories** or with `settings set` (`repositories.items[].watch`) |
+| Legacy `repository accept --discovery-id ID [--watch true|false]` | Accept the exact detected checkout and save an assignment; requires idle work. `--watch` sets background fetching for the new assignment; default `false` when `features.intake` is `local`, otherwise `true` for a checkout with a remote and branch. `true` without a remote is refused, and so is `--watch` for a checkout that is assigned already: change its watching in **Settings → Repositories** or with `settings set` (`repositories.items[].watch`) |
 | `repository decline --discovery-id ID` | Persist the choice not to use the detected checkout |
 | `worktrees list` | List task worktrees in assigned repositories with location, state and using file task |
 | `worktrees prune [--id NAME] [--repository ID] [--discard-changes true] [--dry-run]` | Remove worktrees no file task uses; clean only unless `--discard-changes true`; requires idle work except for `--dry-run` |
-| `footprint` | Read-only inventory of the installed worker by group (`app`, `retained`, `state`, `configuration`, `authoring`, `requests`, `integrations`, `environment`, `worktrees`) with path, existence, size and Git tracking; works running or stopped; no file contents or credentials |
-| `uninstall --dry-run \| --confirm [--stop] [--include-requests] [--include-environment]` | Run from the project directory. `--dry-run` lists `remove` and `keep` with reasons; `--confirm` needs a stopped worker (or `--stop`), removes owned clean task worktrees, then untracked integration, authoring, configuration, state, retained and app files, the app last. Tracked files, edited files, request folders and `.env` entries stay unless included. Exit 1 with `ok: false` when something could not be removed. See [Remove a project worker](../how-to/project-worker.md#remove-a-project-worker) |
+| Legacy `footprint` | Read-only inventory of the installed worker by group (`app`, `retained`, `state`, `configuration`, `authoring`, `requests`, `integrations`, `environment`, `worktrees`) with path, existence, size and Git tracking; works running or stopped; no file contents or credentials |
+| Legacy `uninstall --dry-run \| --confirm [--stop] [--include-requests] [--include-environment]` | Run from the project directory. `--dry-run` lists `remove` and `keep` with reasons; `--confirm` needs a stopped worker (or `--stop`), removes owned clean task worktrees, then untracked integration, authoring, configuration, state, retained and app files, the app last. Tracked files, edited files, request folders and `.env` entries stay unless included. Exit 1 with `ok: false` when something could not be removed. See [Remove a project worker](../how-to/project-worker.md#remove-a-project-worker) |
 | `shared status` | Inspect shared Git intake: binding, `revision`, workflow snapshot and requests, without fetching |
 | `shared sync` | Fetch the shared branch now and reconcile claims and publications; waits up to 120 s |
 | `shared configure --file intake.json` | Save `{"expectedRevision":N,"config":{...}}` while new starts are paused and idle. `config` must be complete: `enabled`, `repositoryId`, `remote`, `branch`, `workflowPath` and `pollMs` |
@@ -170,8 +190,8 @@ Consumption is configured per worker through its portable client, using the same
 `--state-dir` as startup or an explicit remote URL and credential:
 
 ```sh
-node bin/apps/worker/cli.mjs consumption status
-node bin/apps/worker/cli.mjs consumption configure --file consumption.json
+node runtime/bin/apps/worker/cli.mjs consumption status --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs consumption configure --file consumption.json --state-dir state/worker
 ```
 
 `consumption.json` contains a complete policy under its settings wrapper:

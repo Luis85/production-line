@@ -1,10 +1,96 @@
-# Local worker run metrics
+# Worker workflow and run metrics
 
 Local run evidence covers worker-managed Chat turns, approved-file tasks and
 feature requests, including follow-ups in those sessions. It is independent of
 the orchestrator's lease/snapshot journal. An original remote assignment keeps
 its orchestrator evidence; a later local conversation turn is a separate local
 execution, not a replay of that assignment.
+
+## Workflow webview
+
+**Workflow** (`/workflow`) measures retained Feature Request delivery, separately
+from Metrics' provider-attempt and host-resource observations. Authenticated
+`POST /api/requests` with `action: "workflow_metrics"` accepts optional `since`,
+`until`, `projectId` and `profileId` filters. The response is a versioned
+`WorkflowMetricsReport` with `scope: "retained_worker_workflow"`, `capturedAt`,
+explicit window/flow bases and coverage. It does not execute or approve work.
+
+```json
+{"action":"workflow_metrics","since":"2026-10-01T00:00:00Z","until":"2026-10-26T00:00:00Z","projectId":"my-project"}
+```
+
+Dates require ISO timestamps with a timezone. `until` is clamped to capture time;
+reversed windows and windows requiring more than 104 weekly buckets are rejected
+before reading records. Completion, rework and failure windows are half-open:
+`since <= timestamp < until`. Flow uses observations at or before `until`.
+
+| Observation | Meaning and boundary |
+| --- | --- |
+| Flow and stage pressure | WIP, blocked counts, known age and oldest known age across Intake, Pre-production, Production, Post-production, Review, Merge, Build, Publish and Unknown; a snapshot at the displayed `asOf` across all submission dates |
+| Delivered increments | One canonical Feature Request counted once on confirmed main-checkout merge, or on confirmed asset publication when its policy requires a release |
+| Weekly velocity | Confirmed increments grouped into Monday-start UTC weeks by completion time; partial boundary weeks are marked |
+| Complete-week average | Completed increments per complete UTC week in the selected window; partial weeks do not contribute to this average |
+| Lead and cycle time | Submission-to-integration and first-implementation-to-integration distributions over measured delivered increments, with sample and unknown counts |
+| Rework and failures | Recorded request observations with measured/unknown coverage, not an inferred quality score |
+| Delivery evidence | The existing delivery report retains its separate submission-time cohort and measured denominators |
+
+Human acceptance, a successful model invocation, passing checks, a pushed review
+branch and an internal completed phase are not confirmed integration. Review-only
+closures are reported as `closedWithoutIntegration`, outside delivered-increment
+velocity. Release-enabled requests require confirmed publication rather than just
+merge. Retries and rework retain one canonical request identity; they do not add
+increments. Receipts at or after the window's `until` are excluded. A request submitted
+before the window can still contribute a completion inside it. A known completion
+with an unknown submission time counts toward throughput while its lead time
+remains unknown.
+
+Lead time starts at the observed eligible intake submission (`submittedAt`), or
+journal `createdAt` when no intake record exists. A retained intake record with
+an unknown submission date stays unknown. Cycle time starts at the
+first recorded implementing/repairing step start or explicit `execution_started`
+event. Both end at confirmed integration. A missing anchor or a negative interval
+is unknown, not zero. Rework counts recorded `review_changes_requested` events
+and distinct repairing-step starts in the window. Failures count explicit failure
+journal events and failed finished steps, deduplicating a step's event and retained
+step record. Neither is inferred from invocation counts.
+
+The weekly series is bounded to 104 buckets. Omitting `since` starts at the UTC
+Monday containing `until - 1ms`, minus 103 weeks; an explicit window that needs
+more buckets is refused. This is not an all-history total. Project/profile filters apply to the report's evidence.
+Current flow is not a submission-date cohort: old requests can still be WIP.
+Historical state that cannot be reconstructed remains `flow.unknownState`; it is
+reported separately rather than counted as known WIP or completed work. A complete
+UTC week describes the window bounds, not proof that retained history covers
+every actual delivery.
+
+Coverage distinguishes canonical requests, intake-only requests, complete retained
+histories, unknown submission/completion times and closure without integration.
+An incomplete history cannot establish a missing timestamp or a zero-duration
+interval. Lead/cycle distributions show their measured sample counts; an empty
+sample has no percentile. Stage pressure shows `blockedUnknown` separately from
+known blocked requests. Stage age starts at the last recorded transition into that
+stage; intake-only age starts at its known eligible submission. Missing stage-entry
+evidence stays unknown. The embedded delivery report, also retained on Metrics for compatibility, can
+therefore have a different denominator from completion-window throughput; do not
+divide one by the other.
+
+### Evidence-based management
+
+The four areas explain what these operational observations can and cannot show:
+
+| Area | Available interpretation |
+| --- | --- |
+| Current Value | Unmeasured customer/business outcomes; activity and delivered counts do not establish realized value |
+| Unrealized Value | Unmeasured unmet needs and opportunity; the backlog is not a value estimate |
+| Time to Market | Operational proxies from measured delivery times, stage pressure and confirmed-increment throughput |
+| Ability to Innovate | Operational proxies from recorded flow, rework, failures and delivery evidence; innovation investment and outcomes remain unmeasured |
+
+No composite EBM score, story-point velocity, customer satisfaction or quality
+score is inferred. Each area reports its evidence and unavailable measures.
+Readings retain their capture time. A failed refresh keeps a matching **Last
+successful snapshot** with a visible error; changing filters clears the previous
+scope rather than displaying it under a new label. Empty, loading and stale states
+remain distinct. Pausing browser updates changes no worker work.
 
 ## Metrics webview
 

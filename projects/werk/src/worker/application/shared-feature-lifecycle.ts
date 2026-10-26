@@ -1,3 +1,4 @@
+import { acknowledgeReadyReviewAnswer, rejectReadyReviewAnswer } from './shared-ready-review-answer.js';
 import { localMergeConfigured, localMergeProjection, sameLocalMerge, sharedLocalMergePhase } from './shared-local-merge-projection.js';
 import { sharedReleaseConfigured, sharedReleasePhase, sharedReleaseProjection, sameSharedRelease } from './shared-release-projection.js';
 import { advanceSharedReviewRework } from './shared-review-rework.js';
@@ -40,8 +41,18 @@ export class SharedFeatureLifecycle {
   private async flush(record: SharedFeatureRecord, repository: SharedRepositoryPort, signal: AbortSignal) {
     if (!record.pending) return;
     const write = record.pending;
-    try { await repository.publishLifecycle(write, signal); }
+    try {
+      if (record.readyReviewAnswers?.some(item => item.status === 'pending' && item.writeOperationId === write.operationId)) {
+        await this.save(); // Reconfirm the durable answer intent before every possibly mutating retry.
+        if (!repository.publishReadyReviewAnswer) throw new DomainError('unavailable', 'This repository adapter cannot safely publish Ready Check answers.');
+        await repository.publishReadyReviewAnswer(write, signal);
+      } else await repository.publishLifecycle(write, signal);
+    }
     catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'conflict' && rejectReadyReviewAnswer(record, write)) {
+        delete record.pending; record.publication = 'error'; record.error = 'The canonical Feature Request changed before this Ready Check answer was published. Refresh its latest review.';
+        await this.save(); throw new DomainError('conflict', record.error);
+      }
       if (error && typeof error === 'object' && 'code' in error && error.code === 'conflict' && record.claimed && record.readyReviewState && !record.submitted && !write.artifacts.length && this.ports.readyReviewResponse) {
         const current = await repository.readBlob(await repository.head(signal), record.sourcePath, signal);
         if (current !== null) {
@@ -61,6 +72,9 @@ export class SharedFeatureLifecycle {
       if (operation === write.operationId) throw error;
       await repository.publishLifecycle(write, signal);
     }
+    if (acknowledgeReadyReviewAnswer(record, write)) {
+      delete record.pending; record.publication = 'synced'; record.error = null; await this.save(); return;
+    }
     record.remoteRevision = sharedHash(write.request.content);
     record.claimed = true;
     record.publication = 'synced';
@@ -74,6 +88,7 @@ export class SharedFeatureLifecycle {
     delete record.pending;
     await this.save();
   }
+  async flushPending(record: SharedFeatureRecord, repository: SharedRepositoryPort, signal: AbortSignal) { await this.flush(record, repository, signal); }
   async publish(record: SharedFeatureRecord, repository: SharedRepositoryPort, signal: AbortSignal, artifacts: { path: string; content: string; expectedRevision?: string | null }[] = []) {
     await this.flush(record, repository, signal);
     const content = this.ports.renderSource(record);

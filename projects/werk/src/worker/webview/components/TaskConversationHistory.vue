@@ -15,28 +15,28 @@ const {
   clearChatFilters,
   date,
   kindLabel,
-  openChat,
-  opening,
   state,
   taskKind,
   taskKindOptions,
   taskStatus,
 } = useTaskConversationHistory();
+function reviewDestination(sessionId: string) {
+  const task = state.board?.tasks.find(item => item.sessionId === sessionId);
+  return { path:'/review', query:{ session:sessionId, ...(task ? {fileId:task.id} : {}) } };
+}
 </script>
 <template>
     <section v-if="state.unlocked" class="monitor-section" aria-labelledby="chat-history-title">
       <div class="section-heading">
-        <h2 id="chat-history-title" tabindex="-1">Task conversations</h2>
-        <UButton to="/taskboard" color="neutral" variant="outline">Open taskboard</UButton>
+        <h2 id="chat-history-title" tabindex="-1">Retained requests</h2>
+        <UButton to="/workboard" color="neutral" variant="outline">Open Workboard</UButton>
       </div>
       <p class="page-note">
-        Find conversations from chat, file tasks and orchestrator assignments. Open one to read its
-        transcript or continue after execution finishes. Opening an archived task restores it to
-        your task list.
+        Find a retained request and inspect its evidence. Archived requests stay archived while you browse.
       </p>
       <div class="history-filters history-task-filters">
         <div>
-          <label for="chat-history-search">Find a task conversation</label>
+          <label for="chat-history-search">Find a request</label>
           <UInput
             id="chat-history-search"
             v-model="chatSearch"
@@ -82,7 +82,7 @@ const {
           {{
             allChatTasks.length
               ? 'No conversations match these filters.'
-              : 'No saved conversations yet. Start with New task on the Taskboard.'
+              : 'No retained requests yet. Create a Feature Request from Workboard to begin.'
           }}
         </p>
         <UButton
@@ -111,17 +111,12 @@ const {
           >
             {{ taskStatus(task.status) }}
           </UBadge>
-          <UButton
-            color="neutral"
-            variant="outline"
-            :loading="opening === task.id"
-            :disabled="!!opening || state.workspaceBusy"
-            :aria-label="(task.archived ? 'Restore and open task ' : 'Open task ') + task.title"
-            @click="openChat(task.id)"
-          >
-            {{ task.archived ? 'Restore and open' : 'Open task' }}
-          </UButton>
+          <UButton color="neutral" variant="outline" :to="reviewDestination(task.id)" :aria-label="'Inspect request ' + task.title">Inspect request</UButton>
         </li>
       </ul>
     </section>
 </template>
+
+<style scoped>
+.chat-task-history :deep(a),.section-heading :deep(a) { min-height:44px; }
+</style>

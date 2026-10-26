@@ -4,7 +4,7 @@ import { runReleaseOperation } from '../application/release-runtime.js';
 import type { ReleaseAuthority, ReleasePort } from '../application/release-contracts.js';
 import type { RequestCommand } from '../application/request-gates.js';
 import { createReleaseAdapter } from '../infrastructure/release-adapter.js';
-import { authorizeDeliveryPolicy } from './workspace-delivery-policy.js';
+import { authorizeIsolatedDeliveryPolicy as authorizeDeliveryPolicy } from './workspace-delivery-policy.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import type { WorkspaceContext } from './workspace-context.js';
 

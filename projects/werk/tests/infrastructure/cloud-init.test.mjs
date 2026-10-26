@@ -35,6 +35,8 @@ test('render produces data-only cloud-init with private state, no build, and bou
   assert.equal(files.get('/etc/werk/runtime.env').content, 'WERK_STATE_DIR=/var/lib/werk\nWERK_SYSTEM_FILE=/etc/werk/system.yaml\nWERK_LOG_OUTPUT=stream\nWERK_UPDATES=external\n');
   const unit = files.get('/etc/systemd/system/werk-system.service').content;
   for (const expected of ['RequiresMountsFor=/var/lib/werk', 'User=werk', 'Group=werk', 'KillMode=mixed', 'TimeoutStopSec=180', 'StartLimitBurst=3', 'ProtectSystem=strict', 'ReadWritePaths=/var/lib/werk', 'Restart=on-failure', 'system start --no-open --json']) assert.ok(unit.includes(expected), expected);
+  assert.match(unit, /WorkingDirectory=\/opt\/werk\/releases\/0\.1\.0\/runtime/);
+  assert.match(unit, /ExecStart=\/opt\/werk\/node\/v24\.4\.1\/bin\/node \/opt\/werk\/releases\/0\.1\.0\/runtime\/werk\.mjs system start/);
   assert.doesNotMatch(unit, /npm|setup|curl|build|ExecStartPre/);
   assert.equal(files.get('/etc/werk/verify-release.mjs').content, await readFile(new URL('scripts/release/verify.mjs', root), 'utf8'));
 });

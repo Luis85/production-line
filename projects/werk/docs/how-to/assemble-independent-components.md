@@ -1,14 +1,14 @@
 # Assemble independent components
 
 Start only the components you need, then connect them through their webviews.
-A worker accepts tasks through Chat and prepares local review patches without
-an orchestrator. It executes exactly one task at a time; a larger queue does not
-increase that limit. Only workers prompt LLMs.
+A central Home worker prepares project Feature Requests, executes approved work
+and exposes review without an orchestrator. Its configured machine ceiling is
+shared across projects; a larger queue does not increase that ceiling. Only workers prompt LLMs.
 An orchestrator can own a production line without Factory. Factory registers
 existing lines and routes work to them; it does not start their processes.
 
-Native commands run from an extracted release with Node 24, each as a foreground
-process in a separate terminal. Docker examples use the same prebuilt release
+Native commands run from an extracted Home with Node 24. The root worker starts
+in the background; advanced Factory/orchestrator examples run in their terminals. Docker examples use the same prebuilt release
 without host Node. No npm install or source checkout is required. The examples
 use one machine,
 loopback addresses, separate state directories and distinct ports.
@@ -19,42 +19,44 @@ For individually copyable app folders and background lifecycle commands, use the
 ## Start a worker
 
 ```sh
-node werk.mjs worker run --state-dir .werk/components/demo-worker --status-port 4201
+node worker.mjs --port 4201
 ```
 
 Open `http://127.0.0.1:4201`. Unlock it using the private
-`.werk/components/demo-worker/webview-token` file. Taskboard opens first;
-Metrics contains observations, History retains tasks and evidence, and Settings
-contains configuration. Configure **Settings → Providers & accounts** to submit
-model-backed tasks; **Settings → Orchestrator** handles optional enrollment.
+credential file named by `node worker.mjs status`. Workboard opens first;
+Worker health contains observations, History retains tasks and evidence, and Settings
+contains configuration. Configure **Settings → Provider connections** to submit
+model-backed tasks; **Settings → Orchestrator connection** handles optional enrollment.
 Configuration alone does not verify login, subscription quota or model access. See [Use the worker webview](use-worker-webview.md)
 for provider setup, unified task interaction and optional repository-file approval.
 
-Without explicit options, worker state is `.state/worker` and its port is 4100.
+Without explicit options, worker state is `Home/state/worker` and port is 4100.
+Public `werk.mjs worker ...` is refused; use the authoritative Home worker launcher.
 Starting standalone does not require an enrollment token.
 
 ## Scale with separate workers
 
-Each worker is serial across Chat, file tasks and remote assignments. Start more
-worker instances for parallel execution. Keep their identities, task sessions,
+One worker can run up to its configured shared ceiling; project limits may be
+stricter and unscoped legacy assignments remain exclusive. For separate workers,
+use separate complete Homes. Keep their identities, task sessions,
 credentials and state separate even when they share a host or provider account.
 
 ### Native: two workers, two terminals
 
-From the extracted release, run one command per terminal:
+Extract a verified complete Home for each worker, then run its own launcher:
 
 ```sh
-node werk.mjs worker run --state-dir .werk/components/worker-a --status-port 4201
+node /path/to/WorkerHomeA/worker.mjs --port 4201
 ```
 
 ```sh
-node werk.mjs worker run --state-dir .werk/components/worker-b --status-port 4202
+node /path/to/WorkerHomeB/worker.mjs --port 4202
 ```
 
-Open `http://127.0.0.1:4201` and `http://127.0.0.1:4202`. Each directory contains
-its own `webview-token`. Configure providers and optional enrollment separately.
+Open `http://127.0.0.1:4201` and `http://127.0.0.1:4202`. Each Home has
+its own private state/credential-file path. Configure providers and optional enrollment separately.
 These are alternatives to the first example: stop its worker or choose unused
-ports before starting them. Do not raise a per-worker parallelism setting.
+ports before starting them. The queue editor controls a Home worker's shared capacity.
 
 ### Docker: two workers, two persistent volumes
 
@@ -62,7 +64,7 @@ From an extracted release, build its prebuilt runtime image with Docker; host
 Node and npm are not required:
 
 ```sh
-docker build --file Dockerfile.release --tag werk-runtime:local .
+docker build --file runtime/Dockerfile.release --tag werk-runtime:local runtime
 ```
 
 Run the bundled worker CLI in two containers. Each command is a single line and
@@ -87,7 +89,7 @@ The runtime image does not install or authenticate Codex/Claude subscription
 CLIs. Configure an available API connection on each worker, or supply a separately
 prepared CLI-enabled image and login. Do not assume a host CLI login exists inside
 a container. These commands start standalone workers; enroll each later through
-**Settings → Orchestrator** using an address reachable from that container. Container
+**Settings → Orchestrator connection** using an address reachable from that container. Container
 `127.0.0.1` is the container itself, not the host or another container. See
 [Manage access](manage-access.md) for deliberate remote-listener/HTTPS setup.
 
@@ -101,15 +103,15 @@ wrapper accepts `--workers 1`; it is not a standalone-worker scaling command.
 In another terminal:
 
 ```sh
-node werk.mjs orchestrator run --state-dir .werk/components/demo-line --port 3001 --project demo
+node werk.mjs orchestrator run --state-dir state/orchestrator --port 3001 --project demo
 ```
 
 Open `http://127.0.0.1:3001` and sign in with `adminToken` from the private
-`.werk/components/demo-line/component.json`. The default authenticated page is
+`state/orchestrator/component.json`. The default authenticated page is
 **Dashboard** (`#system`), with Intake, Taskboard, Worker and metrics alongside.
 Choose **Tour starten** to explore the process, routing and evidence views.
 
-In the worker's **Settings → Orchestrator**,
+In the worker's **Settings → Orchestrator connection**,
 enter `http://127.0.0.1:3001` and the orchestrator's `enrollmentToken` from the
 same `component.json`, then choose **Save & connect**. The worker retries
 registration when the service is unavailable. Its project comes from the
@@ -117,7 +119,7 @@ enrollment grant. A configured chat provider does not change its registered
 execution profiles; the default orchestrated profiles remain simulations.
 
 The orchestrator runs without any enrolled worker: tasks wait for an eligible
-claim. Its default state directory is `.werk/orchestrator`, port 3000 and project
+claim. Its default Home state directory is `state/orchestrator`, port 3000 and project
 `demo`. `--project` seeds the first start; an existing directory cannot be reused
 for a different project. Worker CLI enrollment is also available through
 `--url` and the `WERK_ENROLLMENT_TOKEN` environment variable.
@@ -134,7 +136,7 @@ commands and paste only the token when `read` waits for input:
 ```sh
 read -r -s WERK_LINE_DEMO_TOKEN
 export WERK_LINE_DEMO_TOKEN
-node werk.mjs factory run --state-dir .werk/components/demo-factory --port 3100
+node werk.mjs factory run --state-dir state/factory --port 3100
 ```
 
 The token is read without terminal echo. Factory captures the configured
@@ -143,8 +145,8 @@ environment after adding or rotating a line credential. Use a separate variable
 for each line. Never substitute Factory's own login token for a line token.
 
 Open `http://127.0.0.1:3100`. Sign in with `adminToken` from
-`.werk/components/demo-factory/component.json`. Factory's default state directory
-is `.werk/factory` and its default port is 3100. Each independent service creates
+`state/factory/component.json`. Factory's default state directory
+is `state/factory` and its default port is 3100. Each independent service creates
 and reuses its private `component.json`; keep those files, databases and worker
 state out of source control and release program files. Launch output names the
 credential file without printing its contents.

@@ -15,7 +15,7 @@ quota remains available for personal use.
 
 ## Configure in the webview
 
-Open **Settings → Consumption**.
+Open **Settings → Token allowance**.
 Enable **Limit this worker’s consumption**, choose the daily or monthly UTC
 period, and enter the total allowance and worker percentage. Expand
 **Model call reservation** to adjust the amount held before each invocation.
@@ -45,8 +45,8 @@ Start the worker, then save this as `consumption.json` in your project:
 Apply and inspect it with the installed worker CLI:
 
 ```sh
-node bin/apps/worker/cli.mjs consumption configure --file consumption.json
-node bin/apps/worker/cli.mjs consumption status
+node runtime/bin/apps/worker/cli.mjs consumption configure --file consumption.json --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs consumption status --state-dir state/worker
 ```
 
 Use `--state-dir PATH` to select another local worker. For a remote worker, use

@@ -155,6 +155,17 @@ team's response channel. Public status is `reviewing_ready` during review,
 `waiting_ready_input` when clarification is needed, or `blocked` when review cannot
 proceed. Review does not create a separate Task note or implementation request.
 
+Workboard also opens the exact project/request under **Projects → Shared request
+progress**, where **Commit and push answer** publishes the canonical answer.
+Authenticated `POST /api/shared-intake` action `answer_ready_review` supplies
+`projectId`, `requestId`, a stable `operationId`, bounded `answer`, and the exact
+public `answerSubject`: `expectedGeneration`, `expectedReviewOperationId`,
+`expectedReviewDigest`, `expectedSourceCommit` and `expectedSourceRevision`.
+The retained answer receipt fences replay and checkpoint changes. An unknown
+acknowledgement retries the same body/key; a published/pending answer cannot create
+a second answer for that checkpoint after reopening. This path commits to Git and
+relies on ordinary intake reconciliation; it never directly dispatches implementation.
+
 While the Ready Check waits, the team may edit Answers and the original authored
 request details, approved scope and compatible instruction-profile fields.
 The accepted provider, model and effort stay fixed. Changing the provider value

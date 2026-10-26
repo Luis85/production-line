@@ -1,3 +1,4 @@
+import { legacyProjectFixture } from '../helpers/legacy-project-worker.mjs';
 import { observePublishedFeature } from './shared-intake-observation.mjs';
 import { taskboardRuntime } from "../worker/runtime-fixtures.mjs";
 import test from 'node:test';
@@ -14,7 +15,7 @@ const execute = promisify(execFile), installer = resolve('bin/apps/worker/cli.mj
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const digest = value => createHash('sha256').update(value).digest('hex');
 
-test('installed worker publishes one frozen shared feature from two clones and preserves the developer checkout across restart', { timeout: 120000 }, async t => {
+test('legacy installed worker recovers and publishes one frozen shared feature from two clones and preserves the developer checkout across restart', { timeout: 120000 }, async t => {
   async function git(directory, ...args) {
     return (await execute('git', ['-c', 'core.hooksPath=/dev/null', '-C', directory, ...args], { signal: t.signal, timeout: 30000, maxBuffer: 2097152 })).stdout.trim();
   }
@@ -77,8 +78,8 @@ test('installed worker publishes one frozen shared feature from two clones and p
   }
   await git(author, 'add', '.'); await git(author, 'commit', '-m', 'Shared workflow and custom checks'); await git(author, 'push', '-u', 'origin', 'main');
   await git(directory, 'clone', remote, checkout); await configureGit(checkout);
-  advance('install portable worker');
-  await cli(installer, checkout, 'init', '--provider', 'openai-api');
+  advance('reconstruct historical worker fixture');
+  await legacyProjectFixture(checkout, ['--provider', 'openai-api']);
   const application = join(checkout, 'bin/apps/worker'), built = join(application, 'src/worker/dist/worker');
   const { WorkerWorkspace } = await import(pathToFileURL(join(built, 'status/workspace.js')).href);
   const { SnapshotJournal } = await import(pathToFileURL(join(built, 'infrastructure/journal/snapshots.js')).href);

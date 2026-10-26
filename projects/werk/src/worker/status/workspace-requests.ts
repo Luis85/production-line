@@ -1,3 +1,4 @@
+import { workflowMetrics } from './workspace-workflow-metrics.js';
 import { localMergeCommands } from '../application/local-merge-contracts.js';
 import { requestLocalMergeView, mergeLocalRequest } from './workspace-local-merge.js';
 import { continueReviewRework } from './workspace-review-rework.js';
@@ -83,6 +84,7 @@ export function capabilities(workspace: WorkspaceContext){
 export async function requestCommand(workspace: WorkspaceContext, input: unknown, options: { canonicalSource?: boolean } = {}){
   const selectedAction = input && typeof input === 'object' && !Array.isArray(input) ? (input as { action?: unknown }).action : undefined;
   if (deliveryPolicyActions.some(action => action === selectedAction)) return deliveryPolicyCommand(workspace, input);
+  if (selectedAction === 'workflow_metrics') return workflowMetrics(workspace, input);
   if (selectedAction === 'metrics') return deliveryMetrics(workspace, input);
   if (selectedAction === 'execution_recovery' || selectedAction === 'confirm_execution_stopped') return executionRecoveryCommand(workspace, input);
   const initial = object(input, "Request command", [

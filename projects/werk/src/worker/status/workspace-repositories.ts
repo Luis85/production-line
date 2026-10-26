@@ -1,3 +1,4 @@
+import { assertManagedProjectIsolation } from './workspace-managed-isolation.js';
 import { assertNativeWorkReady, nativeWorkStatus } from './workspace-native-work.js';
 import type { CandidateInspectionLimits } from '../application/execution-policy.js';
 import { stopSessionProcesses } from './workspace-processes.js';
@@ -48,6 +49,7 @@ export function assertRepositoryChangeAllowed(workspace: WorkspaceContext){
 }
 
 async function chooseDiscoveredRepository(workspace: WorkspaceContext, action: "accept" | "decline", id: unknown, watch?: boolean){
+  if (action === "accept" && workspace.config.homeDir) throw new DomainError("conflict", "Add a project by its remote URL. Werk Home uses an isolated clone rather than adopting your working checkout.");
   if (action === "accept") assertRepositoryChangeAllowed(workspace);
   else if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating)
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
@@ -78,6 +80,10 @@ async function chooseDiscoveredRepository(workspace: WorkspaceContext, action: "
 
 export async function prepareTaskWorkspace(workspace: WorkspaceContext, selector: string, key: string, signal: AbortSignal, commit?: string, verify = false, inspection: Partial<CandidateInspectionLimits> = workspace.settings.value.execution){
   assertNativeWorkReady(workspace);
+  if (workspace.config.homeDir) {
+    const assigned = workspace.repositories.resolve(selector);
+    await assertManagedProjectIsolation(workspace, assigned.id, assigned.path);
+  }
   if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating || workspace.executionProfiles?.pending())
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   signal = AbortSignal.any([signal, workspace.repositoryStop.signal]);

@@ -9,8 +9,17 @@ export interface SharedIntakeConfig {
   workflowPath: string;
   pollMs: number;
 }
+export interface SharedReadyReviewAnswerSubject {
+  expectedGeneration: number;
+  expectedReviewOperationId: string;
+  expectedReviewDigest: string;
+  expectedSourceCommit: string;
+  expectedSourceRevision: string;
+}
 /** Public readiness review evidence excludes private prompt bytes and model checkpoints. */
 export interface SharedFeatureReadyReviewView {
+  answerSubject?: SharedReadyReviewAnswerSubject;
+  answerPublication?: { operationId: string; status: 'pending' | 'published' | 'rejected' };
   status: 'queued' | 'running' | 'waiting_input' | 'passed' | 'failed';
   attempt: number;
   sessionId?: string;

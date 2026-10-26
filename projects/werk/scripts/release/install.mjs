@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
-import { lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, rmdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -52,12 +52,6 @@ async function download(url, fetcher) {
   return Buffer.concat(chunks);
 }
 
-async function absent(path) {
-  try { await lstat(path); }
-  catch (error) { if (error.code === 'ENOENT') return; throw error; }
-  throw Error(`Destination already exists: ${path}. Existing files were preserved. Start that installation with node werk.mjs up, or choose another --directory.`);
-}
-
 /**
  * @param {any} config
  * @param {any} options
@@ -67,8 +61,17 @@ export async function install(config, options, { fetcher = fetch, log = console.
   if (process.versions.node.split('.')[0] !== '24') throw Error('Werk requires Node.js 24.x. Install Node 24 and retry.');
   if (!config || !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(config.version) || !/^[\w.-]+\/[\w.-]+$/.test(config.repository) || !/^[a-f0-9]{64}$/.test(config.sha256)) throw Error('Use install.mjs from a published GitHub release, not the source template.');
   const name = `werk-${config.version}`, archive = `${name}.tar.gz`;
-  const parent = resolve(options.directory), destination = join(parent, name);
-  await absent(destination);
+  const home = config.layout === 'werk-home-v1';
+  if (home && (options.file || options.stateDir)) throw Error('--file and --state-dir are legacy system installer options. Home selects its own state; use worker.mjs migration plan for retained standalone state.');
+  const destination = home ? resolve(options.directory) : join(resolve(options.directory), name), parent = home ? resolve(destination, '..') : resolve(options.directory);
+  async function fresh() {
+    try {
+      const info = await lstat(destination);
+      if (home && !info.isSymbolicLink() && info.isDirectory() && (await readdir(destination)).length === 0) return true;
+    } catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+    throw Error('Destination already exists and is not empty. Existing projects, state and files were preserved. Use the Home update command or choose a new empty Home.');
+  }
+  await fresh();
   try { exec('tar', ['--version'], { stdio: 'ignore', timeout: 10000, windowsHide: true }); }
   catch { throw Error('tar is required on PATH (included in current Windows, macOS and most Linux systems).'); }
   await mkdir(parent, { recursive: true });
@@ -84,14 +87,19 @@ export async function install(config, options, { fetcher = fetch, log = console.
     // Reject paths outside the expected root before invoking the system extractor.
     const listing = tar(exec, 'Listing the release archive', archive, ['-tzf', archive], { cwd: staging, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: listingTimeoutMs, windowsHide: true });
     const paths = listing.trimEnd().split(/\r?\n/);
-    if (paths.length > 11000 || paths.some(path => /[:\\\x00-\x1f\x7f]/.test(path) || !path.startsWith(`${name}/`) || path.replace(/\/$/, '').split('/').some(part => !part || part === '.' || part === '..'))) throw Error('Unsafe release archive paths');
+    const roots = new Set(['runtime', 'docs', 'worker.mjs', 'werk.mjs', 'werk-docker.sh', 'werk-docker.ps1', 'README.md', 'AGENTS.md', 'LICENSE', 'CHANGELOG.md', 'release-manifest.json']);
+    if (paths.length > 11000 || paths.some(path => /[:\\\x00-\x1f\x7f]/.test(path) || (home ? !roots.has(path.split('/')[0]) : !path.startsWith(`${name}/`)) || path.replace(/\/$/, '').split('/').some(part => !part || part === '.' || part === '..'))) throw Error('Unsafe release archive paths');
+    const types = tar(exec, 'Inspecting release archive entry types', archive, ['-tvzf', archive], { cwd: staging, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: listingTimeoutMs, windowsHide: true });
+    if (types.trimEnd().split(/\r?\n/).some(line => !/^[-d][rwxSsTt-]{9}/.test(line))) throw Error('Release archive links and special files are forbidden.');
     tar(exec, `Extracting the release archive (${paths.length} entries)`, archive, ['-xzf', archive], { cwd: staging, stdio: 'pipe', timeout: extractionTimeoutMs(paths.length), windowsHide: true });
-    const extracted = join(staging, name);
+    const extracted = home ? staging : join(staging, name);
+    if (home) await rm(archivePath);
     const manifest = JSON.parse(await readFile(join(extracted, 'release-manifest.json'), 'utf8'));
     if (manifest.version !== config.version) throw Error('Release manifest version mismatch');
-    const { verifyRelease } = await import(pathToFileURL(join(extracted, 'scripts/release/verify.mjs')).href);
+    if (home && manifest.layout !== 'werk-home-v1') throw Error('This archive uses a legacy layout; choose an explicit legacy recovery or a new Werk Home release.');
+    const { verifyRelease } = await import(pathToFileURL(join(extracted, ...(home ? ['runtime'] : []), 'scripts/release/verify.mjs')).href);
     await verifyRelease(extracted);
-    await absent(destination);
+    if (await fresh()) await rmdir(destination);
     await rename(extracted, destination);
     log(`Installed Werk ${config.version} in ${destination}`);
     return destination;
@@ -99,6 +107,12 @@ export async function install(config, options, { fetcher = fetch, log = console.
 }
 
 export async function start(root, options) {
+  const manifest = JSON.parse(await readFile(join(root, 'release-manifest.json'), 'utf8'));
+  if (manifest.layout === 'werk-home-v1') {
+    const { workerHome } = await import(pathToFileURL(join(root, 'runtime/bin/apps/worker/scripts/runtime/portable/home.mjs')).href);
+    await workerHome(['start', ...(options.noOpen ? ['--no-open'] : [])], { homeRoot: root });
+    return process.exitCode ?? 0;
+  }
   const { runNative } = await import(pathToFileURL(join(root, 'scripts/runtime/update/launcher.mjs')).href);
   const args = ['up', '--no-update', '--file', options.file ?? join(root, 'examples/system.yaml')];
   if (options.stateDir) args.push('--state-dir', options.stateDir);
@@ -110,7 +124,8 @@ export function restartCommand(root, options, platform = process.platform) {
   // Single-quoted literals prevent expansion of $(), backticks and shell operators.
   // PowerShell escapes a quote by doubling it; Bash closes/escapes/reopens it.
   const quote = value => "'" + value.replaceAll("'", platform === 'win32' ? "''" : "'\\''") + "'";
-  const args = [quote(join(root, 'werk.mjs')), 'up'];
+  if (release?.layout === 'werk-home-v1' && (options.file || options.stateDir)) throw Error('Home restart does not accept legacy system state overrides.');
+  const args = [quote(join(root, release?.layout === 'werk-home-v1' ? 'worker.mjs' : 'werk.mjs')), ...(release?.layout === 'werk-home-v1' ? [] : ['up'])];
   if (options.file) args.push('--file', quote(options.file));
   if (options.stateDir) args.push('--state-dir', quote(options.stateDir));
   if (options.noOpen) args.push('--no-open');
@@ -120,7 +135,7 @@ export function restartCommand(root, options, platform = process.platform) {
 async function main() {
   const options = parse(process.argv.slice(2));
   if (options.help) {
-    console.log('node install.mjs [--directory PATH] [--no-start] [--no-open] [--file PATH] [--state-dir PATH]\nRequires Node 24 and tar. Downloads and verifies this installer\'s exact release, then starts the default Factory system. Existing installations are never overwritten.');
+    console.log('node install.mjs --directory EMPTY_HOME [--no-start] [--no-open]\nRequires Node 24 and tar. Downloads and verifies this installer\'s exact release, then starts the central worker in the selected empty Home. Existing projects, state and installations are never overwritten.');
     return;
   }
   const root = await install(release, options);

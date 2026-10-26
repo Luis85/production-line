@@ -5,9 +5,11 @@ import { promisify } from 'node:util';
 import { access, mkdtemp, rm, readFile, writeFile, realpath } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { workerNpmScripts, seedWorkerPackage } from '../../scripts/runtime/portable/npm-package.mjs';
+import { workerNpmScripts } from '../../scripts/runtime/portable/npm-package.mjs';
+import { seedLegacyWorkerPackage } from '../helpers/legacy-project-package.mjs';
 import { commands } from '../../scripts/runtime/portable/commands.mjs';
 import { updateCommands } from '../../scripts/runtime/portable/update-commands.mjs';
+import { legacyProjectFixture } from '../helpers/legacy-project-worker.mjs';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 
 const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
@@ -42,26 +44,27 @@ test('worker npm scripts expose supported commands without install or build hook
   for (const command of [...Object.keys(catalog), ...Object.keys(updateCommands)]) assert.ok(manifest.scripts[command.replaceAll(' ', ':')], command);
   for (const name of ['worker', 'start', 'run', 'status', 'stop', 'schema', 'feature:setup', 'feature:author:create', 'feature:author:validate', 'feature:author:ready']) assert.ok(manifest.scripts[name], name);
   for (const name of ['install', 'preinstall', 'postinstall', 'prepare', 'build']) assert.equal(manifest.scripts[name], undefined);
+  assert.equal(manifest.scripts.init, undefined); assert.equal(workerNpmScripts(true)['worker:init'], 'node bin/apps/worker/cli.mjs init', 'Retain the old generated identity only for ownership and recovery.');
   assert.equal(manifest.dependencies, undefined); assert.equal(manifest.devDependencies, undefined);
 });
 
-test('root npm manifest is create-only and does not change project module semantics or custom scripts', async t => {
+test('legacy root npm manifest is create-only and does not change project module semantics or custom scripts', async t => {
   const cwd = await project(t), path = join(cwd, 'package.json');
-  assert.equal((await seedWorkerPackage(cwd)).created, true);
+  assert.equal((await seedLegacyWorkerPackage(cwd)).created, true);
   const initial = JSON.parse(await readFile(path, 'utf8'));
   assert.equal(initial.private, true); assert.equal(initial.type, undefined); assert.equal(initial.dependencies, undefined);
   assert.equal(initial.scripts['worker:status'], 'node bin/apps/worker/cli.mjs status');
   for (const command of Object.keys(updateCommands)) assert.equal(initial.scripts['worker:' + command.replaceAll(' ', ':')], 'node bin/apps/worker/cli.mjs ' + command);
   const customized = '{\n  "name": "existing-project", "type":"commonjs",\n  "scripts": {"worker":"node my-worker.js","test":"node custom-test.cjs"}\n}\n';
   await writeFile(path, customized);
-  assert.equal((await seedWorkerPackage(cwd)).created, false);
+  assert.equal((await seedLegacyWorkerPackage(cwd)).created, false);
   assert.equal(await readFile(path, 'utf8'), customized);
 });
 
-test('installed npm commands forward arguments and share the caller project state without npm install', { timeout: 120000 }, async t => {
+test('legacy installed npm commands forward arguments and share the caller project state without npm install', { timeout: 120000 }, async t => {
   const cwd = await project(t, false), entry = join(cwd, 'bin/apps/worker/cli.mjs'), state = 'state with spaces';
   await ownWorkspace(t, cwd, () => cli(cwd, entry, 'stop', '--state-dir', state));
-  const installed = await cli(cwd, installer, 'init');
+  const installed = await legacyProjectFixture(cwd);
   const app = installed.application;
   assert.equal(installed.npm.created, true);
   assert.equal((await npm(cwd, app, 'worker', ['schema'])).application, 'worker');
@@ -77,14 +80,14 @@ test('installed npm commands forward arguments and share the caller project stat
   await assert.rejects(access(join(cwd, 'package-lock.json')), { code: 'ENOENT' });
 });
 
-test('init preserves an existing npm project exactly while installed app scripts stay available', async t => {
+test('legacy fixture preserves an existing npm project exactly while installed app scripts stay available', async t => {
   const cwd = await project(t), manifest = '{"private":true,"type":"commonjs","scripts":{"worker":"node own-worker.cjs","test":"node test.cjs"}}\n';
   await writeFile(join(cwd, 'package.json'), manifest);
-  const installed = await cli(cwd, installer, 'init');
+  const installed = await legacyProjectFixture(cwd);
   assert.equal(installed.npm.created, false);
   assert.equal(await readFile(join(cwd, 'package.json'), 'utf8'), manifest);
   assert.equal((await npm(cwd, installed.application, 'status')).stateDirectory, join(cwd, '.werk/worker'));
-  await cli(cwd, join(installed.application, 'cli.mjs'), 'init');
+  await legacyProjectFixture(cwd);
   assert.equal(await readFile(join(cwd, 'package.json'), 'utf8'), manifest);
 });
 

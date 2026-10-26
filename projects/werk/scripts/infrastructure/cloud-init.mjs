@@ -28,7 +28,7 @@ export function validateArtifacts(options) {
 }
 export function serviceUnit(artifacts) {
   const executable = `/opt/werk/node/${artifacts.node.version}/bin/node`;
-  const root = `/opt/werk/releases/${artifacts.release.version}`;
+  const root = `/opt/werk/releases/${artifacts.release.version}/runtime`;
   return `[Unit]\nDescription=Werk single-host production system\nWants=network-online.target\nAfter=network-online.target\nRequiresMountsFor=/var/lib/werk\nStartLimitIntervalSec=300\nStartLimitBurst=3\n\n[Service]\nType=simple\nUser=werk\nGroup=werk\nWorkingDirectory=${root}\nEnvironmentFile=/etc/werk/runtime.env\nExecStart=${executable} ${root}/werk.mjs system start --no-open --json\nRestart=on-failure\nRestartSec=10\nKillMode=mixed\nTimeoutStopSec=180\nUMask=0077\nNoNewPrivileges=true\nPrivateTmp=true\nProtectSystem=strict\nProtectHome=true\nReadWritePaths=/var/lib/werk\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n`;
 }
 export async function prepare(options) {

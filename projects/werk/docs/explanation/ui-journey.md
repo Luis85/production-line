@@ -32,12 +32,20 @@ real Git PR operations in this starter.
 | Analyze | What can be compared reliably? | Portfolio filters, sample counts, latest-window disclosure and unknown cost/quality states |
 | Review delivery | Is the feature accepted? | Target workflow requires human review and verified feature-PR merge; mock status never implies this |
 
-The worker separates four needs: **Taskboard** creates or continues tasks and
-shows capacity, **Metrics** shows operational observations, **History** finds saved
-work and evidence, and **Settings** provides focused configuration sections.
-A standalone worker owns its local
-tasks, provider connections and sessions. Chat, file tasks and parent assignments
-share one execution slot; queued work does not add capacity. Parent-assigned work
+The worker's four primary navigation destinations are **Workboard**, **Projects**,
+**Workflow** and **Settings**. Each focused view serves one user goal. Workboard
+chooses the next request, with Needs you first; New Feature Request and the exact
+existing conversation open separate views. Projects chooses a project, then
+scopes one setup, policy-approval, readiness, policy-draft or polling operation.
+Workflow health summarizes flow/velocity; Delivery quality evidence owns outcome
+cohorts. Worker health observes resources and consumption. History opens mutually
+exclusive read-only evidence views, without selecting a session, restoring an
+archive or controlling the queue. Settings is a directory of independent editors.
+See the [worker webview guide](../how-to/use-worker-webview.md) for exact routes.
+A standalone worker owns its local tasks, provider connections and sessions.
+Requests share the configured 1–8 machine execution slots and stricter project
+limits; unscoped legacy and parent assignments remain exclusive. Queued work
+does not add execution capacity. Parent-assigned work
 remains under the owning orchestrator's authority. Local patches require human
 review and are not applied automatically. Docker webview ports must be discovered
 from the actual replica mapping; do not fabricate a URL from a worker ID.

@@ -5,6 +5,8 @@ import ts from 'typescript';
 import { computed, effectScope, nextTick, reactive, ref, watch } from 'vue';
 import { frontend } from '../ui/helpers/frontend-loader.mjs';
 
+const { workboardLane, workboardAction } = await frontend('src/worker/webview/workboard-view.ts');
+const { hasRequestActivity } = await frontend('src/worker/webview/worker-mode-view.ts');
 const { buildTaskOverview } = await frontend('src/worker/webview/task-overview.ts');
 const { readRequestSummaries } = await frontend('src/worker/webview/request-summary-reader.ts');
 const { taskActivityChanges } = await frontend('src/worker/webview/task-notifications.ts');
@@ -26,9 +28,9 @@ function fixture(t, sharedRequests = []) {
     return { total: runs.length, rows: runs };
   };
   const bindings = { computed, ref, watch, nextTick, onActivated() {}, onDeactivated() {}, useRoute: () => ({ path: '/taskboard', query: {} }), useRouter: () => ({}), state, request: read,
-    buildTaskOverview, readRequestSummaries, taskActivityChanges, buildWorkerCapacityView: () => ({ state: 'busy', stale: false }), getCapacityFreshness: () => 'fresh' };
+    workboardLane, workboardAction, hasRequestActivity, buildTaskOverview, readRequestSummaries, taskActivityChanges, buildWorkerCapacityView: () => ({ state: 'busy', stale: false }), getCapacityFreshness: () => 'fresh' };
   const scope = effectScope(); t.after(() => scope.stop());
-  const result = scope.run(() => new Function(...Object.keys(bindings), javascript + '\nreturn { readEvidence, activeRun, activeRuns, currentExecutionId, currentSession, runProvider, runModel, runElapsed, usage, canStop, running, extraRunning, activePurpose };')(...Object.values(bindings)));
+  const result = scope.run(() => new Function(...Object.keys(bindings), javascript + '\nreturn { readEvidence, activeRun, activeRuns, currentExecutionId, currentSession, runProvider, runModel, runElapsed, usage, canStop, running, groups, activePurpose };')(...Object.values(bindings)));
   return { ...result, state, run, runs, calls };
 }
 
@@ -68,9 +70,9 @@ test('Ready Check sessions identify the current reviewer without duplicating it 
   await f.readEvidence();
   assert.equal(f.activePurpose.value, 'Feature Request Ready Check');
   assert.equal(f.running.value.title, 'Review one'); assert.equal(f.running.value.primaryAction.kind, 'feature');
-  assert.deepEqual(f.extraRunning.value.map(item => item.sessionId), ['ready-review-two']);
+  assert.deepEqual(f.groups.value.find(group => group.id === 'running').items.filter(item => item.sessionId !== f.currentExecutionId.value).map(item => item.sessionId), ['ready-review-two']);
   assert.equal(f.canStop.value, false); assert.equal(f.currentSession.value, undefined);
   f.run.id = 'previous-attempt'; await f.readEvidence();
   assert.equal(f.running.value, undefined); assert.equal(f.activePurpose.value, 'Advisory review');
-  assert.deepEqual(f.extraRunning.value.map(item => item.sessionId), ['ready-review-two']);
+  assert.deepEqual(f.groups.value.find(group => group.id === 'running').items.filter(item => item.sessionId !== f.currentExecutionId.value).map(item => item.sessionId), ['ready-review-two']);
 });

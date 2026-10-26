@@ -165,7 +165,7 @@ function primaryAction(item: Pick<TaskOverviewItem, 'sessionId' | 'localTaskId' 
     if (item.localTaskId) query.set('fileId', item.localTaskId);
     return { kind: 'review', label: item.status === 'release_pending' ? 'Inspect release' : item.status === 'merge_pending' ? 'Inspect main checkout merge' : item.status === 'integration_pending' ? 'Inspect integration' : item.localTaskId ? 'Review changes' : 'Review result', sessionId: item.sessionId, href: '/review?' + query };
   }
-  if (item.sessionId) return { kind: 'session', label: ['waiting_input', 'escalated'].includes(item.status) ? 'Answer task' : 'Open task', sessionId: item.sessionId, href: '/taskboard?session=' + encodeURIComponent(item.sessionId) };
+  if (item.sessionId) return { kind: 'session', label: ['waiting_input', 'escalated'].includes(item.status) ? 'Answer task' : 'Open task', sessionId: item.sessionId, href: '/request?session=' + encodeURIComponent(item.sessionId) };
   if (item.localTaskId) return { kind: 'file', label: 'Inspect file task', href: '/history' + (['review', 'failed'].includes(item.status) ? '?fileState=' + item.status : '') };
   if (item.featureName) return { kind: 'feature', label: 'Inspect request', href: '/history?view=features' };
   return { kind: 'history', label: 'Inspect execution', href: '/history' };

@@ -7,6 +7,9 @@ import WorkflowTimeline from '../src/worker/webview/components/WorkflowTimeline.
 import ManagedProjectsPanel from '../src/worker/webview/components/ManagedProjectsPanel.vue';
 import App from '../src/worker/webview/App.vue';
 import TaskboardPage from '../src/worker/webview/pages/TaskboardPage.vue';
+import ProjectsPage from '../src/worker/webview/pages/ProjectsPage.vue';
+import AddProjectPage from '../src/worker/webview/pages/AddProjectPage.vue';
+import { router } from './router';
 import type { LocalMergeView } from '../src/worker/application/local-merge-contracts';
 import type { GateCommandFields } from '../src/worker/webview/request-gate-controller';
 import { state } from '../src/worker/webview/store';
@@ -81,14 +84,29 @@ export const NotifyRequestProgress: Story = {
     advance = () => { base.run.phase = 'packaging'; base.run.status = 'completed'; base.run.decision.reason = 'Candidate verification completed. Review the proposed increment.'; base.run.decision.waitingFor = 'Human review of the current candidate.'; base.request.lifecycle = 'in_review'; base.request.phase = 'review'; base.session.requestPhase = 'review'; base.session.requestLifecycle = 'in_review'; state.sessions!.execution.currentSessionId = null; state.refreshRevision++; };
     return () => h(UApp, null, { default: () => h(KeepAlive, null, { default: () => h(TaskboardPage) }) });
   } }),
-  play: async ({ canvasElement }) => { const q = within(canvasElement); await q.findByText('The worker is implementing the accepted request in its worktree.'); await nextTick(); advance(); const heading = await q.findByRole('heading', { name: 'Worker updates' }); const updates = heading.closest('section')!; await within(updates).findByText(/Ready for human review/); if (!updates.querySelector('a[href*="review"]')) throw Error('Worker update needs a request evidence link.'); await ready(canvasElement); }
+  play: async ({ canvasElement }) => { const q = within(canvasElement); await q.findByText('The worker is implementing the accepted request in its worktree.'); await nextTick(); advance(); const summary = await q.findByText(/Recent worker updates/); await userEvent.click(summary); const updates = summary.closest('details')!; await within(updates).findByText(/Ready for human review/); if (!updates.querySelector('a[href*="review"]')) throw Error('Worker update needs a request evidence link.'); await ready(canvasElement); }
 };
 
 export const FirstWorkerHome: Story = {
   name: 'Find the first project and provider setup from an empty worker home',
-  parameters: { storymap: storymap('A fresh standalone worker includes its untouched default conversation. That placeholder does not hide provider, repository and policy setup before the first Feature Request.', ['pages/TaskboardPage']) },
-  render: () => ({ setup() { installWorkerFixture('empty'); state.status!.mode = 'mock'; state.status!.state = 'standalone'; state.environment!.orchestratorUrl = null; state.environment!.chat.provider = 'claude-cli'; state.environment!.chat.configured = false; state.settings!.defaultProvider = 'claude-cli'; state.sessions!.selected = 'default'; state.sessions!.records.push({ id: 'default', taskId: 'default', kind: 'chat', title: 'New task', provider: 'claude-cli', createdAt: '2026-10-25T12:00:00Z', archived: false, status: 'draft', messages: 0, busy: false, interaction: { schemaVersion: 1, sessionId: 'default', revision: 0, phase: 'idle', pending: null, latestTurn: null, turns: [], totalTurns: 0 } }); return () => h(UApp, null, { default: () => h(KeepAlive, null, { default: () => h(TaskboardPage) }) }); } }),
-  play: async ({ canvasElement }) => { const q = within(canvasElement); await q.findByRole('heading', { name: 'Prepare your first Feature Request' }); for (const [name, href] of [['Set up a provider', '/settings#provider-connections'], ['Add a project', '/settings#repositories'], ['Approve the project delivery policy', '/settings#delivery-policy']]) { if (q.getByRole('link', { name }).getAttribute('href') !== href) throw Error('First-use navigation lost its setup destination.'); } await ready(canvasElement); }
+  parameters: { storymap: { ...storymap('A fresh standalone worker keeps its untouched placeholder out of request activity. First-use links lead to provider settings and the central Home project setup, where clone fields and policy approval remain explicit.', ['pages/TaskboardPage', 'pages/ProjectsPage', 'pages/AddProjectPage', 'components/ManagedProjectsPanel']), route: '/workboard' } },
+  render: () => ({ setup() { installWorkerFixture('empty'); state.status!.mode = 'mock'; state.status!.state = 'standalone'; state.environment!.orchestratorUrl = null; state.environment!.chat.provider = 'claude-cli'; state.environment!.chat.configured = false; state.settings!.defaultProvider = 'claude-cli'; state.sessions!.selected = 'default'; state.sessions!.records.push({ id: 'default', taskId: 'default', kind: 'chat', title: 'New task', provider: 'claude-cli', createdAt: '2026-10-25T12:00:00Z', archived: false, status: 'draft', messages: 0, busy: false, interaction: { schemaVersion: 1, sessionId: 'default', revision: 0, phase: 'idle', pending: null, latestTurn: null, turns: [], totalTurns: 0 } }); return () => h(UApp, null, { default: () => h(KeepAlive, null, { default: () => h(router.currentRoute.value.path === '/projects/new' ? AddProjectPage : router.currentRoute.value.path === '/projects' ? ProjectsPage : TaskboardPage) }) }); } }),
+  play: async ({ canvasElement }) => {
+    const q = within(canvasElement);
+    await q.findByRole('heading', { name:'Workboard' });
+    for (const [name,href] of [['setting up a provider','/settings#provider-connections'],['connecting a project','/projects']]) if(q.getByRole('link',{name}).getAttribute('href')!==href)throw Error('First-use goal destination lost: '+name);
+    if((q.getByRole('button',{name:'New Feature Request'}) as HTMLButtonElement).disabled)throw Error('New Feature Request must remain reachable from an empty Home.');
+    await userEvent.click(q.getByRole('link',{name:'connecting a project'}));await q.findByRole('heading',{name:'Projects'});
+    await userEvent.click(q.getByRole('link',{name:'Add a project'}));await q.findByRole('heading',{name:'Add a project'});
+    if(router.currentRoute.value.path!=='/projects/new')throw Error('Adding a project must have a focused route.');
+    await q.findByLabelText('Git repository URL');
+    if(q.getByLabelText('Project ID').checkVisibility())throw Error('Optional clone settings must start disclosed.');
+    await userEvent.click(q.getByText(/Advanced project settings/));
+    for(const label of ['Project ID','Shared branch','Feature Request folder','Check for new requests every · seconds'])if(!q.getByLabelText(label).checkVisibility())throw Error('Clone setup cannot reach '+label);
+    const clone=q.getByRole('button',{name:'Clone and add project'})as HTMLButtonElement;if(!clone.disabled)throw Error('An empty registration must not submit.');
+    if(q.queryByLabelText('Absolute checkout directory')||canvasElement.querySelector('.delivery-policy'))throw Error('Clone registration must not adopt an external checkout or approve another project policy.');
+    await ready(canvasElement);
+  }
 };
 function renderRetainedSetup(resume: boolean) { return () => ({ setup() {
   const base = installManagedProjectsFixture(), project = base.projects.projects[0]; project.workflow.configured = false;

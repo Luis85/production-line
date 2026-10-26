@@ -4,7 +4,9 @@ Werk uses pinned Oxlint 1.88.0 and Fallow 3.35.0 alongside TypeScript and its
 existing architecture tests. They run in normal development and CI. The tools
 inspect maintained source; downloaded runtime archives do not need them.
 Mutation testing is a separate, advisory release experiment described in
-[mutation testing](../how-to/mutation-testing.md).
+[mutation testing](../how-to/mutation-testing.md). The dashboard also has an
+independent observation-model scope; it does not alter the historical authority
+or workflow baselines.
 
 ## Contributor commands
 
@@ -39,6 +41,39 @@ The complete Fallow report intentionally exits unsuccessfully while it contains
 findings. It is an inspection command, not an instruction to accept everything
 it reports. Use the regular command to distinguish a new regression from the
 recorded baseline.
+
+## Dashboard mutation checks
+
+`npm run mutation -- --scope dashboard` measures the three pure dashboard modules:
+observation windows, retained workflow evidence and report aggregation. The scope
+is `worker-workflow-dashboard-v1`; its JSON, HTML, log and summary are written to
+`reports/mutation/dashboard/`. It reuses the model tests and independent UTC,
+completion, historical-state and timing boundary contracts. It does not mutate
+browser rendering, storage adapters or the older delivery report.
+
+The lane has a three-minute overall budget and uses the existing per-mutant
+deadline, three workers and per-test coverage. It is advisory, with no recorded
+baseline or automatic promotion. A completed run may still contain surviving,
+uncovered or timed-out mutants; read their counts and the strict assertion score
+alongside Stryker's score, which includes timeouts as detected mutations. A valid
+run also checks source, selected-test and configuration fingerprints before and
+after measurement. The authority and workflow scopes retain their own targets,
+denominators, evidence and baselines.
+
+The contract follow-up on 2026-10-26 completed over 998 mutants: 719
+assertion-killed, 264 survived, 13 uncovered and two timed out, with no
+compile/runtime errors. The strict score is 72.04% (Stryker: 72.24%); four added
+contract groups killed 42 more mutants while retaining every previous kill on
+the same three target sources and mutant universe. The retained repository proof
+is under `docs/evidence/local-delivery/mutation-dashboard-v1-followup-2026-10-26/`.
+Earlier receipts and the separate 982-mutant source version remain preserved in
+`docs/evidence/local-delivery/mutation-dashboard-v1-2026-10-26/`.
+
+The release workflow configures an independent advisory dashboard measurement
+for pull requests, tags and manual runs, with a fifteen-minute job allowance
+for setup, installation, the bounded measurement and evidence retention. Its
+`werk-mutation-dashboard-report` artifact contains this scope's reports, and
+publication does not depend on the job.
 
 ## Oxlint's role
 

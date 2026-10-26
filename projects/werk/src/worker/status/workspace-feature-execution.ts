@@ -1,3 +1,4 @@
+import { assertManagedProjectIsolation } from './workspace-managed-isolation.js';
 import { assertLocalMergeBaseline } from './workspace-local-merge-baseline.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { FeatureIntakeBlocked } from '../application/feature-intake-measurement.js';
@@ -13,6 +14,7 @@ import type { WorkspaceContext } from './workspace-context.js';
 
 /** Resolve named profiles from approved committed policy, once; mutable defaults cannot alter a reserved request. */
 export async function prepareFeatureExecution(workspace: WorkspaceContext, input: FeatureInput, repository: string, repositoryId: string, baseline?: string): Promise<FeaturePreparation> {
+  await assertManagedProjectIsolation(workspace, repositoryId, repository);
   if (baseline && input.mode === 'patch') await assertLocalMergeBaseline(workspace, repository, repositoryId, baseline);
   const legacy = () => ({ selection: modelSelection(workspace.settings.provider(input.provider), input, workspace.definitions.select({ ...input })) });
   if (input.mode !== 'patch' || !baseline && input.requestSchema !== 'worker.request/v1' && !input.executionProfile) {

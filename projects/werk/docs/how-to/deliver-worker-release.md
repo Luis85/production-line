@@ -7,10 +7,10 @@ This optional extension targets a native Windows worker using Claude Code CLI an
 ## Prepare the worker and project
 
 1. Install a prebuilt worker with [project worker setup](project-worker.md) and use Node 24.x. Keep private worker state separate from shared Git content.
-2. Configure Claude Code CLI in the account that runs the worker and check it in **Settings → Providers & accounts**. Review approved file/command/MCP access independently of provider authentication.
+2. Configure Claude Code CLI in the account that runs the worker and check it in **Settings → Provider connections**. Review approved file/command/MCP access independently of provider authentication.
 3. Register the remote project through managed-project settings, or explicitly adopt the intended existing checkout. Choose its shared branch and request directory. A registration failure keeps actionable diagnostics; it does not authorize changing an unrelated checkout.
 4. For this optional integration, authenticate Git and GitHub CLI in that same worker account. The worker uses their official host authentication. Never copy credentials into a Feature Request, prompt, policy, URL or release asset.
-5. Commit the project's template, readiness/completion rules, approved build/check configuration and `.werk/delivery-policy.json`. Approve the exact displayed policy digest in **Settings → Project delivery**.
+5. Commit the project's template, readiness/completion rules, approved build/check configuration and `.werk/delivery-policy.json`. Approve the exact displayed policy digest in the selected project's **Policy approval** view.
 
 A managed clone lives in `<state-dir>/projects/<project-id>/checkout`. A registered project is not automatically ready for execution: missing templates, unapproved policy, unavailable tools and unresolved readiness still require action.
 
@@ -19,8 +19,8 @@ A managed clone lives in `<state-dir>/projects/<project-id>/checkout`. A registe
 The installed worker CLI exposes the same project operations:
 
 ```sh
-node bin/apps/worker/cli.mjs projects list
-node bin/apps/worker/cli.mjs projects register --file register-project.json
+node runtime/bin/apps/worker/cli.mjs projects list --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs projects register --file register-project.json --state-dir state/worker
 ```
 
 For a remote clone, `register-project.json` contains the selected project and a unique command identity:
@@ -68,7 +68,7 @@ Changing any policy field changes its digest. Commit and approve the resulting p
 
 ## Submit and follow the request
 
-Open **Taskboard → New request**, choose the registered project and template, enter the outcome, criteria and approved scope, and keep the default Low priority or choose Medium/High. Prepare the draft, inspect readiness findings, and submit through the configured intake mode.
+Open **Workboard → New Feature Request**, choose the registered project and template, enter the outcome, criteria and approved scope, and keep the default Low priority or choose Medium/High. Prepare the draft, inspect readiness findings, and submit through the configured intake mode.
 
 For shared Git, the ready request must be committed and pushed to the watched branch and claimed remotely before execution. A local save alone does not start shared work. Keep the original request identity when answering questions through Markdown or the webview.
 
@@ -99,15 +99,15 @@ Use the authenticated CLI for the same actions when needed: inspect `request sch
 Inspect the current release state before acting:
 
 ```sh
-node bin/apps/worker/cli.mjs request release --id REQUEST_ID
+node runtime/bin/apps/worker/cli.mjs request release --id REQUEST_ID --state-dir state/worker
 ```
 
 Use the request's numeric revision for `--if-match`, a unique command ID for `--key`, and a JSON payload identifying the exact `deliveryRunId`, `inputRevision`, `candidateCommit` and `candidateDigest`. The executable commands are `request merge`, `request build-release`, `request publish-release` and `request reconcile-release`:
 
 ```sh
-node bin/apps/worker/cli.mjs request merge --id REQUEST_ID --if-match REVISION --key merge-1 --file candidate.json
-node bin/apps/worker/cli.mjs request build-release --id REQUEST_ID --if-match REVISION --key build-1 --file candidate.json
-node bin/apps/worker/cli.mjs request publish-release --id REQUEST_ID --if-match REVISION --key publish-1 --file release.json
+node runtime/bin/apps/worker/cli.mjs request merge --id REQUEST_ID --if-match REVISION --key merge-1 --file candidate.json --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs request build-release --id REQUEST_ID --if-match REVISION --key build-1 --file candidate.json --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs request publish-release --id REQUEST_ID --if-match REVISION --key publish-1 --file release.json --state-dir state/worker
 ```
 
 Fetch the new revision after each completed action. `release.json` also carries the intended `releaseTag`. Reconciliation identifies the saved `releaseOperationId`; it observes rather than repeats that mutation. Use `request confirm-release-stopped` only after inspecting and stopping an uncertain build process, following the installed schema and its required note/identity fields.

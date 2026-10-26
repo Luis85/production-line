@@ -303,16 +303,16 @@ review-note publication contract.
 
 ## Template and configuration
 
-`worker init` installs `features/_templates/feature-request.md` for **shared Git
-intake**. It contains `templateId`, uses the configured provider explicitly and
+Central Home project workflow setup previews and commits
+`features/_templates/feature-request.md` for **shared Git intake**. It contains `templateId`, uses the configured provider explicitly and
 is authored through `feature author` or the standalone authoring script. Setup
 preserves existing templates. It is never admitted by the local watcher.
 
-For the separate **local folder** flow, generate its default template without a
-running worker:
+The following **local folder** template describes retained legacy intake, not
+new Home project setup. Offline template generation remains available:
 
 ```sh
-node bin/apps/worker/cli.mjs feature template > features/new-feature.md
+node runtime/bin/apps/worker/cli.mjs feature template > features/new-feature.md
 ```
 
 The local template starts in `draft` and uses the configured feature provider unless
@@ -335,7 +335,7 @@ Explain a search flow for the project.
 - Describe how to verify the selected behavior.
 ```
 
-The installed `.werk/worker.json` configures the watcher. Its legacy
+A legacy project-installed `.werk/worker.json` configured its local watcher. Its
 `features.provider` seeds `defaultProvider` only when no saved default exists;
 later provider defaults are edited in the worker settings:
 
@@ -346,11 +346,11 @@ later provider defaults are edited in the worker settings:
 `features.directory` enables intake; without it or `--features-dir`, existing
 workers do not scan or create an intake feature folder. Automatic task tracking
 still uses the worker state directory. Relative paths resolve against
-`--project-dir` when supplied, otherwise the working directory. The portable
-worker launched from an initialized project discovers `.werk/worker.json`.
+`--project-dir` when supplied, otherwise the working directory. The retired project-installed launch path discovered `.werk/worker.json`; central
+Home launch does not infer that configuration.
 `feature folder get` reports the saved path; `feature folder plan --path requests`
 previews a relocation; `feature folder set --path requests` persists it and moves
-existing requests/results while the project worker is stopped. The destination
+existing requests/results in legacy operation while that worker is stopped. The destination
 must be a new, separate folder inside the project. See the
 [folder configuration guide](../how-to/project-worker.md#choose-or-change-the-feature-folder).
 `--features-dir requests` overrides its folder for a launch. Polling supports Docker bind mounts

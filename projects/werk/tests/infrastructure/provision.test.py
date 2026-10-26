@@ -45,6 +45,39 @@ class ArchiveSafety(unittest.TestCase):
         with self.assertRaises(ValueError):
             provision.check_manifest_version(extracted, '0.2.0')
 
+    def test_flat_home_extracts_directly_and_preserves_runtime_boundaries(self):
+        manifest = {'name': 'werk', 'version': '0.1.0', 'node': '>=24.0.0 <25', 'layout': 'werk-home-v1', 'updateProtocol': 2}
+        archive = self.archive([
+            ('release-manifest.json', tarfile.REGTYPE, json.dumps(manifest).encode()),
+            ('worker.mjs', tarfile.REGTYPE, b'worker launcher'),
+            ('README.md', tarfile.REGTYPE, b'Home guidance'),
+            ('runtime/werk.mjs', tarfile.REGTYPE, b'system launcher'),
+            ('runtime/bin/apps/factory/cli.mjs', tarfile.REGTYPE, b'factory'),
+            ('docs/index.md', tarfile.REGTYPE, b'Handbook'),
+        ])
+        extracted = provision.extract_archive(archive, self.root / 'out')
+        self.assertEqual(extracted, self.root / 'out')
+        self.assertEqual((extracted / 'runtime/werk.mjs').read_text(), 'system launcher')
+        self.assertFalse((extracted / 'werk-0.1.0').exists())
+        provision.check_manifest_version(extracted, '0.1.0')
+        manifest['updateProtocol'] = 1
+        (extracted / 'release-manifest.json').write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'contract mismatch'):
+            provision.check_manifest_version(extracted, '0.1.0')
+
+    def test_flat_home_rejects_mutable_payload_and_unsafe_paths_before_extraction(self):
+        manifest = ('release-manifest.json', tarfile.REGTYPE, b'{}')
+        for path in ['state/worker/credentials.json', 'projects/existing/value.md', 'backups/state.json', 'werk-0.1.0/runtime/werk.mjs',
+                     '../outside', '/tmp/escape', 'runtime/../state/identity.json', 'runtime//unsafe', 'runtime/./unsafe', 'README.md/nested']:
+            with self.subTest(path=path):
+                with self.assertRaises(ValueError):
+                    provision.extract_archive(self.archive([manifest, (path, tarfile.REGTYPE, b'bad')]), self.root / 'out')
+                self.assertFalse((self.root / 'out').exists())
+        for kind in [tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.FIFOTYPE]:
+            with self.assertRaises(ValueError):
+                provision.extract_archive(self.archive([manifest, ('runtime/escape', kind, b'')]), self.root / 'out')
+            self.assertFalse((self.root / 'out').exists())
+
     def test_hash_failure_before_extract(self):
         archive = self.archive([self.manifest()])
         with self.assertRaisesRegex(ValueError, 'SHA-256'):

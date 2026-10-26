@@ -238,11 +238,11 @@ write must fit the API's 64 KiB limit. Other JSON commands retain their 64 KiB
 input limit. New starts must be paused and the worker idle:
 
 ```sh
-node bin/apps/worker/cli.mjs queue pause
-node bin/apps/worker/cli.mjs tool-access get > tool-access.json
+node runtime/bin/apps/worker/cli.mjs queue pause --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs tool-access get --state-dir state/worker > tool-access.json
 # Edit builtins.cliTools in tool-access.json, then:
-node bin/apps/worker/cli.mjs tool-access set --file tool-access.json
-node bin/apps/worker/cli.mjs queue resume
+node runtime/bin/apps/worker/cli.mjs tool-access set --file tool-access.json --state-dir state/worker
+node runtime/bin/apps/worker/cli.mjs queue resume --state-dir state/worker
 ```
 
 A minimal CLI tool entry for a Node script in `bin/`:
@@ -300,7 +300,7 @@ can remain for human review after the invocation finishes. Services and their
 logs remain scoped to their owning Feature Request/session/task. Service output
 is private project data that the selected model may receive through its tools.
 
-Manage active services in **Metrics → Services & execution processes**. Changes
+Manage active services in **Worker health → Services & execution processes**. Changes
 to grants reconcile existing services; revocation or a changed preset stops the
 old service instead of silently changing its executable. The
 [worker process guide](manage-worker-processes.md) explains the setup, limits,
@@ -350,7 +350,8 @@ dispatch evidence.
 
 To run one grant's Chat calls in a project:
 
-1. Assign the repository in **Settings → Repositories**.
+1. Register and choose the repository in **Projects**. Retained non-Home
+   installations keep their applicable legacy repository configuration.
 2. Pause and drain the worker, open **Settings → Tools & MCP** and, for that command preset
    or stdio MCP connection, set **Working directory in chat** to
    **Live checkout of repository "ID"**. Save.
@@ -419,14 +420,14 @@ and checks all count as tool calls.
 
 | Limit | Default | Configurable range | Where |
 | --- | --- | --- | --- |
-| Total invocation duration | 6 hours | 1 second to 24 hours | **Settings → Queue & duration**; `execution.maxRuntimeMs` |
-| Calls per invocation | 128 | 1–512 | **Queue & duration → Tool execution limits**; `execution.maxToolCalls` |
-| Global command ceiling | 300 seconds | 1–3,600 seconds | **Queue & duration → Tool execution limits**; `execution.commandTimeoutMs` |
+| Total invocation duration | 6 hours | 1 second to 24 hours | **Settings → Execution time limits**; `execution.maxRuntimeMs` |
+| Calls per invocation | 128 | 1–512 | **Execution time limits → Tool execution limits**; `execution.maxToolCalls` |
+| Global command ceiling | 300 seconds | 1–3,600 seconds | **Execution time limits → Tool execution limits**; `execution.commandTimeoutMs` |
 | Command preset or CLI tool override | Inherit the global command ceiling | 1–3,600 seconds | Each grant in **Settings → Tools & MCP**; optional `timeoutMs` |
 | Stdio MCP call timeout | 30 seconds | 1–900 seconds | Each connection; optional `timeoutMs` |
 | HTTP MCP call timeout | 30 seconds | 1–300 seconds | Each connection; optional `timeoutMs` |
 | Web fetch deadline | 10 seconds | Fixed | — |
-| Candidate source inspection | 64 MiB, 20,000 paths, 8 MiB per file outside the approved edit list | See [configuration](../reference/configuration.md#local-worker-execution-policy) | **Queue & duration → Repository inspection limits**; the three `execution.candidate*` settings |
+| Candidate source inspection | 64 MiB, 20,000 paths, 8 MiB per file outside the approved edit list | See [configuration](../reference/configuration.md#local-worker-execution-policy) | **Execution time limits → Repository inspection limits**; the three `execution.candidate*` settings |
 
 Command presets, project CLI tools and required feature checks use the smaller
 of their optional timeout and the invocation's captured global command ceiling.
@@ -449,7 +450,7 @@ a command or remote MCP tool may already have changed state.
 ### Allow long project checks
 
 1. Pause new starts and finish or cancel queued and running work.
-2. In **Settings → Queue & duration**, set the global command ceiling and total
+2. In **Settings → Execution time limits**, set the global command ceiling and total
    invocation duration to cover the intended checks and repair iterations.
 3. In **Settings → Tools & MCP**, leave command/CLI timeouts unset to inherit the
    global ceiling, or set shorter deadlines for quick tools. Configure a longer
@@ -545,7 +546,7 @@ can read the `tool_budget_exhausted` interaction event or the turn's `toolBudget
 field; see the [tool budget reference](../reference/model-interaction.md#tool-budget).
 If a task regularly hits the budget, split it into smaller tasks or narrow the
 granted tools so the model needs fewer calls, or adjust the captured limits for
-new tasks in **Settings → Queue & duration**.
+new tasks in **Settings → Execution time limits**.
 
 File reads return at most 32 KiB per call and expose an offset for another chunk.
 Web and MCP results are bounded to 64 KiB. CLI tool output is cut at its

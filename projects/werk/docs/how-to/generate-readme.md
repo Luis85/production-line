@@ -31,8 +31,8 @@ performs no provider calls, Git commits or publication.
 ## Select real UI screenshots
 
 Choose stable IDs from the actual Storybook stories, with deterministic fixtures
-and a visible sample-data label. The manifest currently selects the Taskboard,
-shared request authoring, Metrics, feature review and Settings. The release uses
+and a visible sample-data label. The manifest selects Workboard, project selection, focused request authoring,
+Review, Workflow, Worker health and the Settings directory. The release uses
 the exact desktop/mobile PNG bytes produced by the existing full-page capture;
 it does not redraw, crop, retouch or synthesize the interface.
 
@@ -81,6 +81,14 @@ used for release packaging; it does not trigger another source-image refresh.
 Tracked pictures retain their honest capture commit and are not relabelled as a
 new capture. The generated repository landing page reuses these same tracked
 pictures.
+
+## Keep current images separate from history
+
+[Documentation evidence](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/evidence/README.md) separates the current curated
+`readme/` pictures from `archive/`. Never replace historical screenshots with a
+new UI: they substantiate dated reports. Keep raw validation and mutation receipts.
+Before removing an unreferenced image, check maintained links and receipt references,
+record its hash and recovery commit, then run the strict documentation check.
 
 ## Why generation does not loop
 

@@ -8,10 +8,10 @@ replace IDs, revisions and keys with values from your own request.
 ## Inspect the blocker
 
 ```sh
-node bin/apps/worker/cli.mjs request list --state-dir .werk/worker
-node bin/apps/worker/cli.mjs request get --id REQUEST_ID --state-dir .werk/worker
-node bin/apps/worker/cli.mjs request events --id REQUEST_ID --after 0 --limit 100 --state-dir .werk/worker
-node bin/apps/worker/cli.mjs request schema --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request list --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request get --id REQUEST_ID --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request events --id REQUEST_ID --after 0 --limit 100 --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request schema --state-dir .werk/worker
 ```
 
 Inspect the current `revision`, `inputRevision`, latest `ready`/`done` evaluation,
@@ -39,8 +39,8 @@ a patch request must retain its actual copied input, including approved files.
 Then submit and inspect the pending candidate:
 
 ```sh
-node bin/apps/worker/cli.mjs request propose --id REQUEST_ID --if-match CURRENT_REVISION --key proposal-1 --file proposal.json --state-dir .werk/worker
-node bin/apps/worker/cli.mjs request get --id REQUEST_ID --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request propose --id REQUEST_ID --if-match CURRENT_REVISION --key proposal-1 --file proposal.json --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request get --id REQUEST_ID --state-dir .werk/worker
 ```
 
 A proposal does not mutate accepted input or start inference. Write
@@ -48,7 +48,7 @@ A proposal does not mutate accepted input or start inference. Write
 new current revision:
 
 ```sh
-node bin/apps/worker/cli.mjs request accept --id REQUEST_ID --if-match NEW_REVISION --key accept-1 --file accept.json --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request accept --id REQUEST_ID --if-match NEW_REVISION --key accept-1 --file accept.json --state-dir .werk/worker
 ```
 
 Acceptance creates a new input generation, preserves history and reevaluates
@@ -62,7 +62,7 @@ For a currently held failed stage, write `rework.json` as `{"stage":"ready"}`
 or `{"stage":"done"}` and use the current revision:
 
 ```sh
-node bin/apps/worker/cli.mjs request rework --id REQUEST_ID --if-match CURRENT_REVISION --key rework-1 --file rework.json --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request rework --id REQUEST_ID --if-match CURRENT_REVISION --key rework-1 --file rework.json --state-dir .werk/worker
 ```
 
 This explicitly queues a quota-consuming advisory invocation. It can produce a
@@ -78,7 +78,7 @@ For an advisory finding, write
 `resolve.json` as `{"findingId":"FINDING_ID","note":"Decision and supporting context."}`:
 
 ```sh
-node bin/apps/worker/cli.mjs request resolve --id REQUEST_ID --if-match CURRENT_REVISION --key resolve-1 --file resolve.json --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request resolve --id REQUEST_ID --if-match CURRENT_REVISION --key resolve-1 --file resolve.json --state-dir .werk/worker
 ```
 
 An operator note cannot erase a deterministic rule failure. Correct the input or
@@ -86,7 +86,7 @@ provide supported trusted evidence, then write `evaluate.json` as
 `{"stage":"ready"}` or `{"stage":"done"}`:
 
 ```sh
-node bin/apps/worker/cli.mjs request evaluate --id REQUEST_ID --if-match CURRENT_REVISION --key evaluate-1 --file evaluate.json --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request evaluate --id REQUEST_ID --if-match CURRENT_REVISION --key evaluate-1 --file evaluate.json --state-dir .werk/worker
 ```
 
 If the policy requires operator acceptance, inspect the exact current result and
@@ -104,7 +104,7 @@ generation remains ready and no primary admission exists, issue a new guarded
 operation with a new key:
 
 ```sh
-node bin/apps/worker/cli.mjs request execute --id REQUEST_ID --if-match CURRENT_REVISION --key execute-after-inspection-2 --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs request execute --id REQUEST_ID --if-match CURRENT_REVISION --key execute-after-inspection-2 --state-dir .werk/worker
 ```
 
 Do not interpret `admitted` as completed. Inspect lifecycle events and execution
@@ -150,12 +150,12 @@ prove that a disconnected orchestrator has received the decision.
 ## Inspect consumption and feature files
 
 ```sh
-node bin/apps/worker/cli.mjs run analyze --purpose gate_review --state-dir .werk/worker
-node bin/apps/worker/cli.mjs run analyze --purpose rework --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs run analyze --purpose gate_review --state-dir .werk/worker
+node runtime/bin/apps/worker/cli.mjs run analyze --purpose rework --state-dir .werk/worker
 ```
 
 Unknown usage is not zero and reported estimates are not necessarily billed cost.
 Feature `_gates/<feature-id>/` files are generated views. Editing them cannot
 resolve findings, accept candidates or satisfy gates; use guarded CLI/UI actions.
 
-For an existing project installation, rerun `node bin/apps/worker/cli.mjs init` from the project root before committing generated findings. Initialization adds `_gates/` alongside `_questions/` and `_results/` to the configured feature folder’s ignore file, preserving operator rules. These generated projections can contain private request findings and are not source files.
+For an existing project installation, rerun `node runtime/bin/apps/worker/cli.mjs init --state-dir state/worker` from the project root before committing generated findings. Initialization adds `_gates/` alongside `_questions/` and `_results/` to the configured feature folder’s ignore file, preserving operator rules. These generated projections can contain private request findings and are not source files.

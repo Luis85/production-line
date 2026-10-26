@@ -1,3 +1,4 @@
+import { workerLinks as links } from '../src/worker/webview/worker-navigation';
 import { h, KeepAlive } from 'vue';
 import UApp from '@nuxt/ui/components/App.vue';
 import MonitoringPage from '../src/worker/webview/pages/MonitoringPage.vue';
@@ -140,11 +141,11 @@ function installMetricsFixture(scenario: MetricsScenario = 'active') {
 }
 let currentFixture: ReturnType<typeof installMetricsFixture>;
 export const metricsFixture = () => currentFixture;
-const links = [{ path: '/taskboard', label: 'Taskboard', icon: 'i-lucide-columns-2' }, { path: '/dashboard', label: 'Metrics', icon: 'i-lucide-activity' }, { path: '/history', label: 'History', icon: 'i-lucide-history' }, { path: '/settings', label: 'Settings', icon: 'i-lucide-settings-2' }];
+
 export function renderMetricsPage(scenario: MetricsScenario = 'active') {
   return () => ({ setup() {
     currentFixture = installMetricsFixture(scenario);
-    return () => h(UApp, null, { default: () => h(WorkerShell, { links, homePath: '/taskboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
+    return () => h(UApp, null, { default: () => h(WorkerShell, { links, homePath: '/workboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
       identity: () => h('div', { class: 'worker-identity' }, [h('div', [h('strong', 'Atlas documentation'), h('span', 'Worker Storybook · fictional data')])]),
       status: () => 'Isolated example · no model connected',
       default: () => h(KeepAlive, null, { default: () => h(MonitoringPage) }),

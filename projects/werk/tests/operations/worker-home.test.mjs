@@ -31,10 +31,10 @@ test('verified ZIP starts directly from an empty chosen worker home and register
   const packed = await packageRelease(project, artifacts), extracted = await extractRelease(artifacts, home, 'zip'), entry = join(extracted.root, 'worker.mjs');
   await ownWorkspace(t, outer, async () => { await cli(entry, home, ['stop']).catch(() => {}); });
   assert.equal(extracted.version, packed.version); assert.equal((await stat(entry)).isFile(), true);
-  const readme = await readFile(join(extracted.root, 'README.md'), 'utf8'); assert.ok(readme.includes('node ./werk-' + packed.version + '/worker.mjs')); assert.equal(readme.includes('{{version}}'), false);
-  const started = await cli(entry, home, ['--no-open', '--port', '0']);
+  const readme = await readFile(join(extracted.root, 'README.md'), 'utf8'); assert.match(readme, /node (?:\.\/)?worker\.mjs/); assert.equal(extracted.root, home); assert.equal(readme.includes('{{version}}'), false);
+  const started = await cli(entry, outer, ['--no-open', '--port', '0']);
   assert.equal(started.data.state, 'running'); assert.equal(started.data.kind, 'worker');
-  assert.equal(started.data.stateDirectory, join(home, '.werk', 'worker'));
+  assert.equal(started.data.stateDirectory, join(home, 'state', 'worker'));
   assert.match(started.data.url, /^http:\/\/127\.0\.0\.1:\d+$/); assert.match(started.stderr, /Unlock the webview/);
   const token = (await readFile(started.data.credentialsFile, 'utf8')).trim(); assert.match(token, /^[a-f0-9]{64}$/);
   assert.equal((started.stdout + started.stderr).includes(token), false);
@@ -42,9 +42,9 @@ test('verified ZIP starts directly from an empty chosen worker home and register
   const page = await fetch(started.data.url, { signal: AbortSignal.timeout(10000) }); assert.equal(page.status, 200); assert.equal((await page.text()).includes(token), false);
   const denied = await fetch(started.data.url + '/api/settings', { signal: AbortSignal.timeout(10000) }); assert.equal(denied.status, 401);
   const empty = await api(started.data.url, token, '/api/managed-projects'); assert.deepEqual(empty.projects, []);
-  const environment = await api(started.data.url, token, '/api/environment'); assert.ok(environment.status.machineId); assert.equal(environment.orchestratorUrl, null); assert.equal(environment.projectDirectory, null);
-  const owner = JSON.parse(await readFile(join(home, '.werk/worker/portable.json'), 'utf8'));
-  assert.ok(owner.launch.args.includes('--standalone')); assert.equal(owner.launch.args.includes('--url'), false);
+  const environment = await api(started.data.url, token, '/api/environment'); assert.equal(environment.homeDirectory, home); assert.equal(environment.projectsDirectory, join(home, 'projects')); assert.equal(environment.homeLayout, 'central'); assert.ok(environment.status.machineId); assert.equal(environment.orchestratorUrl, null); assert.equal(environment.projectDirectory, null);
+  const owner = JSON.parse(await readFile(join(home, 'state/worker/portable.json'), 'utf8'));
+  assert.ok(owner.launch.args.includes('--home-dir')); assert.ok(owner.launch.args.includes(home)); assert.ok(owner.launch.args.includes('--standalone')); assert.equal(owner.launch.args.includes('--url'), false);
   await assert.rejects(readFile(join(home, '.env')), { code: 'ENOENT' }); await assert.rejects(readFile(join(home, 'package.json')), { code: 'ENOENT' }); await assert.rejects(readFile(join(home, '.werk/worker-project.json')), { code: 'ENOENT' });
   const producer = join(outer, 'producer'), remote = join(outer, 'company.git'); await mkdir(producer);
   await execute('git', ['init', '--bare', '--initial-branch=main', remote]); await execute('git', ['init', '--initial-branch=main', producer]);
@@ -53,11 +53,11 @@ test('verified ZIP starts directly from an empty chosen worker home and register
   await execute('git', ['-C', producer, 'remote', 'add', 'origin', remote]); await execute('git', ['-C', producer, 'push', 'origin', 'main']);
   const registered = await api(started.data.url, token, '/api/managed-projects', { action: 'register', operationId: 'downloaded-register', id: 'company', repository: pathToFileURL(remote).href });
   assert.equal(registered.projects[0].status, 'ready'); assert.equal(registered.projects[0].intakeEnabled, false);
-  assert.ok(registered.projects[0].path.startsWith(join(home, '.werk', 'worker', 'projects')));
+  assert.equal(registered.projects[0].path, join(home, 'projects', 'company'));
   assert.equal((await readFile(join(registered.projects[0].path, 'README.md'))).length > 0, true);
-  const repeated = await cli(entry, home, ['--no-open']); assert.equal(repeated.data.alreadyRunning, true); assert.equal(repeated.data.runId, started.data.runId);
+  const repeated = await cli(entry, producer, ['--no-open']); assert.equal(repeated.data.alreadyRunning, true); assert.equal(repeated.data.runId, started.data.runId);
   await cli(entry, home, ['stop']); assert.equal((await cli(entry, home, ['status'])).data.state, 'stopped');
-  const restarted = await cli(entry, home, ['--no-open', '--port', '0']); assert.equal((await readFile(restarted.data.credentialsFile, 'utf8')).trim(), token);
+  const restarted = await cli(entry, outer, ['--no-open', '--port', '0']); assert.equal((await readFile(restarted.data.credentialsFile, 'utf8')).trim(), token);
   assert.equal((await api(restarted.data.url, token, '/api/environment')).status.machineId, environment.status.machineId);
   assert.equal((await api(restarted.data.url, token, '/api/managed-projects')).projects[0].id, 'company');
 });
@@ -68,12 +68,12 @@ test('copied worker starter needs only Node and an explicit home outside its rep
   await ownWorkspace(t, outer, async () => { await cli(entry, outer, ['stop', '--home', home]).catch(() => {}); });
   await assert.rejects(cli(entry, app, ['--no-open', '--port', '0']), error => error instanceof Error && /outside the copied app folder/.test(error.message));
   const started = await cli(entry, outer, ['--home', home, '--no-open', '--port', '0']); assert.equal(started.data.state, 'running');
-  assert.equal(started.data.stateDirectory, join(home, '.werk', 'worker'));
+  assert.equal(started.data.stateDirectory, join(home, 'state', 'worker'));
   const token = (await readFile(started.data.credentialsFile, 'utf8')).trim(); assert.equal((await api(started.data.url, token, '/api/managed-projects')).projects.length, 0);
   if (process.platform !== 'win32') {
     const alias = join(outer, 'logical worker home'); await symlink(home, alias, 'dir');
     const replay = await cli(entry, outer, ['--home', alias, '--no-open']);
-    assert.equal(replay.data.stateDirectory, join(home, '.werk', 'worker'));
+    assert.equal(replay.data.stateDirectory, join(home, 'state', 'worker'));
     assert.equal(replay.data.runId, started.data.runId); assert.equal(replay.data.alreadyRunning, true);
   }
   const help = await cli(entry, outer, ['--help']); assert.match(help.data.home, /outside the copied app folder/);

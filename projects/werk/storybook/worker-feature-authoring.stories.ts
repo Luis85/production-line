@@ -106,6 +106,7 @@ export const SelectRequestModel: Story = {
     await userEvent.type(query.getByLabelText('Model · optional', { exact: true }), 'team-selected-model');
     await userEvent.click(query.getByRole('button', { name: 'Prepare request' }));
     await query.findByLabelText('Context', { exact: true });
+    await userEvent.click(query.getByText('Execution options', { exact: false }));
     await userEvent.click(query.getByText('Provider, model & effort', { exact: true }));
     const model = query.getByLabelText('Model · optional', { exact: true }) as HTMLInputElement;
     if (model.value !== 'team-selected-model') throw Error('Prepared Markdown lost its explicit model selection.');

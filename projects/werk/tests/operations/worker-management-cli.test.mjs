@@ -1,3 +1,4 @@
+import { legacyProjectFixture } from '../helpers/legacy-project-worker.mjs';
 import { testErrorOutput } from '../helpers/process-errors.mjs';
 import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
@@ -5,16 +6,16 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, readFile, writeFile, realpath } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 import { waitForInstalledNativeWork } from '../helpers/native-cli-readiness.mjs';
-const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
+const exec = promisify(execFile);
 test('copied worker CLI manages drafts, tasks, queues and history without a browser', { timeout: 120000 }, async t => {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), 'werk-management-cli-'))), entry = join(cwd, 'bin/apps/worker/cli.mjs'); let running = false;
   const cli = async (...args) => { const result = await exec(process.execPath, [entry, ...args], { cwd, timeout: 40000 }); return JSON.parse(result.stdout); };
   await ownWorkspace(t, cwd, async () => { if (running) await cli('stop'); });
-  await exec(process.execPath, [installer, 'init', '--provider', 'openai-api'], { cwd });
+  await legacyProjectFixture(cwd, ['--provider', 'openai-api']);
   const schema = await cli('schema'); for (const name of ['feature edit', 'feature submit', 'feature result', 'feature wait', 'task retry', 'file-task priority', 'queue pause', 'session restore']) assert.ok(schema.commands[name], name);
   await cli('start', '--port', '0'); running = true;
   await cli('queue', 'pause'); const settingsFile = join(cwd, 'settings.json');

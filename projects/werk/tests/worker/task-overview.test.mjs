@@ -204,7 +204,7 @@ test('review routes escape exact identities while answer and active work keep co
   assert.equal(items.get('done').primaryAction.label, 'Review result');
   assert.equal(items.get('question').primaryAction.kind, 'session');
   assert.equal(items.get('question').primaryAction.label, 'Answer task');
-  assert.equal(items.get('active').primaryAction.href, '/taskboard?session=active');
+  assert.equal(items.get('active').primaryAction.href, '/request?session=active');
 });
 
 

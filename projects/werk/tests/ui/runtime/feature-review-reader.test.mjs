@@ -99,8 +99,8 @@ test('shared task contradictions are blocked before exposing decisions', async (
   await assert.rejects(readFeatureReview({ sessionId: 'local-one', fileId: '' }, f.read), /task identity changed/);
 });
 test('next-step links preserve canonical context and lead to the existing continuation workflow', () => {
-  assert.equal(reviewActionHref('answer', 'id /&'), '/taskboard?session=id%20%2F%26');
-  assert.equal(reviewActionHref('resume', 'one'), '/taskboard?session=one');
+  assert.equal(reviewActionHref('answer', 'id /&'), '/request?session=id%20%2F%26');
+  assert.equal(reviewActionHref('resume', 'one'), '/request?session=one');
   assert.equal(reviewActionHref('inspect_checks', 'one'), '#review-checks');
   assert.equal(reviewActionHref('review_patch', 'one'), '#review-changes');
   assert.equal(reviewActionHref('review_shared', 'one'), '#review-handoff');

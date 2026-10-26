@@ -76,6 +76,7 @@ export const ResourcePressure: Story = { name: '08 · Recognize current resource
 export const FilterAndRefresh: Story = { name: '09 · Change the activity window without flicker', ...scenario('09 · Change the activity window without flicker', 'The time filter queries retained attempts by acceptance time. Background refresh preserves selection, keyboard focus, labels and rendered data without loading spinners or duplicate panels.', 'active', async canvas => {
   const select = canvas.querySelector<HTMLSelectElement>('#execution-window');
   if (!select) throw Error('Execution activity needs a labelled time window.');
+  await userEvent.click(within(canvas).getByText('Execution usage and outcomes',{exact:true}));
   const fixture = metricsFixture();
   const previous = fixture.analyses.length;
   await userEvent.selectOptions(select, '24h');

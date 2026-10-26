@@ -9,16 +9,16 @@ your role; a local worker does not require a Factory or orchestrator.
 
 | I want to… | Start here | What I need |
 | --- | --- | --- |
-| Use a worker on my computer | [Install a local worker](how-to/project-worker.md), then [connect the Markdown queue](how-to/shared-feature-intake.md) | A verified runtime release, Node 24 and a provider account for real execution |
+| Use a worker on my computer | [Start WerkHome](tutorials/worker-home-to-main.md), then register a remote project | A verified runtime release, Node 24 and a provider account for real execution |
 | Share feature requests with a team | [Create requests from any environment](how-to/team-feature-authoring.md), then [connect the shared queue](how-to/shared-feature-intake.md) | A shared Git repository, the project template and readiness/done rules; one member runs the worker |
 | Operate a Factory and production lines | [Set up a complete system](tutorials/system-from-yaml.md) | Node 24, or Docker Engine 26+ and Compose 2.35+; separate runtime state and credentials |
 | Build or integrate the frontend | [Frontend architecture and state](reference/webview-architecture.md), then [develop components and stories](how-to/generate-storybook.md) | Source checkout, Node 24 and `npm ci`; component API and live examples are linked from the header |
 
 ## Your first useful result
 
-1. **Install and connect.** Download a verified runtime and install `bin/apps/worker` in the project. Setup creates a private `.env` and shareable `.env.example`. Use the CLI to review the detected repository, configure the local provider and connect the shared Git branch. The webview is optional.
-2. **Prepare the team contract.** Commit the template, authoring skill, Obsidian Base and ready/done rules. Review model tool access and required checks with the worker operator. Keep credentials and private worker state out of Git.
-3. **Describe and submit the work.** Create a draft from the project template, list approved files and observable acceptance criteria, then validate it. Mark it ready and commit and push it to the shared intake branch. A local save or local commit alone does not dispatch shared work.
+1. **Start and connect.** Extract a verified archive directly into a fresh WerkHome and run `node worker.mjs`. Configure the provider, clone/register the remote project and inspect its visible `projects/` checkout. Private worker state remains under `state/`; no worker is installed in the source project.
+2. **Prepare the team contract.** Commit the template, Obsidian Base and ready/done rules. Add the optional offline authoring kit/skills explicitly when your team needs them. Review model tool access and required checks with the worker operator. Keep credentials and private worker state out of Git.
+3. **Describe and submit the work.** Choose **Workboard → New Feature Request**, create a draft from the project template, list approved files and observable acceptance criteria, then validate it. Mark it ready and commit and push it to the shared intake branch. A local save or local commit alone does not dispatch shared work.
 4. **Follow, answer and review.** Pull the branch to read progress in the original request. Follow its Task link, write an authorized answer under **Answer**, set `status: ready`, then commit and push. The worker continues after validation. Inspect the final PullRequest Markdown note, feature branch and check evidence before human merge.
 
 Follow [Implement and review a feature](how-to/implement-feature.md) for the full

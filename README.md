@@ -4,26 +4,26 @@
 
 **Turn a shared Feature Request into an implementation your team can review.**
 
-Werk runs a worker on your machine, connects it to your project's Git repository
-and dispatches approved work to a configured model. Your team collaborates through
-Obsidian-compatible Markdown notes; the worker webview offers chat-based request
-creation, progress, metrics and configuration. A person reviews the result before
-merging.
+Werk runs from one dedicated Home on your machine. It clones project repositories
+into isolated worker-owned checkouts and executes approved Feature Requests with
+your configured model. Create a request in the webview or collaborate through
+Obsidian-compatible Markdown notes, follow its progress and Git activity, then
+review the increment and explicitly approve its merge.
 
 [Documentation](https://luis85.github.io/production-line/) ·
 [Download](https://github.com/Luis85/production-line/releases/latest) ·
 [Changelog](projects/werk/CHANGELOG.md) · [Source documentation](projects/werk/docs/index.md)
 
-![Worker taskboard showing capacity and requests grouped by their current state.](projects/werk/docs/evidence/readme/worker-taskboard.png)
+![Workboard prioritizing requests that need input and increments ready for review.](projects/werk/docs/evidence/readme/worker-taskboard.png)
 
-*The real worker taskboard with sample local requests. Select a request to inspect its conversation and progress; use Metrics, History and Settings to inspect and configure the worker. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
+*Workboard with deterministic sample requests. Choose the next request to advance; authoring, conversation and review have separate focused views. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
 
 ## Choose your starting point
 
 | You want to… | Start here |
 | --- | --- |
 | Start a standalone worker in its own home | [Archive-to-main-checkout quick start](#start-a-dedicated-worker-home) |
-| Install a worker directly in an existing project | [Project-worker setup](#install-a-project-worker) |
+| Bring an existing 0.16 worker into WerkHome | [Retained-state adoption](projects/werk/docs/how-to/project-worker.md#existing-standalone-installations) |
 | Work locally from Markdown with review before merge | [Local delivery worker](projects/werk/docs/explanation/local-delivery-worker.md) |
 | Explicitly opt into GitHub PRs and Releases | [Optional GitHub release workflow](projects/werk/docs/how-to/deliver-worker-release.md) |
 | Let a team submit requests through Git and Obsidian | [Shared Markdown queue](projects/werk/docs/how-to/shared-feature-intake.md) |
@@ -41,18 +41,22 @@ when working with an older installation.
 ## Start a dedicated worker home
 
 Use Node 24.x, Git and a complete verified runtime archive containing the standalone
-`worker.mjs` launcher. Extract it into a fresh worker home, preserving its
-`werk-<version>` top directory. From the outer home, start the prebuilt worker:
+`worker.mjs` launcher. Extract the archive directly into a fresh WerkHome; there
+is no inner version folder. Start the prebuilt worker:
 
 ```sh
-node ./werk-<version>/worker.mjs
+node ./worker.mjs
 ```
 
-Replace `<version>` with the extracted version. The current directory is its home;
+The launcher's directory is its Home regardless of the current working directory;
 `--home PATH` selects it explicitly. The worker opens its webview and keeps private
-state in `<home>/.werk/worker`. Startup prints the local URL and private credential
+state in `<home>/state/worker`, visible cloned repositories in `<home>/projects/`
+and replaceable prebuilt files in `<home>/runtime/`. Startup prints the local URL and private credential
 file path; unlock locally without putting the token in the URL. This starts the
 standalone worker; no project-local `init`, npm step or Factory fleet is needed.
+
+Use Werk 0.17.0 or later for this Home layout; older archives keep their original
+layout and require the adoption procedure below.
 
 In the webview, configure the provider, clone/register the project, preview its
 workflow setup and approve its Git commit/push. Separately approve the exact
@@ -62,81 +66,27 @@ review the delivered increment and explicitly allow its merge into the displayed
 main checkout. New web-generated setup includes `localMerge: true`, so delivery
 waits for that merge confirmation after candidate acceptance.
 
+![Project directory showing isolated Home checkout paths and an explicit Add a project action.](projects/werk/docs/evidence/readme/worker-projects.png)
+
+*Choose a registered project. Cloning, workflow publication, exact policy approval and intake recheck are separate explicit steps. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
+
 The [primary tutorial](projects/werk/docs/tutorials/worker-home-to-main.md) follows this literal
 archive-to-main journey. A newly built candidate archive and the currently public
 released binary are separate artifacts; use the matching version's documentation.
 GitHub PRs and Releases remain optional committed/approved integrations.
 
-## Install a project worker
+## Existing project-local workers
 
-Native workers require **Node.js 24.x**. The download command also needs `curl`
-and `tar` on PATH. From a directory for downloaded releases:
+The new runtime uses one central WerkHome and retires project-local worker
+installation. Projects contain source and committed workflow files; they do not
+need runtime copies, private worker `.env` files or `init`.
 
-Linux/macOS (Bash):
-
-```sh
-curl -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs &&
-  node werk-install.mjs --no-start
-```
-
-Windows (PowerShell):
-
-```powershell
-curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs
-if ($LASTEXITCODE -eq 0) { node werk-install.mjs --no-start }
-```
-
-The installer verifies a version-pinned archive and its extracted files, then
-creates `werk-<version>/`. Existing version directories are preserved. The
-prebuilt runtime needs no npm installation, compiler or administrator privileges.
-You can also download and verify a runtime archive from
-[GitHub Releases](https://github.com/Luis85/production-line/releases); choose the
-runtime asset, rather than GitHub's source-code archive.
-
-Next, **open a terminal in your team's project directory**. Replace the release
-path below with the directory created by the installer. Initialization defaults
-to `codex-cli` (Linux/macOS). For Claude Code, including native Windows, use
-`init --provider claude-cli` instead. This selection also sets the provider in the
-new request template; changing the connection later does not rewrite that template.
-
-```sh
-node /path/to/werk-release/bin/apps/worker/cli.mjs init
-node bin/apps/worker/cli.mjs run
-```
-
-Initialization installs `bin/apps/worker`, a private `.env`, a shareable
-`.env.example`, configuration, a Feature Request template, readiness/completion
-rules, an Obsidian Base and the offline **Create Feature Request** authoring kit.
-Choose a request folder with `init --features-dir requests/features`; the default
-is `features`. Keep `.env`, provider credentials and private state out of Git.
-
-The worker prints its local URL. To use the webview, unlock it with
-`WERK_WORKER_TOKEN` from your project's `.env`. The token is never put in a browser
-URL. `run` stays in the terminal; Ctrl+C stops it. Use `start`, `status` and `stop`
-for background operation.
-
-Before submitting shared work:
-
-1. Sign in to Claude Code or Codex CLI on the worker machine, or configure an API
-   provider. Check the connection in **Settings → Providers & accounts**.
-2. Review the detected project repository and explicitly accept it. Configure
-   the repository, remote and shared intake branch.
-3. Review the model's file, command and MCP permissions and the required project
-   checks. A provider login does not grant tool access.
-4. Review and commit the generated `.werk/delivery-policy.json` with the shared
-   template, authoring kit and ready/done rules. Approve the exact committed policy
-   in **Settings → Project delivery**. New project policies require a structured
-   readiness assessment before implementation.
-5. Push the shared setup files, then connect shared intake using the
-   [setup guide](projects/werk/docs/how-to/shared-feature-intake.md#connect-the-worker). For local intake,
-   commit and approve the policy before submitting canonical requests as well.
-
-All setup controls are also available through the CLI. The
-[project-worker guide](projects/werk/docs/how-to/project-worker.md) covers browser-free setup,
-Docker without host Node, existing repositories, upgrades and environment files.
-Portable apps include an npm-compatible `package.json`; run
-`npm --prefix bin/apps/worker run` to list the available scripts. No npm install
-is needed.
+An existing 0.16 installation must be stopped and inspected before adoption. Use
+`node worker.mjs migration plan --state-dir ABSOLUTE_OLD_STATE` from the new Home,
+then explicitly adopt the selected stopped state. Adoption retains its absolute
+paths and writes a private selection; it does not move or delete old projects,
+journals or worktrees. Follow [the adoption guide](projects/werk/docs/how-to/project-worker.md#existing-standalone-installations)
+and keep the old files and a verified backup until recovery is resolved.
 
 ## One Feature Request throughout the workflow
 
@@ -181,13 +131,11 @@ retries, conflicts and human review.
 
 ### Working locally
 
-For a worker that watches your own folder, choose `init --intake local`. New
-`worker.request/v1` notes start as drafts; set `intent: submit` after writing the
-acceptance criteria and approved paths. The worker pins the committed project
-policy, implements in an owned worktree, runs required checks and creates a local
-review note. Accept the exact candidate through Markdown or the webview, then
-explicitly approve its merge into the displayed main checkout. Older review-only
-policies and manual Git integration retain their established behavior. Local intake does not automatically push branches or notes.
+New Home requests use the project's committed template and shared Git handoff.
+Legacy local request records retain their accepted source/intent and policy
+semantics; they are not a new project-installation option. Review the exact
+candidate and explicitly approve the displayed main-checkout merge. Acceptance
+alone does not mutate the checkout or establish delivered-increment velocity.
 A project can explicitly opt into [GitHub candidate publication](projects/werk/docs/how-to/publish-worker-candidates.md)
 through committed integration policy and local approval of its exact digest.
 Each authorized push or hosting-service PR retains its own recorded outcome.
@@ -200,7 +148,7 @@ The [local delivery guide](projects/werk/docs/explanation/local-delivery-worker.
 profiles, dependencies, pause and interruption recovery. Both intake modes retain
 the same Feature Request throughout execution and review.
 
-## Create requests through Markdown or chat
+## Create requests through Markdown or Workboard
 
 ### From any team member's clone
 
@@ -227,14 +175,14 @@ templates and rules are configurable; see [team authoring](projects/werk/docs/ho
 
 ### From the worker webview
 
-Open **Taskboard → New request**, describe the outcome and choose **Prepare
+Open **Workboard → New Feature Request**, describe the outcome and choose **Prepare
 request**. This prepares the committed template without invoking a model. Fill
 in the request details and use **Check readiness**, then **Save draft to Git** or
 **Mark ready and publish**. Shared intake picks up that same note.
 
-![Shared Feature Request authoring in the worker, with request instructions and the Prepare request action.](projects/werk/docs/evidence/readme/worker-create-request.png)
+![Focused New Feature Request view with project, goal, acceptance criteria and explicit Git publication.](projects/werk/docs/evidence/readme/worker-create-request.png)
 
-*The shared-request entry screen with example instructions. The next step lets you review the template, approved scope and readiness before publishing. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
+*One project request, from its committed template to an explicit publication decision. Draft preparation does not invoke a model or commit to Git. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
 
 Once the worker owns the request, open its conversation to follow execution and
 answer pending questions. Webview answers publish the same Task response that a
@@ -253,24 +201,35 @@ does not merge the feature branch.
 
 ## Inspect and configure the worker
 
-The **Taskboard** shows current work, queue and capacity. **Metrics** explains
-measured consumption and execution activity; **History** keeps previous runs and
-their evidence. **Settings** holds the worker's operating configuration.
+Each focused view serves one user goal. **Workboard** helps choose the next request
+and leads with work needing your input. **New Feature Request** prepares and publishes
+one request; its conversation and **Review** have separate focused views.
+**Projects** is the project directory: adding a clone, publishing workflow files,
+approving policy and enabling intake each have an explicit next step.
+**Workflow** explains recorded delivery health, with delivery-quality evidence in a
+separate view. **Worker health** explains resources and consumption. **History**
+inspects retained evidence without selecting or restoring archived requests.
+**Settings** first helps you choose a setting, then opens one independent editor;
+unsent edits survive navigation within the unlocked tab.
 
-![Worker Metrics with current capacity, configured token allowance, resources and execution activity.](projects/werk/docs/evidence/readme/worker-metrics.png)
+![Workflow health with recorded stage pressure, confirmed-increment velocity and measurement coverage.](projects/werk/docs/evidence/readme/worker-workflow.png)
 
-*Metrics in the real worker UI with deterministic sample measurements. Worker process resources, host observations and the configured allowance are separate; these are not live account balances. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
+*Recorded delivery health and operational EBM proxies. Unmeasured customer or business outcomes remain unavailable rather than being inferred. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
+
+![Worker health with resources, measured consumption and execution activity.](projects/werk/docs/evidence/readme/worker-metrics.png)
+
+*Worker health with deterministic sample measurements. Resource use and allowance are separate from delivery quality and live provider account balances. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
 
 For development servers and other long-running project services, configure named
 service presets explicitly. The worker supervises them in the request’s pinned
-worktree, with bounded lifetime and restart limits. **Metrics → Processes** shows
+worktree, with bounded lifetime and restart limits. **Worker health → Processes** shows
 owned services, observed resource use and stop/restart controls; missing operating
 system measurements stay visible as unavailable. See
 [manage worker processes](projects/werk/docs/how-to/manage-worker-processes.md).
 
-![Worker settings with provider connections and navigation to repositories, tool access and consumption settings.](projects/werk/docs/evidence/readme/worker-settings.png)
+![Settings directory grouping independent worker settings by the task to perform.](projects/werk/docs/evidence/readme/worker-settings.png)
 
-*Settings in the real worker UI, using sample configuration. Keep credentials local to the worker machine. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
+*Choose one setting, then edit it on its own focused view. Provider connection, default provider, capacity and time limits have independent saves. [Screenshot provenance](projects/werk/docs/evidence/readme/README.md).*
 
 | Configure | Where to learn more |
 | --- | --- |
@@ -341,7 +300,7 @@ application or npm install.
 3. Confirm registration in the worker and the Orchestrator's worker list. Review
    **Settings → Execution profiles**. To edit them, pause and drain the worker,
    save the profiles, wait for the Orchestrator's acknowledgment, then resume
-   new starts on Taskboard.
+   new starts on Workboard.
 4. In the Orchestrator, choose automatic routing to eligible workers or a manual
    worker destination. Submit a small **simulation** using the line's project ID
    and an advertised provider/profile. Inspect its evidence and expect the
@@ -375,10 +334,10 @@ owned by that line.
    [private credential example](projects/werk/docs/how-to/assemble-independent-components.md#start-factory-with-a-private-line-credential).
    Restart Factory with the updated environment after adding or rotating a line
    credential.
-2. Start the Factory from the project directory with its own state and port:
+2. Start the Factory from Home with its own state and port:
 
    ```sh
-   node /path/to/werk-release/bin/apps/factory/cli.mjs start --state-dir .werk/factory --port 3100
+   node /path/to/WerkHome/runtime/bin/apps/factory/cli.mjs start --state-dir /path/to/WerkHome/state/factory --port 3100
    ```
 
 3. Open the returned URL and sign in with the Factory's own admin token. Create

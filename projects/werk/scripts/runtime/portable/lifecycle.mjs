@@ -191,7 +191,8 @@ export async function run(kind, state, root, options, internal, launch = null) {
       const { runWorker } = await import(new URL(`../../../src/worker/dist/worker/runner.js`, import.meta.url));
       const { configuration } = await import(new URL(`../../../src/worker/dist/worker/config.js`, import.meta.url));
       const effective = await configuration(options);
-      worker = runWorker({ ...effective, stateDir: state, url: options.url, enrollmentToken: process.env.WERK_ENROLLMENT_TOKEN ?? '', webviewToken: process.env.WERK_WORKER_TOKEN, projectDir: options['project-dir'], integrationProjectDir: await configuredProjectRoot(options), statusHost: options.host ?? '127.0.0.1', statusPort: Number(options.port ?? 4100) }, abort.signal, { ready: async address => {
+      if (options['home-dir'] !== undefined && (!isAbsolute(options['home-dir']) || await realpath(options['home-dir']) !== options['home-dir'])) throw inputError('Home must be an explicit canonical absolute directory from the Home launcher.');
+      worker = runWorker({ ...effective, stateDir: state, ...(options['home-dir'] ? { homeDir: options['home-dir'] } : {}), url: options.url, enrollmentToken: process.env.WERK_ENROLLMENT_TOKEN ?? '', webviewToken: process.env.WERK_WORKER_TOKEN, projectDir: options['project-dir'], integrationProjectDir: options['home-dir'] ? undefined : await configuredProjectRoot(options), statusHost: options.host ?? '127.0.0.1', statusPort: Number(options.port ?? 4100) }, abort.signal, { ready: async address => {
         const host = address.address === '0.0.0.0' || address.address === '::' ? '127.0.0.1' : address.address;
         await onReady({ url: `http://${host.includes(':') ? '[' + host + ']' : host}:${address.port}`, credentialsFile: join(state, 'webview-token') });
       } });

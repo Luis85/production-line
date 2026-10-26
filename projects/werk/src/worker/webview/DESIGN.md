@@ -2,18 +2,22 @@
 
 ## THESIS
 
-Operate mode. One independently runnable worker, four primary pages: Taskboard
-(default at `/taskboard`), Metrics (`/dashboard`), History and Settings (`/settings`).
-An attention-first taskboard keeps task instructions and responses on the right.
-Vue with Nuxt UI remains the implementation foundation. Request-scoped Review is
-the delivery workspace reached from these pages. The worker shares a configured
-machine execution ceiling across projects; stricter project limits and exclusive
-unscoped operations govern which work can run concurrently.
+Operate mode. Preserve the slate/mint Vue and Nuxt UI identity. Every focused
+view has exactly one user goal. Workboard, Projects, Workflow and Settings remain
+the four primary navigation destinations; each opens focused child workflows.
+Resource health and History remain secondary evidence destinations.
 
-The legacy `/chat` route redirects to `/taskboard` while preserving its query.
-Metrics presents observations; Settings owns configuration. `/monitoring-status`
-continues to open Metrics. Earlier Dashboard setup anchors open the corresponding
-Settings sections. History remains the evidence and management surface.
+Workboard chooses the next request, with attention before waiting work. Creation,
+conversation, project setup, evidence inspection and maintenance use their own
+views. Supporting facts belong beside a decision; unrelated operations do not.
+The route/goal catalogue is recorded in the
+[dated review](../../../docs/reports/worker-ui-goals-2026-10-26.md).
+
+Legacy taskboard/chat/session bookmarks retain exact request identity. Project
+bookmarks resolve to the selected project or shared request. Earlier settings
+bookmarks reach the appropriate independent editor or project workflow.
+Home contains stable launchers, replaceable runtime, visible projects and private
+state. New project-local installation is retired.
 
 ## OWN-WORLD
 
@@ -25,47 +29,66 @@ capacity reservations as running models.
 
 ## STORY
 
-A horizontal WorkerShell keeps identity, Taskboard / Metrics / History / Settings
-navigation, update state, Tour and Lock visible. After unlock, Taskboard answers
-three questions: what needs the operator, what is running, and what is waiting.
-A Running now strip follows observed active executor owners. Below it, a wider
-Needs you area prioritizes checkpoint questions, decisions, request rework,
-review and failed or interrupted attempts. Up next shows waiting work alongside
-it. Completed and Drafts use disclosures beneath the active work.
+A horizontal WorkerShell keeps Workboard / Projects / Workflow / Settings,
+update state, Tour and Lock visible. Workboard (`/workboard`) answers which
+request needs attention next. Needs you precedes review, active work and waiting
+work, including on narrow screens. Compact status navigation reaches each lane.
 
-One card represents one retained task across its session, local file task and
-project-request projections. Preserve original task/session/request identifiers
-and the source labels Local request, Assigned and Project request. Chat and file
-execution remain distinct backend modes within Local request. Project
-companion files do not transfer authority over remote assignments to the local
-worker. Stale running records that disagree with the executor's active owners
-need refresh, not duplicate running cards. Simulations remain labelled Simulated;
-model completion is separate from review, acceptance, patch application or merge.
+**New Feature Request** opens `/requests/new` with project/draft identity retained.
+It leads with the intended outcome, context, acceptance criteria, verification
+and approved paths. Optional routing preferences disclose progressively. Prepare,
+readiness and explicit Git publication serve that single authoring outcome;
+request browsing and conversations open elsewhere.
 
-Selecting a task pins its identity above the right-hand interaction panel.
-New request adds work; Follow up continues that selected task. This panel is for
-task instructions, responses and checkpoint answers. Configuration, provider
-login and worker administration belong in Settings. Empty states link to setup
-when needed without turning task interaction into a settings form.
+`/request?session=<id>` opens the exact retained conversation and its valid
+controls. `/request?project=<id>&request=<name>` handles the exact pre-admission
+shared request and Ready Check. Review (`/review`) decides the exact current
+increment. Required-check status and pending human acceptance are named
+separately. Diff, current proof and the valid decision stay visible; historical
+checks, detailed operation identities and execution traces disclose progressively.
+`/request/maintenance?fileId=<id>` owns retained file-task priority, retry and
+cleanup without turning History into task management.
 
-New request starts with Request instructions. Task options disclose the provider,
-optional name and imported Docker Agent definition/agent. Repository files ·
-optional grants bounded access to approved inputs within this same composer.
-Create request always creates durable task tracking; the file permission is not
-a switch for Markdown persistence. One idempotent create command owns the initial
-instructions and permissions. If its acknowledgement is uncertain, keep that
-exact command and expose Retry same request; never silently create another task.
-Follow-ups retain the selected session and generated feature-request record.
-Unsent drafts survive refresh, navigation and access expiry in this tab; explicit
-Lock clears them and reload persistence is not promised.
+Projects (`/projects`) chooses a project. `/projects/new` clones one remote into
+the visible `Home/projects/<id>` path. `/project?project=<id>` keeps one project
+identity while `step=workflow|policy|enable|edit|intake` opens one setup, approval,
+readiness, policy-draft or request-polling goal. Approval keeps the exact baseline,
+named providers, destination, limits and permitted exceptions with its explicit
+acknowledgement. Recheck follows approval without asking the operator to remember
+another project selector. Existing retained paths remain labelled honestly.
 
-Feature request Markdown shows the confirmed file, saved time and readable
-progress. A pending or failed sync remains visible and retryable without implying
-that accepted work was rejected. Source intake notes remain authoritative;
-generated records never submit work or approve completion when edited. Keep
-execution outcome, readiness/completion gates and patch review distinct.
-History retains task management, source requests, patches and execution evidence.
-Backend task kinds remain provenance, not separate primary creation journeys.
+Workflow summarizes delivery health; `/workflow/evidence` owns quality cohorts.
+Worker health (`/dashboard`) owns resources and invocation consumption, not
+Feature Request outcome analysis. History provides mutually exclusive read-only
+views. Browsing evidence never selects a session, restores an archive or changes
+the queue. Links lead to the correct request/review/maintenance workflow.
+
+One card retains one Feature Request identity across source, session and attempts.
+Running state must agree with executor observations. Questions, rework, holds,
+unknown outcomes and review actions remain visible. Candidate acceptance,
+confirmed merge and release publication stay distinct.
+
+Background updates preserve selection, focused controls and unsent authoring.
+Unknown publication acknowledgement retains its immutable command identity;
+reconciliation precedes another mutation. Source Markdown remains authoritative,
+with generated progress and saved/error state explicit.
+
+## WORKFLOW EVIDENCE
+
+Workflow starts with persisted Feature Request stages and stage pressure, then
+UTC-week delivered-increment velocity and measured lead/cycle durations. Project
+and time filters retain their scope across sections. Completion targets distinguish
+human acceptance, main-checkout merge and release publication. Velocity requires
+confirmed integration; review-only closure, provider attempts, passing checks and
+an internal completed phase do not establish delivered increments.
+
+The four Evidence-based management areas expose the limits of the observations.
+Delivery timing can inform Time to Market; no chart manufactures Current Value,
+Unrealized Value, innovation outcomes or a quality score from activity counts.
+Unknown and incomplete-history coverage belongs beside each measure. Empty data,
+failed reads and stale retained observations have distinct messages. Charts retain
+text labels and accessible tabular facts; narrow screens preserve filter labels,
+evidence identity and 44px controls. The existing slate/mint system remains.
 
 ## MONITORING AND STEERING
 
@@ -78,7 +101,7 @@ Missing usage, cost, progress and provider telemetry remain unavailable. Metrics
 starts with current activity and capacity, then token allowance beside worker and
 host resources. Execution activity follows with outcome distribution, measured
 duration, input/output tokens and reported cost. Runtime and connection diagnostics
-remain in a disclosure. Taskboard, History and Settings links lead to their owned
+remain in a disclosure. Workboard, History and Settings links lead to their owned
 workflows instead of adding configuration or task management to Metrics.
 
 Current activity and the daily/monthly UTC allowance remain independent of the
@@ -125,10 +148,14 @@ ceiling; committed project policy can impose stricter concurrency limits.
 
 ## SETUP AND DEFINITIONS
 
-Settings owns Providers & accounts, Queue & duration, Consumption, Tools & MCP,
-Repositories, Shared request intake, Execution profiles, Agent definitions,
-Project delivery, Project integration and Orchestrator. Editors save separately
-and keep drafts
+Settings opens a grouped directory, then one independent editor: Provider
+connections, Default provider, Queue capacity, Execution time limits, Token allowance,
+Tools & MCP, Agent instructions, Saved project authority, optional Execution profiles,
+Orchestrator connection or Assigned request rules. Saved project authority permits global
+revocation; project policy approval stays in the focused project workflow.
+Central Home's earlier repository, integration and intake settings bookmarks
+redirect to Projects or the scoped project. Retained Factory settings remain
+available in their applicable context. Editors save separately and keep drafts
 while navigating in the current tab. Queue/duration/consumption policy saves
 compare the saved baseline; conflicts preserve the draft for reconciliation.
 Metrics keeps operational diagnostics and links to the relevant editor. CLI
@@ -153,21 +180,21 @@ unlock. The durable access token is cleared after successful entry and is not
 saved in browser storage, the session cookie or a URL. Running tasks continue
 on the worker when browser access locks.
 
-After unlock, the board and right-hand interaction panel establish the worker's
-current work immediately. Empty attention and queue areas explain their state;
+After unlock/setup, Workboard establishes the next request needing attention.
+Creation and conversation open focused views with their own headings. Empty attention and queue areas
+explain their state;
 no placeholder task, model name or fabricated progress is presented as real.
 The selected task remains clear while the operator drafts instructions or reads
-output. A persistent Tour explains the four pages and their controls without
+output. A persistent Tour explains the four primary pages and their controls without
 configuring providers, enrolling the worker or submitting work.
 
 ## FORM
 
 Use native Nuxt UI controls and authored two-dimensional layout. The horizontal
 header and board retain the existing slate surfaces, mint action color and
-readable hierarchy. Wide screens place the board beside the narrower interaction
-panel; within the board, Needs you has more space than Up next. Small screens
-stack board and interaction without losing the selected task or requiring drag
-and drop. Native buttons and links provide keyboard equivalents for every action.
+readable hierarchy. Wide screens use the available width for delivery stages;
+small screens retain request identity, stage labels and next actions without
+requiring drag and drop. Native buttons and links provide keyboard equivalents.
 
 Task names and model/provider labels wrap. Status always includes text rather
 than relying on color. Transcript replies support paragraphs, lists, emphasis,
@@ -196,17 +223,16 @@ retain their `KeepAlive` lifecycle. Shared polling skips hidden or paused views
 and prevents overlapping scheduled reads. Tours use Nuxt UI focus management,
 await route activation before highlighting a target and close when access locks.
 Shared skip links focus main content without changing hash-based routes used by
-other Werk applications. Taskboard aggregation is a pure view of retained worker
+other Werk applications. Workboard aggregation is a pure view of retained worker
 state; it does not introduce a second task queue or execution authority.
 
 ## Repository consent and profile editing
 
-A detected installation repository appears in a nonmodal prompt above the
-taskboard and in Settings → Repositories. Show its full wrapping path,
-branch and remote name without remote credentials. Use repository and Don’t use
-are explicit choices; the latter persists and leaves a reconsideration action
-in Settings. Pending actions, failures and acknowledged choices have visible
-feedback without stealing focus during polling.
+Projects owns remote-clone registration and displays the visible Home path,
+selected branch, watched folder/poll interval and setup recovery. It does not
+infer Home to be a repository or offer arbitrary existing-checkout adoption.
+Retained legacy paths remain labelled and unchanged. Pending actions and failures
+have visible feedback without stealing focus during polling.
 
 Execution profiles have a focused Settings editor with labelled ID/provider
 fields, add/remove controls and a visible execution-mode boundary. Keep drafts

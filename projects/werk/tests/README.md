@@ -98,38 +98,48 @@ and a JSON result without credentials. Provider output and the proposed file pat
 come from a labelled protocol fixture; no real provider login or model request is
 performed, and the approved checkout is left unchanged.
 
-## Project worker and feature-folder qualification
+## WerkHome and feature-request qualification
 
-The default suite includes `worker/feature-requests.test.mjs` and
-`operations/project-worker.test.mjs`: stable saves, drafts, duplicate IDs, admission
-recovery, folder ownership, malformed input, preserved Markdown, serial execution,
-project installation and actual native CLI restart. Native provider execution uses
-a labelled protocol fixture, not an authenticated model.
+The default suite covers retained feature-folder semantics and central Home
+layout, migration refusal/adoption, managed clones, policy approval and guarded
+request execution. Legacy project-install fixtures remain explicitly separate
+from supported new Home setup. Protocol fixtures are not authenticated models.
 
-For the complete native installed-project journey on Linux/macOS, after a build:
+After a source build, run the native central Home journey on Linux/macOS:
 
 ```sh
 node scripts/release/project-worker-smoke.mjs --native
 ```
 
-Set `WERK_PROJECT_WORKER_APP` to an extracted release's `bin/apps/worker` to qualify
-the package. This uses a labelled CLI protocol fixture, project-local setup,
-revision-guarded feature commands, chat/patch execution, durable before/after
-evidence, run analysis and restart. No npm step runs in the test project. The
-fixture executable is POSIX-only; it does not qualify Windows provider execution.
+Set `WERK_WORKER_HOME_ROOT` to an extracted flat Home root to qualify its payload.
+The smoke launches the central worker, clones the visible remote project,
+approves its policy, submits a committed Feature Request, runs independent checks,
+confirms the pushed candidate/Markdown review and restarts with the same identity.
+There is no project-local worker install or npm step in the test project. The
+labelled provider protocol executable is POSIX-only; Windows/live inference
+qualification remains separate.
 
-With Docker available, run the explicit installed-project journey after a build:
+With Docker, run the same central Home journey inside a Node24 container:
 
 ```sh
 node scripts/release/project-worker-smoke.mjs
 ```
 
-Set `WERK_PROJECT_WORKER_APP` to an extracted release's `bin/apps/worker` to test
-the downloaded payload. The script runs setup inside a Node container (no host
-Node used by the installation commands), starts generated Compose, ingests a
-bind-mounted Markdown request, checks its exported result and restarts to verify
-identity/no duplicate execution. It removes its own Compose services and scratch
-project. It uses a provider protocol fixture and does not qualify live inference.
+Use the same `WERK_WORKER_HOME_ROOT` extracted-Home selector. This qualifies the
+container's clone/policy/request/check/Git-review/restart behavior, not native
+Windows or a real provider account. Test-owned containers/scratch state are cleaned.
+
+Qualify selective replacement, credential/project preservation, rollback and
+external-candidate runtime-gap recovery against actual archives:
+
+```sh
+node scripts/release/home-update-smoke.mjs release
+```
+
+`npm run acceptance:worker-home` adds the real browser prepare/edit/readiness/Git
+publication, candidate checks, human acceptance and explicit main-checkout merge.
+It uses a labelled deterministic Claude CLI protocol fixture with no real
+provider login/inference. Retain archive hashes and source identity for every run.
 
 ## Generated UI stories and release evidence
 

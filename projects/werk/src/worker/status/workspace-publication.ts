@@ -7,7 +7,7 @@ import type { RequestCommand } from '../application/request-gates.js';
 import { createLocalDelivery } from '../infrastructure/local-delivery.js';
 import { createRemoteDeliveryGit } from '../infrastructure/remote-delivery-git.js';
 import { createGitHubPublication } from '../infrastructure/remote-delivery-github.js';
-import { authorizeDeliveryPolicy } from './workspace-delivery-policy.js';
+import { authorizeIsolatedDeliveryPolicy as authorizeDeliveryPolicy } from './workspace-delivery-policy.js';
 import type { WorkspaceContext } from './workspace-context.js';
 
 const active = new WeakMap<WorkspaceContext, Map<string, Promise<unknown>>>();

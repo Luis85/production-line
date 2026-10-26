@@ -1,154 +1,65 @@
+// Candidate Home qualification: real launcher/HTTP/Git/journals, deterministic CLI inference only.
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, mkdtemp, readFile, writeFile, rm, realpath } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, writeFile, rm, realpath } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
-const exec = promisify(execFile), source = resolve(process.env.WERK_PROJECT_WORKER_APP ?? 'bin/apps/worker');
-const requestedProject = process.env.WERK_PROJECT_WORKER_PROJECT ? resolve(process.env.WERK_PROJECT_WORKER_PROJECT) : await mkdtemp(join(tmpdir(), 'werk-native-project-'));
-await mkdir(requestedProject, { recursive: true });
-const project = await realpath(requestedProject);
-const entry = join(project, 'bin/apps/worker/cli.mjs');
-async function command(path, ...args) { const out = await exec(process.execPath, [path, ...args], { cwd: project, timeout: 45000, maxBuffer: 1048576 }); return JSON.parse(out.stdout); }
-const cli = (...args) => command(entry, ...args);
-let started = false;
+import { pathToFileURL } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
+import { writeDownloadedWorkerModel } from './worker-home-protocol.mjs';
+const execute = promisify(execFile), source = resolve(process.env.WERK_WORKER_HOME_ROOT ?? '.');
+const scratch = await realpath(await mkdtemp(join(tmpdir(), 'werk-native-home-'))), home = join(scratch, 'WerkHome'), entry = join(home, 'worker.mjs');
+const environment = { ...process.env, GIT_CONFIG_COUNT: '2', GIT_CONFIG_KEY_0: 'user.name', GIT_CONFIG_VALUE_0: 'Release Fixture', GIT_CONFIG_KEY_1: 'user.email', GIT_CONFIG_VALUE_1: 'fixture@example.invalid' };
+for (const key of Object.keys(environment)) if (key.startsWith('WERK_')) delete environment[key];
+async function command(file, args, cwd = scratch) { return execute(file, args, { cwd, env: environment, timeout: 180000, maxBuffer: 2097152 }); }
+async function git(cwd, ...args) { return (await command('git', args, cwd)).stdout.trim(); }
+async function cli(...args) { return JSON.parse((await command(process.execPath, [entry, ...args])).stdout); }
+let url, token, started = false;
+async function api(path, body) {
+  const response = await fetch(url + path, { method: body === undefined ? 'GET' : 'POST', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(120000) });
+  const value = await response.json(); assert.ok(response.ok, path + ': ' + JSON.stringify(value)); return value;
+}
 try {
-  const setup = await command(join(source, 'cli.mjs'), 'init', '--features-dir', 'requests/features');
-  assert.equal(setup.featuresDirectory, join(project, 'requests/features'));
-  const manifest = JSON.parse(await readFile(join(project, 'package.json'), 'utf8'));
-  assert.equal(manifest.private, true); assert.equal(manifest.scripts['worker:status'], 'node bin/apps/worker/cli.mjs status');
-  assert.equal(manifest.dependencies, undefined);
-  await assert.rejects(readFile(join(project, '.git/config')), { code: 'ENOENT' });
-  const fixture = join(project, 'provider-fixture'), invocations = join(project, 'fixture-model-invocations');
-  await writeFile(fixture, `#!${process.execPath}\nimport { appendFileSync } from 'node:fs';if(process.argv[2]==='--version'){console.log('codex-cli 0.0.0-fixture');process.exit(0)}if(process.argv[2]==='login'&&process.argv[3]==='status'){console.log('Logged in using ChatGPT');process.exit(0)}appendFileSync(${JSON.stringify(invocations)},'invoked\\n');let text='';for await(const p of process.stdin)text+=p;const reply=text.includes('QUESTION_FLOW')&&!text.includes('ANSWER_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'question',message:'Which layout should the fixture retain?',choices:[{id:'existing',label:'Keep the existing layout'}]}}):text.includes('ESCALATION_FLOW')&&!text.includes('RESUME_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'escalation',message:'The fixture requires an operator decision.',reason:'No authority to choose a new layout.'}}):text.includes('Implement the requested changes')?JSON.stringify({summary:'Fixture review',files:[{path:'approved.txt',content:'changed\\n'}]}):'Packaged feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:reply}}));\n`, { mode: 0o700 });
-  await writeFile(join(project, 'provider.json'), JSON.stringify({ provider: { id: 'codex-cli', executable: fixture, authenticationMode: 'cli-account' } }), { mode: 0o600 });
-  const schema = await cli('schema');
-  const hasRunEvidence = !!schema.commands['run analyze'];
-  const hasInteractions = !!schema.commands['interaction answer'];
-  if (process.env.WERK_EXPECT_INTERACTIONS === '1') assert.ok(hasInteractions, 'The candidate must expose guarded model interactions.');
-  if (process.env.WERK_EXPECT_RUN_EVIDENCE === '1') assert.ok(hasRunEvidence, 'The candidate must expose durable run evidence commands.');
-  await cli('start', '--port', '0'); started = true;
-  await cli('settings', 'set', '--file', 'provider.json');
-  const checked = await cli('provider', 'check', '--id', 'codex-cli');
-  assert.equal(checked.authentication, 'authenticated');
-  await cli('queue', 'pause');
-  await writeFile(join(project, 'draft.md'), '---\nschemaVersion: 1\ntitle: Packaged request\nstatus: draft\n---\nDescribe the next step.\n');
-  const created = await cli('feature', 'create', '--name', 'example.md', '--markdown', 'draft.md');
-  assert.equal(created.record, null);
-  assert.match(created.markdown, /status: draft/);
-  await cli('feature', 'validate', '--name', 'example.md');
-  const current = await cli('feature', 'get', '--name', 'example.md');
-  await cli('feature', 'submit', '--name', 'example.md', '--if-match', current.revision);
-  const queued = await cli('feature', 'get', '--name', 'example.md');
-  // Pausing execution does not pause intake: a polling tick may already adopt ready work.
-  assert.match(queued.markdown, /status: (?:ready|queued)\n/);
-  if (queued.record) assert.equal(queued.record.status, 'queued');
-  if (queued.execution) assert.equal(queued.execution.status, 'queued');
-  await assert.rejects(readFile(invocations), { code: 'ENOENT' });
-  await cli('queue', 'resume');
-  const completed = await cli('feature', 'wait', '--name', 'example.md', '--timeout-ms', '30000');
-  assert.equal(completed.record.status, 'completed');
-  assert.match(completed.execution.text, /protocol fixture completed/);
-  const result = await cli('feature', 'result', '--name', 'example.md');
-  assert.match(await readFile(join(setup.featuresDirectory, completed.record.result), 'utf8'), /protocol fixture completed/);
-  await writeFile(join(project, 'approved.txt'), 'original\n');
-  await writeFile(join(project, 'patch-draft.md'), '---\nschemaVersion: 1\ntitle: Packaged patch\nstatus: draft\nmode: patch\npaths: [approved.txt]\n---\nChange the approved file.\n');
-  const patchDraft = await cli('feature', 'create', '--name', 'patch.md', '--markdown', 'patch-draft.md');
-  await cli('feature', 'submit', '--name', 'patch.md', '--if-match', patchDraft.revision);
-  const patch = await cli('feature', 'wait', '--name', 'patch.md', '--timeout-ms', '30000');
-  assert.equal(patch.record.status, 'review');
-  assert.match(await readFile(join(setup.featuresDirectory, patch.record.patch), 'utf8'), /\+changed/);
-  assert.equal(await readFile(join(project, 'approved.txt'), 'utf8'), 'original\n');
-  let retainedRuns;
-  if (hasRunEvidence) {
-    retainedRuns = await cli('run', 'list');
-    assert.equal(retainedRuns.total, 2);
-    assert.deepEqual(retainedRuns.rows.map(run => run.kind).sort(), ['chat', 'local']);
-    assert.deepEqual(retainedRuns.rows.map(run => run.outcome).sort(), ['completed', 'review']);
-    for (const run of retainedRuns.rows) {
-      assert.equal(run.before.state, 'running'); assert.equal(run.after.state, run.outcome);
-      assert.equal(run.before.resources.scope, 'worker_process');
-      assert.equal(run.after.resources.scope, 'worker_process');
-      assert.equal(run.usage.inputTokens, null); assert.equal(run.usage.providerReportedCostUsd, null);
-    }
-    const analysis = await cli('run', 'analyze');
-    assert.equal(analysis.total, 2); assert.equal(analysis.completedPairs, 2);
-    assert.equal(analysis.consumption.inputTokens, null);
-    assert.equal(analysis.consumption.providerReportedCostUsd, null);
+  await cp(source, home, { recursive: true, filter: path => path !== join(source, 'state') && path !== join(source, 'projects') });
+  const producer = join(scratch, 'producer'), remote = join(scratch, 'company.git'), fixture = join(scratch, 'claude-protocol-fixture');
+  await mkdir(producer); await mkdir(join(producer, 'src')); await mkdir(join(producer, 'tests')); await writeDownloadedWorkerModel(fixture);
+  await writeFile(join(producer, 'src/value.mjs'), 'export const value = 1;\n');
+  await writeFile(join(producer, 'tests/value.mjs'), "import assert from 'node:assert/strict'; import { value } from '../src/value.mjs'; assert.equal(value, 2);\n");
+  await git(scratch, 'init', '--bare', '--initial-branch=main', remote); await git(producer, 'init', '--initial-branch=main'); await git(producer, 'add', '.'); await git(producer, 'commit', '-m', 'Initial project'); await git(producer, 'remote', 'add', 'origin', remote); await git(producer, 'push', 'origin', 'main');
+  const first = await cli('--no-open', '--port', '0'); started = true; url = first.url; token = (await readFile(first.credentialsFile, 'utf8')).trim();
+  assert.equal(first.stateDirectory, join(home, 'state/worker'));
+  await api('/api/settings', { defaultProvider: 'claude-cli', provider: { id: 'claude-cli', authenticationMode: 'cli-account', executable: fixture, model: 'deterministic-protocol-fixture' }, board: { paused: true } });
+  const registered = await api('/api/managed-projects', { action: 'register', id: 'company', operationId: 'smoke-register', repository: pathToFileURL(remote).href });
+  const checkout = registered.projects[0].path; assert.equal(checkout, join(home, 'projects/company'));
+  const setup = await api('/api/managed-projects', { action: 'setup_plan', id: 'company', provider: 'claude-cli' });
+  await api('/api/managed-projects', { action: 'setup_apply', id: 'company', operationId: 'smoke-workflow', expectedPlan: setup.planDigest });
+  const policy = await api('/api/requests', { action: 'delivery_policy', projectId: 'company' }); assert.equal(policy.configuration.localMerge, true);
+  await api('/api/requests', { action: 'approve_delivery_policy', repositoryId: 'company', configurationDigest: policy.configurationDigest, expectedApprovalRevision: policy.approvalRevision });
+  assert.equal((await api('/api/managed-projects', { action: 'reconcile', id: 'company', operationId: 'smoke-enable' })).projects[0].intakeEnabled, true);
+  const grant = await api('/api/tool-access'); await api('/api/tool-access', { expectedRevision: grant.revision, builtins: { ...grant.builtins, files: true, commands: [{ id: 'value', name: 'Verify exported value', executable: process.execPath, args: ['tests/value.mjs'], enabled: true, verification: true }] }, mcp: [] });
+  const draft = await api('/api/features', { action: 'prepare', projectId: 'company', operationId: 'smoke-draft', seed: { title: 'Packaged Home value change', provider: 'claude-cli', message: 'Change the exported value to two in the approved file.', paths: ['src/value.mjs'] } });
+  const markdown = draft.markdown.replace('<!-- Describe constraints, relevant behavior, and what is outside this request. -->', 'Preserve unrelated source and committed verification.').replace('<!-- Add one or more concrete, verifiable checklist items. -->', '- The value is two and the committed verification passes.').replace('<!-- Explain how each outcome will be checked and what evidence reviewers need. -->', 'Run tests/value.mjs against the isolated candidate.');
+  const ready = await api('/api/features', { action: 'publish', projectId: 'company', operationId: 'smoke-ready', name: draft.name, markdown, status: 'ready', expectedRevision: draft.revision, expectedWorkflowDigest: draft.workflowDigest, expectedBinding: draft.binding });
+  assert.ok(ready.publication?.commit); await assert.rejects(readFile(join(scratch, 'fixture-calls.jsonl')), { code: 'ENOENT' });
+  await api('/api/settings', { board: { paused: false } });
+  let retained;
+  const deadline = performance.now() + 180000;
+  while (performance.now() < deadline) {
+    await api('/api/shared-intake', { action: 'sync', projectId: 'company' });
+    retained = (await api('/api/shared-intake?projectId=company')).requests.find(item => item.id === ready.featureId);
+    if (retained?.error) throw Error(retained.error);
+    if (retained?.status === 'ready_for_review' && retained.publication === 'synced') break;
+    await delay(200);
   }
-  let interactionEvidence = null;
-  if (hasInteractions) {
-    const capabilities = await cli('capabilities');
-    await writeFile(join(project, 'question-draft.md'), '---\nschemaVersion: 1\ntitle: Retained fixture question\nstatus: draft\n---\nQUESTION_FLOW: Ask before selecting a layout.\n');
-    const questionDraft = await cli('feature', 'create', '--name', 'question.md', '--markdown', 'question-draft.md');
-    await cli('feature', 'submit', '--name', 'question.md', '--if-match', questionDraft.revision);
-    const waiting = await cli('feature', 'wait', '--name', 'question.md', '--timeout-ms', '30000');
-    assert.equal(waiting.execution.status, 'waiting_input');
-    const sessionId = waiting.record.sessionId;
-    const question = await cli('interaction', 'get', '--id', sessionId);
-    assert.equal(question.phase, 'waiting_input'); assert.equal(question.pending.kind, 'question');
-    await cli('stop'); started = false;
-    await cli('start', '--port', '0'); started = true;
-    assert.deepEqual(await cli('interaction', 'get', '--id', sessionId), question);
-    const answerPath = join(project, 'answer.json');
-    await writeFile(answerPath, JSON.stringify({ answer: 'ANSWER_COMPLETE: Keep the existing layout.' }));
-    await assert.rejects(cli('interaction', 'answer', '--id', sessionId, '--question-id', question.pending.id, '--if-match', String(question.revision + 1), '--key', 'stale-answer-001', '--file', answerPath), error => error.code === 2);
-    const answerArgs = ['interaction', 'answer', '--id', sessionId, '--question-id', question.pending.id, '--if-match', String(question.revision), '--key', 'retained-answer-001', '--file', answerPath];
-    const accepted = await cli(...answerArgs);
-    const replayed = await cli(...answerArgs);
-    assert.equal(replayed.latestTurn.id, accepted.latestTurn.id);
-    assert.equal(replayed.totalTurns, question.totalTurns + 1);
-    await writeFile(answerPath, JSON.stringify({ answer: 'A changed answer cannot reuse the accepted operation.' }));
-    await assert.rejects(cli(...answerArgs), error => error.code === 2);
-    assert.equal((await cli('feature', 'wait', '--name', 'question.md', '--timeout-ms', '30000')).execution.status, 'completed');
-    const answered = await cli('interaction', 'turn', '--id', sessionId, '--turn-id', accepted.latestTurn.id);
-    assert.equal(answered.kind, 'answer'); assert.ok(answered.dispatch && answered.dispatchDigest);
-    assert.match(JSON.stringify(answered.dispatch), /ANSWER_COMPLETE/);
-    assert.equal(answered.dispatch.policy.continuation, 'worker_context_replay');
-    await writeFile(join(project, 'escalation.json'), JSON.stringify({ id: 'packaged-escalation', title: 'Fixture escalation', provider: 'codex-cli', message: 'ESCALATION_FLOW: Wait for operator authority.' }));
-    await cli('task', 'create', '--file', 'escalation.json');
-    assert.equal((await cli('task', 'wait', '--id', 'packaged-escalation', '--timeout-ms', '30000')).session.status, 'escalated');
-    const escalated = await cli('interaction', 'get', '--id', 'packaged-escalation');
-    assert.equal(escalated.pending.kind, 'escalation');
-    const cancelled = await cli('interaction', 'cancel', '--id', 'packaged-escalation', '--question-id', escalated.pending.id, '--if-match', String(escalated.revision), '--key', 'decline-escalation-001');
-    assert.equal(cancelled.phase, 'cancelled');
-    const resumed = await cli('interaction', 'resume', '--id', 'packaged-escalation', '--turn-id', cancelled.latestTurn.id, '--if-match', String(cancelled.revision), '--key', 'resume-escalation-001', '--message', 'RESUME_COMPLETE: Continue with the existing layout.');
-    assert.equal((await cli('task', 'wait', '--id', 'packaged-escalation', '--timeout-ms', '30000')).session.status, 'completed');
-    const resumedTurn = await cli('interaction', 'turn', '--id', 'packaged-escalation', '--turn-id', resumed.latestTurn.id);
-    assert.equal(resumedTurn.kind, 'resume'); assert.equal(resumedTurn.priorTurnId, escalated.latestTurn.id);
-    assert.ok(resumedTurn.dispatch && resumedTurn.dispatchDigest);
-    assert.equal(resumedTurn.dispatch.policy.continuation, 'worker_context_replay');
-    const eventPage = await cli('interaction', 'events', '--id', sessionId, '--after', '0', '--limit', '2');
-    assert.equal(eventPage.schemaVersion, 1); assert.ok(eventPage.events.length > 0);
-    let eventAfter = eventPage.nextAfter, eventRecords = [...eventPage.events], hasMore = eventPage.hasMore;
-    while (hasMore) {
-      const page = await cli('interaction', 'events', '--id', sessionId, '--after', String(eventAfter), '--limit', '2');
-      assert.ok(page.nextAfter > eventAfter); eventAfter = page.nextAfter; hasMore = page.hasMore; eventRecords.push(...page.events);
-    }
-    assert.equal(new Set(eventRecords.map(event => event.id)).size, eventRecords.length);
-    assert.ok(eventRecords.some(event => event.type === 'input_requested'));
-    assert.ok(eventRecords.some(event => event.type === 'completed'));
-    assert.ok(eventRecords.every(event => event.sessionId === sessionId));
-    const emptyEvents = await cli('interaction', 'events', '--id', sessionId, '--after', String(eventAfter));
-    assert.equal(emptyEvents.events.length, 0); assert.equal(emptyEvents.nextAfter, eventAfter);
-
-    interactionEvidence = { questionRestartPreserved: true, revisionGuarded: true, answerReplaySafe: true, changedReplayRejected: true, actualDispatchRetained: true, guardedEscalationCancelResume: true, contextMode: 'worker_context_replay', nativeProviderSessionResumed: false, capabilityDiscovery: !!capabilities, durableEventPagination: true };
-    if (hasRunEvidence) retainedRuns = await cli('run', 'list');
-  }
-  await cli('stop'); started = false;
-  assert.doesNotMatch(await readFile(join(project, '.werk/worker/portable.log'), 'utf8'), /database is not open|database.*closed|state_write_error/i);
-  await cli('start', '--port', '0'); started = true;
-  const restored = await cli('feature', 'get', '--name', 'example.md');
-  assert.equal(restored.record.taskId, completed.record.taskId);
-  const features = await cli('feature', 'list');
-  assert.equal(features.records.length, hasInteractions ? 4 : 2, 'Chat/task intake retains its canonical Feature Request alongside folder requests.');
-  if (hasInteractions) {
-    const escalation = features.records.find(record => record.id === 'packaged-escalation');
-    assert.ok(escalation, 'Task intake retains its explicit Feature Request identity after restart.');
-    assert.equal(escalation.sessionId, 'packaged-escalation');
-    assert.equal(escalation.name, 'interaction-packaged-escalation.md');
-    assert.equal(features.files.find(file => file.name === escalation.name)?.title, 'Fixture escalation');
-  }
-  if (hasRunEvidence) assert.deepEqual((await cli('run', 'list')).rows, retainedRuns.rows);
-  console.log(JSON.stringify({ ok: true, journey: 'packaged-native-project-worker', source, installedWithoutNpm: true, projectGitRequired: false, configurableFolder: true, providerProtocolFixture: true, resultExported: !!result, patchRequiresReview: true, restartPreserved: true, durableRunEvidence: hasRunEvidence, interactionEvidence, liveProvider: false }));
-} finally { if(started) await cli('stop').catch(()=>{}); if(process.env.WERK_PROJECT_WORKER_KEEP !== '1') await rm(project,{recursive:true,force:true}); }
+  assert.equal(retained?.status, 'ready_for_review'); assert.ok(retained.featureBranch && retained.reviewNote && retained.taskId);
+  const featureCommit = await git(remote, 'rev-parse', 'refs/heads/' + retained.featureBranch);
+  assert.equal(await git(remote, 'show', featureCommit + ':src/value.mjs'), 'export const value = 2;');
+  assert.match(await git(remote, 'show', 'main:' + retained.reviewNote), /Required checks passed for this candidate/);
+  assert.equal(await readFile(join(checkout, 'src/value.mjs'), 'utf8'), 'export const value = 1;\n'); assert.equal(await git(checkout, 'status', '--porcelain'), '');
+  const identity = (await api('/api/environment')).status.machineId, credentials = await readFile(first.credentialsFile);
+  await cli('stop'); started = false; const restarted = await cli('--no-open', '--port', '0'); started = true; url = restarted.url;
+  assert.equal((await api('/api/environment')).status.machineId, identity); assert.deepEqual(await readFile(restarted.credentialsFile), credentials);
+  const restored = (await api('/api/shared-intake?projectId=company')).requests.find(item => item.id === ready.featureId); assert.equal(restored.taskId, retained.taskId); assert.equal(restored.featureBranch, retained.featureBranch);
+  console.log(JSON.stringify({ ok: true, journey: 'central-werk-home-native', extractedHome: true, installedWithoutNpm: true, projectCloneVisible: true, featureCommittedBeforeInference: true, verifiedCandidatePushed: true, markdownReviewPublished: true, mainCheckoutUnchanged: true, identityAndCredentialsPreserved: true, restartPreserved: true, providerProtocolFixture: true, liveProvider: false }));
+} finally { if (started) await cli('stop').catch(() => {}); await rm(scratch, { recursive: true, force: true }); }

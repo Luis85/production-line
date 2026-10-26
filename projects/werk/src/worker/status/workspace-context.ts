@@ -1,7 +1,8 @@
+import { assertManagedProjectIsolation } from './workspace-managed-isolation.js';
 import { canonicalStateDirectory } from '../infrastructure/state-directory.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { readyReviewProfile } from '../application/ready-review-selection.js';
-import { authorizeDeliveryPolicy, authorizeTaskDelivery } from './workspace-delivery-policy.js';
+import { authorizeDeliveryPolicy, authorizeIsolatedDeliveryPolicy, authorizeTaskDelivery } from './workspace-delivery-policy.js';
 import type { SharedFeatureIntake } from '../application/shared-feature-intake.js';
 import { DeliveryPolicyApprovals } from '../infrastructure/delivery-policy-approvals.js';
 import { WorkspaceProjectIntakes } from './workspace-projects.js';
@@ -36,7 +37,7 @@ import type { WorkerSessions } from "../application/sessions.js";
 import type { LocalTaskboard } from "../application/local-tasks.js";
 import { TaskIndex } from "../infrastructure/task-index.js";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import type { SnapshotJournal } from "../infrastructure/journal/snapshots.js";
 import type { Status } from "./server.js";
 import { sharedFeatureAdmissionHold } from './workspace-feature-admission.js';
@@ -47,6 +48,8 @@ import type { readHistory } from './workspace-environment.js';
 export interface WorkspaceConfiguration {
     executionProfiles?: ExecutionProfilesControl;
     stateDir: string;
+    /** Authoritative launcher-selected Home, independent of an explicitly customized state directory. */
+    homeDir?: string;
     url?: string;
     enrollmentToken?: string;
     webviewToken?: string;
@@ -121,7 +124,8 @@ export class WorkspaceContext {
     journal: SnapshotJournal,
     get: () => Status,
   ) {
-    config = { ...config, stateDir: canonicalStateDirectory(config.stateDir) };
+    if (config.homeDir !== undefined && !isAbsolute(config.homeDir)) throw new DomainError('invalid_input', 'Werk Home must be an absolute launcher-selected directory.');
+    config = { ...config, stateDir: canonicalStateDirectory(config.stateDir), ...(config.homeDir ? { homeDir: canonicalStateDirectory(config.homeDir) } : {}) };
     this.taskIndex = new TaskIndex(config.stateDir);
     this.config = config;
     this.executionProfiles = config.executionProfiles;
@@ -137,7 +141,7 @@ export class WorkspaceContext {
       config.features?.provider,
     );
     this.consumption = new WorkerConsumption(new WorkerConsumptionJournal(config.stateDir), () => this.settings.value.consumption);
-    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => { if (this.nativeWorkState === 'preparing') assertNativeWorkReady(this); return this.repositoryDiscovery.assertAllowed(item.path); }, preserveCheckout: item => this.featureProjects?.preservesCheckout(item) ?? false });
+    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: async item => { if (this.nativeWorkState === 'preparing') assertNativeWorkReady(this); await assertManagedProjectIsolation(this, item.id, item.path, { allowPendingAttachment: true }); return this.repositoryDiscovery.assertAllowed(item.path); }, preserveCheckout: item => this.featureProjects?.preservesCheckout(item) ?? false });
     this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository, config.features?.intake === 'local' ? false : undefined);
     this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
@@ -192,6 +196,7 @@ export class WorkspaceContext {
       maxRuntimeMs: () => this.settings.value.execution.maxRuntimeMs,
       assertCanAdmit: () => { const hold = sharedFeatureAdmissionHold(this); if (hold) throw new DomainError('unavailable', hold.message); },
       authorize: authority => authorizeDeliveryPolicy(this, authority.repositoryId, authority.configurationDigest),
+      verifyAuthority: authority => authorizeIsolatedDeliveryPolicy(this, authority.repositoryId, authority.configurationDigest),
       profile: input => readyReviewProfile(input, this.settings.provider(input.provider), selectors => this.definitions.select(selectors)),
       model: readyReviewModels(config.stateDir, this.settings, this.consumption, this.sessions.runs, this.processObservations),
     });

@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, realpath, rename, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { DomainError } from '../../shared/errors.js';
+import { managedProjectLocations, type ManagedProjectLocationPort } from './managed-project-locations.js';
 import { managedRepository, type ManagedProject } from '../application/managed-projects.js';
 import { repositoryGit, repositoryRoot } from './repositories-git.js';
 import { assertDirectory, readBoundedFile, syncDirectory } from './journal/files.js';
@@ -15,9 +16,8 @@ async function directory(path: string) {
 }
 
 /** Git owns host transport authentication; fixed options prevent hooks and recursive submodule execution. */
-export function managedProjectGit(stateDirectory: string) {
-  const home = join(resolve(stateDirectory), 'projects');
-  const location = (id: string) => join(home, id, 'checkout');
+export function managedProjectGit(stateDirectory: string, locations: ManagedProjectLocationPort = managedProjectLocations(stateDirectory)) {
+  const { home, location } = locations;
   async function verify(path: string, branch: string, signal: AbortSignal) {
     if ((await exists(path))?.isSymbolicLink()) conflict('Project checkouts cannot be symlinks.');
     const root = await repositoryRoot(path, signal);
@@ -33,11 +33,13 @@ export function managedProjectGit(stateDirectory: string) {
     return { path: root.path, repository, head };
   }
   async function owned(project: ManagedProject) {
-    if (project.path !== location(project.id)) conflict('The managed checkout path changed.');
+    const placement = locations.placement(project);
     await assertDirectory(resolve(stateDirectory));
-    await directory(home);
-    const parent = await directory(join(home, project.id));
+    await directory(placement.root);
+    if (!placement.legacy) await directory(join(resolve(stateDirectory), 'managed-projects'));
+    const parent = await directory(placement.privateDirectory);
     const marker = join(parent, 'registration.json');
+    if (await exists(project.path) && !await exists(marker)) conflict('The project destination already exists without its ownership record. It was preserved; choose a new project ID for an isolated clone.');
     const identity = JSON.stringify({ schemaVersion: 1, id: project.id, repository: project.repository });
     try { await writeFile(marker, identity + '\n', { flag: 'wx', mode: 0o600 }); await syncDirectory(parent); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
@@ -48,10 +50,11 @@ export function managedProjectGit(stateDirectory: string) {
     home, location,
     adopt: verify,
     async clone(project: ManagedProject, signal: AbortSignal) {
-      const parent = await owned(project);
+      await owned(project);
+      const parent = locations.placement(project).parent;
       if (await exists(project.path)) return;
       const suffix = createHash('sha256').update(project.operationId).digest('hex').slice(0, 16);
-      const staging = join(parent, 'incoming-' + suffix);
+      const staging = join(parent, '.incoming-' + project.id + '-' + suffix);
       if (await exists(staging)) conflict('A saved clone attempt exists already. Reconcile it or explicitly retry; incomplete folders are preserved.');
       await repositoryGit(parent, ['clone', '--quiet', '--origin', 'origin', '--branch', project.branch, '--single-branch', '--no-tags', '--', project.repository, staging], signal, 120000, 65536);
       const observed = await verify(staging, project.branch, signal);
@@ -61,10 +64,10 @@ export function managedProjectGit(stateDirectory: string) {
     },
     async inspect(project: ManagedProject, signal: AbortSignal) {
       if (project.mode === 'clone') {
-        await assertDirectory(home); await assertDirectory(join(home, project.id));
-        if (project.path !== location(project.id)) conflict('The managed checkout path changed.');
+        const placement = locations.placement(project);
+        await assertDirectory(placement.root); await assertDirectory(dirname(placement.privateDirectory)); await assertDirectory(placement.privateDirectory);
         const expected = JSON.stringify({ schemaVersion: 1, id: project.id, repository: project.repository });
-        if ((await readBoundedFile(join(home, project.id, 'registration.json'), 8192)).trim() !== expected) conflict('Project ownership could not be verified.');
+        if ((await readBoundedFile(join(locations.placement(project).privateDirectory, 'registration.json'), 8192)).trim() !== expected) conflict('Project ownership could not be verified.');
       }
       if (!await exists(project.path)) return { ready: false };
       const observed = await verify(project.path, project.branch, signal);

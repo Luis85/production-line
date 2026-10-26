@@ -43,7 +43,7 @@ function references(path, source) {
 export function generatedImportSource(root, importer, specifier) {
   const target = relative(root, resolve(dirname(importer), specifier)).split(sep).join('/');
   if (!specifier.startsWith('./') && !specifier.startsWith('../')) throw Error('Generated imports must be relative to their importing module.');
-  if (target === 'bin/apps/worker/scripts/runtime/portable/home.mjs' && !specifier.split('/').includes('..')) return 'scripts/runtime/portable/home.mjs';
+  if (['bin/apps/worker/scripts/runtime/portable/home.mjs', 'runtime/bin/apps/worker/scripts/runtime/portable/home.mjs'].includes(target) && !specifier.split('/').includes('..')) return 'scripts/runtime/portable/home.mjs';
   const suffix = specifier.includes('/dist/') ? specifier.split('/dist/')[1] : specifier.split('.mutation-build/')[1];
   if (!suffix || suffix.split('/').some(part => !part || part === '.' || part === '..')) throw Error('Generated import paths cannot traverse their build output.');
   // The build writes each app manifest from the root release package metadata.

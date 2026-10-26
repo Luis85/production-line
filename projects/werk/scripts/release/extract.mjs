@@ -34,12 +34,16 @@ export async function extractRelease(artifacts, destination, format = process.pl
   if (names[0].version !== names[1].version || new Set(names.map(entry => entry.format)).size !== 2) throw Error('Release archives must share a version');
   const selected = names.find(entry => entry.format === format);
   const prefix = `werk-${selected.version}`;
+  let legacy;
+  const homeRoots = new Set(['runtime', 'docs', 'worker.mjs', 'werk.mjs', 'werk-docker.sh', 'werk-docker.ps1', 'README.md', 'AGENTS.md', 'LICENSE', 'CHANGELOG.md', 'release-manifest.json']);
   const seen = new Set();
   let payloadBytes = 0;
   function checkPath(path, bytes) {
     payloadBytes += bytes;
     if (bytes > 32 * 1024 * 1024 || payloadBytes > 256 * 1024 * 1024 || seen.size >= 10001) throw Error('Release archive exceeds extraction bounds');
-    if (!path.startsWith(prefix + '/') || /[:\\\x00-\x1f]/.test(path) || path.split('/').some(part => !part || part === '.' || part === '..') || seen.has(path)) throw Error(`Unsafe or duplicate archive entry: ${path}`);
+    const old = path.startsWith(prefix + '/');
+    if (legacy === undefined) legacy = old;
+    if (legacy !== old || !old && !homeRoots.has(path.split('/')[0]) || /[:\\\x00-\x1f\x7f]/.test(path) || path.split('/').some(part => !part || part === '.' || part === '..') || seen.has(path)) throw Error(`Unsafe or duplicate archive entry: ${path}`);
     seen.add(path);
   }
   let zipFiles;
@@ -62,8 +66,9 @@ export async function extractRelease(artifacts, destination, format = process.pl
         await writeFile(full, content, { flag: 'wx' });
       }
     } else await extract({ file: join(artifacts, selected.name), cwd: destination, chmod: true });
-    const root = join(destination, prefix);
+    const root = legacy ? join(destination, prefix) : destination;
     const verified = await verifyRelease(root);
+    if (legacy === (verified.layout === 'werk-home-v1')) throw Error('Archive paths and manifest layout differ');
     if (verified.version !== selected.version) throw Error('Manifest version differs from archive name');
     if (zipFiles && process.platform !== 'win32') {
       const manifest = JSON.parse(await readFile(join(root, 'release-manifest.json'), 'utf8'));

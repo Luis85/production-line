@@ -62,11 +62,11 @@ with NODE_USE_ENV_PROXY=1 in this managed network environment.
 The candidate is a local dirty-tree qualification artifact, not a published
 release. Its package and copied-app fixtures make no paid provider requests.
 
-[CLI lifecycle evidence](../evidence/2026-10-14-worker-lifecycle-cli/results.json)
+[CLI lifecycle evidence](../evidence/archive/2026-10-14-worker-lifecycle-cli/results.json)
 records a failed request, explicit retry, reported fixture usage, nullable cost,
 all-matching analysis, CSV/JSON export and exact evidence surviving restart.
 
-[Native feature lifecycle evidence](../evidence/2026-10-14-worker-lifecycle/feature-lifecycle-results.json)
+[Native feature lifecycle evidence](../evidence/archive/2026-10-14-worker-lifecycle/feature-lifecycle-results.json)
 records three reserved attempts, two actual scripted-provider executions, a queued
 cancellation without an execution pair, immutable prior evidence and no replay.
 
@@ -74,7 +74,7 @@ The [interactive lifecycle gallery](worker-lifecycle-journey.html) embeds 15
 screenshots across 1440, 390 and 320 pixels with view and width selection,
 fullscreen inspection and a downloadable synthetic metrics dataset. Request files
 are live local fixtures; the 120-run analysis data is explicitly synthetic.
-[Browser results](../evidence/worker-lifecycle-browser-results.json) confirm all
+[Browser results](../evidence/archive/worker-lifecycle-browser-results.json) confirm all
 120 exported rows at every width, no horizontal overflow and no page errors.
 
 Final checks:
@@ -86,7 +86,7 @@ Final checks:
   required run-evidence schema, immutable restart data and clean-shutdown checks.
 - Extracted generic runtime native and Docker journeys: passed; Docker wrapper
   operated without host Node, repeated setup and preserved task/worker identity.
-- [Package qualification](../evidence/2026-10-14-worker-lifecycle-package/qualification.json)
+- [Package qualification](../evidence/archive/2026-10-14-worker-lifecycle-package/qualification.json)
   records archive verification, runtime provenance and explicit published/candidate separation.
 - Release CI adds the installed-project request and metrics gate on Linux/macOS.
 - Workflow generation, strict documentation links and whitespace checks: passed.

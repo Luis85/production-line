@@ -32,17 +32,17 @@ unchanged for this tutorial. No secrets or tasks are stored in it. The
 At the release root:
 
 ```text
-node werk.mjs system plan --file examples/system.yaml --json
-node werk.mjs system up --file examples/system.yaml
+node werk.mjs system plan --file runtime/examples/system.yaml --json
+node werk.mjs system up --file runtime/examples/system.yaml
 ```
 
 Review the plan before starting. Up prepares private state, starts the Factory,
 line orchestrators and workers, then opens the Factory page once all are healthy.
 Keep the terminal running. Add `--no-open` for headless use, or use `--json` for
-machine lifecycle output. State defaults to `.werk-system/demo-system`. Native
+machine lifecycle output. State defaults to `state/system`. Native
 Factory login uses `WERK_FACTORY_ADMIN_TOKEN` from
-`.werk-system/demo-system/factory/credentials.json`; Alpha login uses
-`WERK_ADMIN_TOKEN` from `.werk-system/demo-system/lines/alpha/credentials.json`.
+`state/system/factory/credentials.json`; Alpha login uses
+`WERK_ADMIN_TOKEN` from `state/system/lines/alpha/credentials.json`.
 Read these privately; never print or share the credential file contents.
 
 ## Docker: use the same definition
@@ -54,15 +54,15 @@ if you have already initialized it for native execution.
 Bash:
 
 ```bash
-bash werk-docker.sh system plan --file examples/system.yaml --environment docker --json
-bash werk-docker.sh system up --file examples/system.yaml --environment docker
+bash werk-docker.sh system plan --file runtime/examples/system.yaml --environment docker --json
+bash werk-docker.sh system up --file runtime/examples/system.yaml --environment docker
 ```
 
 PowerShell:
 
 ```powershell
-./werk-docker.ps1 system plan --file examples/system.yaml --environment docker --json
-./werk-docker.ps1 system up --file examples/system.yaml --environment docker
+./werk-docker.ps1 system plan --file runtime/examples/system.yaml --environment docker --json
+./werk-docker.ps1 system up --file runtime/examples/system.yaml --environment docker
 ```
 
 Wait for the whole system to become healthy. If a browser does not open, visit
@@ -72,7 +72,7 @@ credentials. Linux Docker keeps the same private `factory/credentials.json` and
 in a named volume; explicitly export the login files:
 
 ```powershell
-./werk-docker.ps1 system credentials --file examples/system.yaml --environment docker
+./werk-docker.ps1 system credentials --file runtime/examples/system.yaml --environment docker
 ```
 
 Read Factory's `WERK_FACTORY_ADMIN_TOKEN` from the exported
@@ -103,8 +103,8 @@ a Git push or a real pull request.
 Native, from a second terminal:
 
 ```text
-node werk.mjs system status --file examples/system.yaml --json
-node werk.mjs system stop --file examples/system.yaml
+node werk.mjs system status --file runtime/examples/system.yaml --json
+node werk.mjs system stop --file runtime/examples/system.yaml
 ```
 
 For Docker, use the same wrapper and `--environment docker` with `system status`

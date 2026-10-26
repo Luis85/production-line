@@ -45,9 +45,9 @@ export const RegistrationInProgress: Story = {
     return () => frame([h('p', { class: 'page-note' }, 'Illustrative pending registration · no repository is cloned.'), h(ManagedProjectsPanel)]);
   } }),
   play: async ({ canvasElement }) => {
-    const q = within(canvasElement); await q.findByText('Customer portal'); await userEvent.click(q.getByText('Register a project', { exact: true }));
+    const q = within(canvasElement); await q.findByText('Customer portal'); await userEvent.click(q.getByText('Add a project', { exact: true }));
     await userEvent.type(q.getByLabelText('Project ID'), 'api'); await userEvent.type(q.getByLabelText('Git repository URL'), 'https://github.com/example/api.git');
-    await userEvent.click(q.getByRole('button', { name: 'Clone and register project' })); await q.findByText('Cloning and registering the project… Wait for the worker’s recorded result.');
+    await userEvent.click(q.getByRole('button', { name: 'Clone and add project' })); await q.findByText('Cloning and registering the project… Wait for the worker’s recorded result.');
     if (q.queryByRole('button', { name: 'Retry saved operation' })) throw Error('A still-running operation must not claim an uncertain acknowledgement.');
     completeRegistration?.(); await q.findByText('Project operation recorded. Review the saved project status below.'); await ready(canvasElement);
   },

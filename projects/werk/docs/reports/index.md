@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Worker focused-view goals · 2026-10-26](worker-ui-goals-2026-10-26.md) | Independent desktop/mobile critique, one-goal route catalogue, safety-preserving improvements and explicit verification limits |
 | [Worker release workflow acceptance](worker-release-workflow-acceptance.md) | Primary standalone workflow, acceptance matrix and explicit pending native Windows/Claude/GitHub qualification |
 | [Worker review experience research](worker-review-experience-research.md) | Primary-source review patterns, product perspectives, next-step clarity and preserved workflow authority |
 | [Durable Feature Request sessions and delegation](worker-durable-sessions-review.md) | Overnight handoff, provider/API/subscription research, session/context boundaries and controlled subagents |
@@ -24,7 +25,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 | [CI recovery and independent polish](ci-recovery-polish.md) | Clean image builds, Windows portability and cleanup, truthful feature wait, cancellation accounting and access recovery |
 | [CI recovery browser walkthrough](ci-recovery-polish.html) | Shared-board states and before/after malformed access-expiry journeys |
 | [Unified worker, webviews and request gates](werk-unified-worker-review.md) | Shared Vue/Nuxt UI Kanban, deterministic request lifecycle, package comparison and integrated qualification |
-| [Interactive unified view sitemap](werk-unified-views.html) | Current route and worker-panel screenshots, gate workflow and explicit evidence provenance |
+| [Interactive unified view sitemap](werk-unified-views.html) | Historical route and worker-panel screenshots, gate workflow and explicit evidence provenance |
 | [Worker request gates and recovery](worker-request-gates-review.md) | Deterministic readiness/completion, advisory rework, remote checkpoint ownership, command admission disclosure and focused fixture validation |
 | [Worker model lifecycle and operations review](worker-model-operations-review.md) | Durable model contracts, questions/recovery, project integrations, resource monitoring, twelve-factor review and qualification |
 | [Interactive resource and integration journey](worker-resources-integrations-journey.html) | Reviewed project synchronization, protected edits and real local warning/deadline/recovery screenshots |
@@ -47,7 +48,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 | [First release review and polish](first-release-review.md) | Five-perspective review, resolved defects and integrated release qualification |
 | [Six improvements review](six-improvements-review.md) | Qualification, recovery, onboarding, monitoring, security and scoped live execution |
 | [Six improvements Forge report](six-improvements-cli-report.md) | Tool use, friction and follow-up recommendations |
-| [Six improvements evidence](../evidence/six-improvements.json) | Sanitized local observations and explicit qualification limits |
+| [Six improvements evidence](../evidence/archive/six-improvements.json) | Sanitized local observations and explicit qualification limits |
 | [Release and system review](journey-review.md) | Native/Docker archive journey, YAML hierarchy, monitoring, views and VM profile |
 | [Twelve-factor and VM readiness audit](twelve-factor-audit.md) | Stateful architecture boundaries and deployment evidence |
 | [Release journey Forge report](journey-cli-report.md) | Release tooling friction and upstream dispositions |

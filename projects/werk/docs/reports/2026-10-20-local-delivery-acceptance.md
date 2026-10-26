@@ -171,23 +171,23 @@ The table above contains each formal requirement once. The following mappings co
 
 ## Complete-scope validation snapshot
 
-The frozen expanded source passed the [worker build and portable packaging](../evidence/local-delivery/full-scope-final/worker-build.txt) and [fast quality gate](../evidence/local-delivery/full-scope-final/check-fast.txt). The latter checks **477 maintained test files against 1,200 source imports with zero type errors**, source/Vue typing, generated README consistency and Oxlint. All **1,139 checked files** satisfy their LOC limits; all **19 architectural assertions** pass. Fallow verifies **1,196 import mappings**, with zero new dead-code or architectural findings and **177 individually reviewed retained findings**. This is not a claim that the codebase has no existing findings.
+The frozen expanded source passed the [worker build and portable packaging](../evidence/archive/local-delivery/full-scope-final/worker-build.txt) and [fast quality gate](../evidence/archive/local-delivery/full-scope-final/check-fast.txt). The latter checks **477 maintained test files against 1,200 source imports with zero type errors**, source/Vue typing, generated README consistency and Oxlint. All **1,139 checked files** satisfy their LOC limits; all **19 architectural assertions** pass. Fallow verifies **1,196 import mappings**, with zero new dead-code or architectural findings and **177 individually reviewed retained findings**. This is not a claim that the codebase has no existing findings.
 
-The preceding [broad compatibility run](../evidence/local-delivery/full-scope-final/broad-test-failures.txt) recorded **3,066 tests: 3,041 passed, 10 failed and 15 skipped**, in 637,696ms. Five failures exercised newly added tests against an older distribution; three concerned migration fixtures and initialization idempotency, one an API cancellation expectation and one a fixture observing failure before durable accounting/permit settlement. After the corrections and final rebuild, the [targeted regression run](../evidence/local-delivery/full-scope-final/rebuilt-regressions.txt) passed **99/99, zero skipped**, including all ten previously failing cases and the new recovery paths. **The final aggregate suite was not rerun locally**; passing focused checks are not relabelled as a broad pass. [Validation provenance](../evidence/local-delivery/full-scope-final/validation.json) retains log hashes and the count boundaries. Exact-commit CI is tracked on [PR #50](https://github.com/Luis85/production-line/pull/50) and is not declared green in this snapshot.
+The preceding [broad compatibility run](../evidence/archive/local-delivery/full-scope-final/broad-test-failures.txt) recorded **3,066 tests: 3,041 passed, 10 failed and 15 skipped**, in 637,696ms. Five failures exercised newly added tests against an older distribution; three concerned migration fixtures and initialization idempotency, one an API cancellation expectation and one a fixture observing failure before durable accounting/permit settlement. After the corrections and final rebuild, the [targeted regression run](../evidence/archive/local-delivery/full-scope-final/rebuilt-regressions.txt) passed **99/99, zero skipped**, including all ten previously failing cases and the new recovery paths. **The final aggregate suite was not rerun locally**; passing focused checks are not relabelled as a broad pass. [Validation provenance](../evidence/archive/local-delivery/full-scope-final/validation.json) retains log hashes and the count boundaries. Exact-commit CI is tracked on [PR #50](https://github.com/Luis85/production-line/pull/50) and is not declared green in this snapshot.
 
 The readiness/exception/review slice separately passed **56/56 focused tests, zero skipped**, on Linux against a privately compiled source snapshot (2,864ms). These cover real SQLite decisions/replay, actual temporary Git reference reads, source limits, filesystem draft repair, exact-candidate changes, active/racing checkpoint inspection, retained failed-check observations, permitted assumptions, callback permit release and once-recorded clarification. An earlier run exposed a circular assessment snapshot; copying only its three subject fields fixed durable serialization. The generated-project journey proves that an uncommitted new policy cannot fall back to legacy authority, committing it does not approve it, and approval cannot supply a missing semantic assessment. Old installation metadata remains compatible.
 
 Composed failed-check exception → review → restart coverage retains observed verification as false and the original execution result/facts unchanged. Changed patch, evidence, candidate, decision or hold prevents invalid recovery. Prospective pre-admission metrics passed **76/76 intake/journal regressions** and **20/20 metric-domain cases**. Final recovery compatibility passed **116/116 cases**, including real SQLite parent/child restart boundaries; descendant-aware authenticated recovery transport passed **8/8**. Unknown auxiliary, legacy and delegated provider outcomes retain capacity across restart. Operator confirmation only attests cessation and releases the appropriate reservation; it cannot fabricate success, usage or continuation. API abort after dispatch retains uncertainty. These overlapping focused suites are not summed into an aggregate count.
 
-The fresh [1,000-file intake measurement](../evidence/local-delivery/full-scope-final/intake-1000-65536.json) ran from 17:53:43 to 17:54:24 UTC after other build/test/browser activity had finished. Twenty samples per observation measured **startup p95 511ms** (maximum 584ms) and **stable-save visibility p95 1,301ms** (maximum 1,307ms, including the 1,000ms polling delay), within the local 10s/3s targets. The dataset contains 1,000 canonical drafts of 65,536 bytes, mostly YAML comment padding; no invalid file or provider invocation occurred. The retained JSON records every sample, runtime hash and host detail. This was a warm-cache Linux measurement with a 4CPU/16GiB container limit and unverified storage. Admission was disabled: **ready-request admission and its telemetry writes were not exercised**. It does not qualify cold-cache operation, 1,000 simultaneous submitted requests, browser rendering, native Windows or the specified local-SSD reference machine.
+The fresh [1,000-file intake measurement](../evidence/archive/local-delivery/full-scope-final/intake-1000-65536.json) ran from 17:53:43 to 17:54:24 UTC after other build/test/browser activity had finished. Twenty samples per observation measured **startup p95 511ms** (maximum 584ms) and **stable-save visibility p95 1,301ms** (maximum 1,307ms, including the 1,000ms polling delay), within the local 10s/3s targets. The dataset contains 1,000 canonical drafts of 65,536 bytes, mostly YAML comment padding; no invalid file or provider invocation occurred. The retained JSON records every sample, runtime hash and host detail. This was a warm-cache Linux measurement with a 4CPU/16GiB container limit and unverified storage. Admission was disabled: **ready-request admission and its telemetry writes were not exercised**. It does not qualify cold-cache operation, 1,000 simultaneous submitted requests, browser rendering, native Windows or the specified local-SSD reference machine.
 
-The first frozen **24-target v5 mutation attempt was incomplete**: it reached its 12-minute cap (721,610ms including termination), exited 143 and produced no readable Stryker report. Its [incomplete summary](../evidence/local-delivery/full-scope-final/mutation-v5-incomplete.json) and [tool log](../evidence/local-delivery/full-scope-final/mutation-v5-incomplete.txt) are retained. No score or completed mutant counts are inferred from instrumentation. Missing report/provenance entries cannot establish changed runtime source. The historical v4 baseline below remains historical; it does not qualify the expanded v5 scope.
+The first frozen **24-target v5 mutation attempt was incomplete**: it reached its 12-minute cap (721,610ms including termination), exited 143 and produced no readable Stryker report. Its [incomplete summary](../evidence/archive/local-delivery/full-scope-final/mutation-v5-incomplete.json) and [tool log](../evidence/archive/local-delivery/full-scope-final/mutation-v5-incomplete.txt) are retained. No score or completed mutant counts are inferred from instrumentation. Missing report/provenance entries cannot establish changed runtime source. The historical v4 baseline below remains historical; it does not qualify the expanded v5 scope.
 
 The second bounded attempt started from clean commit `781b1a1aafc7b833b473fc2aaf3da9a3c02e824e` with three test-runner workers. It also ended **incomplete after 721,606ms**, with timeout exit 143 and no readable Stryker report or score. Its [exact summary and input hashes](../../scripts/mutation/attempts/worker-delivery-authority-v5-781b1a1.json) and [tool log](../../scripts/mutation/attempts/worker-delivery-authority-v5-781b1a1.log) are retained separately from the first attempt. The 24 target sources, 376 compiled inputs, 23 test/support files and run configuration remained unchanged during measurement. No completed mutant counts or coverage improvement are inferred. The completed v4 baseline and survivor review remain unchanged; the expanded v5 analysis carries an explicit advisory warning rather than a release gate. No third expensive run was attempted in this pass.
 
-The final expanded targeted browser run passed **90/90 desktop/mobile cases**: 15 expanded-delivery/recovery stories, 25 retained delivery/review stories and five shared-authoring stories at both viewports. [Raw results, source inventory, provenance and selected screenshots](../evidence/local-delivery/full-scope-final/README.md) bind the measurement to source digest `c7e54ba4b7a050a3578a5ef5ff127a19a5f17d33faae8bb4bd7ab9a4c218707d`. The build includes uncommitted changes beyond base `8fc99c3`; that commit alone is not its identity. Its inventory contains **110 components and 73 documentation pages**. This capture includes operator recovery, unknown-time metric disclosure and the corrected persistent project-selection fixtures. The [earlier 88-case snapshot](../evidence/local-delivery/full-scope/README.md) remains archived under its separate source identity.
+The final expanded targeted browser run passed **90/90 desktop/mobile cases**: 15 expanded-delivery/recovery stories, 25 retained delivery/review stories and five shared-authoring stories at both viewports. [Raw results, source inventory, provenance and selected screenshots](../evidence/archive/local-delivery/full-scope-final/README.md) bind the measurement to source digest `c7e54ba4b7a050a3578a5ef5ff127a19a5f17d33faae8bb4bd7ab9a4c218707d`. The build includes uncommitted changes beyond base `8fc99c3`; that commit alone is not its identity. Its inventory contains **110 components and 73 documentation pages**. This capture includes operator recovery, unknown-time metric disclosure and the corrected persistent project-selection fixtures. The [earlier 88-case snapshot](../evidence/archive/local-delivery/full-scope/README.md) remains archived under its separate source identity.
 
-[Forty final response-to-render samples](../evidence/local-delivery/full-scope-final/latency.json) passed: desktop p95 **1,051ms** (maximum 1,061ms) and mobile p95 **1,189ms** (maximum 1,238ms). Every sample retained focus, typed review text, page scroll and editor viewport position. Linux Chromium rendered fixture responses while worker builds, quality checks and browser activity ran on the host. These observations do not qualify the reference machine, native Windows, real daemon/network, provider latency or assistive technology. Final committed full-catalogue qualification remains a separate gate.
+[Forty final response-to-render samples](../evidence/archive/local-delivery/full-scope-final/latency.json) passed: desktop p95 **1,051ms** (maximum 1,061ms) and mobile p95 **1,189ms** (maximum 1,238ms). Every sample retained focus, typed review text, page scroll and editor viewport position. Linux Chromium rendered fixture responses while worker builds, quality checks and browser activity ran on the host. These observations do not qualify the reference machine, native Windows, real daemon/network, provider latency or assistive technology. Final committed full-catalogue qualification remains a separate gate.
 
 **Pending qualification:** exact-commit aggregate CI, current committed full Storybook catalogue qualification, valid expanded v5 mutation analysis, native Windows regression confirmation and the selected live Windows/Claude pilot. The real three-provider compatibility matrix, supported vendor versions/authentication/runtime controls, real provider inference and live GitHub publication are not established by deterministic fixtures. No release-ready claim is made in this snapshot.
 
@@ -197,7 +197,7 @@ The portable implementation now has executed application, journal, filesystem an
 
 ### Application intake measurement
 
-Ran `node scripts/quality/local-intake-benchmark.mjs --count 1000 --samples 20 --bytes 4096` on 2026-10-20 from 12:28:06 to 12:29:22 UTC. [Raw samples and environment](../evidence/local-delivery/intake-1000-4096.json) retain the exact output. The dataset used 1,000 canonical drafts of 4,096 bytes, with YAML comment padding; implementation admission was disabled. Zero invalid files and zero model calls were observed.
+Ran `node scripts/quality/local-intake-benchmark.mjs --count 1000 --samples 20 --bytes 4096` on 2026-10-20 from 12:28:06 to 12:29:22 UTC. [Raw samples and environment](../evidence/archive/local-delivery/intake-1000-4096.json) retain the exact output. The dataset used 1,000 canonical drafts of 4,096 bytes, with YAML comment padding; implementation admission was disabled. Zero invalid files and zero model calls were observed.
 
 | Application observation | p95 | Local planning target | Interpretation |
 | --- | --- | --- | --- |
@@ -209,7 +209,7 @@ The host reported Linux x64, Node24.19.0, 4 available CPUs and a 4CPU/16GiB cont
 ### Maximum raw-file-size measurement
 
 A second run used the same 1,000 drafts and 20 samples, now at 65,536 bytes each
-(65,536,000 bytes total), from 12:34:01 to 12:36:11 UTC. [Raw 64KiB samples](../evidence/local-delivery/intake-1000-65536.json)
+(65,536,000 bytes total), from 12:34:01 to 12:36:11 UTC. [Raw 64KiB samples](../evidence/archive/local-delivery/intake-1000-65536.json)
 retain the measured values. The semantic body stayed small; the remainder was
 YAML comment padding. All files were valid and no model calls occurred.
 
@@ -229,7 +229,7 @@ baseline and state the implementation or environment change.
 
 After reusing the completed intake scan for the list projection, the same 1,000 ×
 65,536-byte, 20-sample measurement completed from 12:43:20 to 12:44:34 UTC.
-[Retest samples](../evidence/local-delivery/intake-1000-65536-optimized.json) retain
+[Retest samples](../evidence/archive/local-delivery/intake-1000-65536-optimized.json) retain
 all observations. Startup p95 fell to **1,109ms** and save visibility p95 to
 **3,050ms**. All inputs remained valid and no model was invoked. Visibility still
 exceeded the 3,000ms target under overlapping validation activity; this retest
@@ -246,7 +246,7 @@ reading and hashing every file; only unchanged parsing results are reused. It
 also keys those results by effective provider, so configuration changes cannot
 reuse an obsolete input projection.
 
-[Final samples and build fingerprints](../evidence/local-delivery/intake-1000-65536-final.json)
+[Final samples and build fingerprints](../evidence/archive/local-delivery/intake-1000-65536-final.json)
 record every sample, the host limits and SHA-256 hashes of the four measured
 intake modules. The script checks those hashes again at completion and refuses a
 measurement whose runtime files changed while running.
@@ -267,7 +267,7 @@ machine remains an explicit qualification step.
 
 `tests/worker/local-delivery-workspace.test.mjs` passed four composed regressions,
 alongside seven installed-project cases (**11 passed, zero failures/skips**).
-[Raw installation and workspace output](../evidence/local-delivery/portable-workspace-tests.txt)
+[Raw installation and workspace output](../evidence/archive/local-delivery/portable-workspace-tests.txt)
 records the cases. The complete portable journey runs using the real `WorkerWorkspace`, canonical folder intake, SQLite
 journals, Git, candidate tools, command verification and local delivery adapter.
 Only the model protocol is injected. The fixture applies an approved source edit
@@ -299,7 +299,7 @@ The combined recovery command passed **35 tests, zero failures and zero skips**:
 node --test tests/worker/local-delivery-acceptance-controls.test.mjs tests/worker/local-delivery-runtime.test.mjs tests/worker/local-delivery-recovery-inspection.test.mjs
 ```
 
-[Raw test output](../evidence/local-delivery/portable-recovery-tests.txt) retains
+[Raw test output](../evidence/archive/local-delivery/portable-recovery-tests.txt) retains
 individual results. The control suite contributes 25 cases including seven phase
 subtests; six runtime cases and four recovery-inspection cases exercise bounded
 repair, known-result continuation and inactive-workspace preflight.
@@ -332,7 +332,7 @@ invocation meaning. Its aggregate result is recorded below.
 
 The final focused admission/runtime/recovery run passed **86 tests, zero failures
 or skips**, including all **13 new canonical admission cases**.
-[Raw focused output](../evidence/local-delivery/portable-admission-tests.txt)
+[Raw focused output](../evidence/archive/local-delivery/portable-admission-tests.txt)
 records the individual results. Canonical exact-file delivery rejects missing
 file grants, required/enabled checks, execution services and mismatched committed
 baselines before snapshots or model preparation. Restoring configuration reuses
@@ -343,8 +343,8 @@ silently selected for canonical delivery.
 A separate 20-case source/reconciliation/composed/provider-selection run passed
 19 cases and exposed one fixture error: it tried to change tool access without
 pausing new starts. The fixture now follows the real pause/configure/unpause
-contract; [its isolated rerun passed](../evidence/local-delivery/portable-admission-recovery-test.txt).
-The [original focused output](../evidence/local-delivery/portable-source-review-tests.txt)
+contract; [its isolated rerun passed](../evidence/archive/local-delivery/portable-admission-recovery-test.txt).
+The [original focused output](../evidence/archive/local-delivery/portable-source-review-tests.txt)
 is retained, including that intermediate failure. The composed regression shows
 a request with no required check stays held, then reaches review under the same
 Feature Request and input revision after authorized configuration. It uses real
@@ -364,14 +364,14 @@ There were no reported console/page errors. The scenes exercise provider
 configuration, active work, pause, uncertain outcomes, operator-attested stops,
 lost acknowledgements, human criteria, draft preservation, activity filtering
 and stale or ownership-conflicting acceptance attempts.
-[Scene results](../evidence/local-delivery/browser-targeted-results.json) and
-[browser/source provenance](../evidence/local-delivery/browser-provenance.json)
+[Scene results](../evidence/archive/local-delivery/browser-targeted-results.json) and
+[browser/source provenance](../evidence/archive/local-delivery/browser-provenance.json)
 identify the exact fixture boundary. The targeted run used a working-tree UI
 follow-up to commit `fe792f4`, identified by its own source digest; it is separate
 from final whole-catalogue source qualification. Representative renders show
 retained checkpoints, historical evidence and the explicit operator-attestation
-receipt on [desktop](../evidence/local-delivery/recovery-desktop.png) and
-[mobile](../evidence/local-delivery/recovery-mobile.png). The pages visibly label
+receipt on [desktop](../evidence/archive/local-delivery/recovery-desktop.png) and
+[mobile](../evidence/archive/local-delivery/recovery-mobile.png). The pages visibly label
 this as illustrative data, with no model, command, Git change or review performed.
 
 Visual review exposed a gap in the earlier interaction checks: an interrupted
@@ -382,14 +382,14 @@ matching delivery run, accepted input and policy; older patches, checks, package
 DoD gates and invocation text remain explicitly historical. Delivery continuation
 uses its exact guarded controls. The strengthened fixtures deliberately retain
 older results beside an interrupted or unknown current run.
-[All 36 focused presenter/control tests passed](../evidence/local-delivery/portable-review-projection-tests.txt),
+[All 36 focused presenter/control tests passed](../evidence/archive/local-delivery/portable-review-projection-tests.txt),
 and Vue typechecking passed after the final caption correction. Stale or
 ownership-conflicting reads keep drafts editable while blocking both ordinary
 and directly dispatched acceptance submission.
 
 A separate assay changed the coherent fixture response revision 20 times per
 viewport and observed the marker through the actual one-second UI polling path.
-[All 40 replacement samples](../evidence/local-delivery/browser-latency.json)
+[All 40 replacement samples](../evidence/archive/local-delivery/browser-latency.json)
 retain timing, focus, draft and scroll observations. Nearest-rank p95 is the
 19th ordered sample of 20 for each viewport.
 
@@ -418,7 +418,7 @@ follow-up and are not claimed to have existed in that captured commit.
 
 ### Project quality gates and remaining aggregate validation
 
-The [fast project gate](../evidence/local-delivery/portable-quality-fast.txt)
+The [fast project gate](../evidence/archive/local-delivery/portable-quality-fast.txt)
 passed README drift checks, Oxlint, source and Vue typechecking, and test
 source-contract checking (**434 maintained test files, 1,022 imports, zero
 errors**). All **1,014 files** stayed within the 400-source/450-test code-line
@@ -431,7 +431,7 @@ The broad local `npm run check` attempt produced **2,795 tests: 2,778 passed,
 `feature-requests.test.mjs` (an invalidated input must not retain a current result)
 and `model-selection.test.mjs` (the frozen selection error now also names the
 authentication mode). After correcting those expectations, the
-[request-projection suite passed all 21 cases](../evidence/local-delivery/portable-request-projection-tests.txt),
+[request-projection suite passed all 21 cases](../evidence/archive/local-delivery/portable-request-projection-tests.txt),
 and all four model-selection cases passed in the focused source review above.
 Those resolving runs are not represented as a rerun of the entire broad local
 suite. The 15 local skips were platform- or tool-dependent cases.
@@ -462,8 +462,8 @@ still pending at this snapshot, and a live Windows/Claude account pilot remains
 unqualified. No runtime or UI code changed in this fixture follow-up.
 
 The retained packaged installation/interaction journeys also passed with
-[Node on Linux](../evidence/local-delivery/packaged-node-smoke.json) and
-[an actual Docker runtime](../evidence/local-delivery/packaged-docker-smoke.json).
+[Node on Linux](../evidence/archive/local-delivery/packaged-node-smoke.json) and
+[an actual Docker runtime](../evidence/archive/local-delivery/packaged-docker-smoke.json).
 Their outputs preserve installation, intake, guarded interaction and restart
 observations. Both explicitly report `liveProvider: false`; these protocol-fixture
 smokes do not qualify a real Claude account or native Windows execution.

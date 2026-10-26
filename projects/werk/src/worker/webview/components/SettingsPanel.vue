@@ -10,7 +10,7 @@ import ModelSelectionFields from './ModelSelectionFields.vue';
 import ProviderAccountPanel from './ProviderAccountPanel.vue';
 import ProviderCapabilitiesPanel from './ProviderCapabilitiesPanel.vue';
 import { state, workspaceAction, request, date, PROVIDER_CHECK_TIMEOUT_MS } from '../store';
-defineProps<{ providerOnly?: boolean; connectionOnly?: boolean }>();
+defineProps<{ providerOnly?: boolean; connectionOnly?: boolean; defaultOnly?: boolean; hideDefaults?: boolean }>();
 let connectionGeneration = 0;
 const check = ref<{ message: string; authentication: string; checkedAt: string; version?: string | null; capabilities?: ProviderCapabilities } | null>(null), checking = ref(false), copied = ref(false);
 const provider = ref<ProviderId>('codex-cli'), executable = ref(''), model = ref(''), key = ref(''), clearKey = ref(false), url = ref(''), enrollment = ref(''), busy = ref(false), message = ref('');
@@ -92,18 +92,18 @@ async function save(body: unknown) {
 </script>
 <template>
   <section v-if="state.unlocked" class="monitor-section">
-    <h2 v-if="!providerOnly && !connectionOnly">
+    <h2 v-if="!providerOnly && !connectionOnly && !defaultOnly">
       Connections
     </h2>
-    <form v-if="!connectionOnly" class="settings-form request-defaults" @submit.prevent="save({ defaultProvider, expectedDefaultProvider: defaultBaseline })">
-      <h2>New request defaults</h2>
+    <form v-if="!connectionOnly && !hideDefaults" class="settings-form request-defaults" @submit.prevent="save({ defaultProvider, expectedDefaultProvider: defaultBaseline })">
+      <h2 v-if="!defaultOnly">New request defaults</h2>
       <label for="worker-default-provider">Default provider for new requests</label>
       <USelect id="worker-default-provider" v-model="defaultProvider" :items="state.settings?.providers.map(item => ({ label: item.label + (item.configured ? '' : ' · needs setup'), value: item.id })) ?? []" :disabled="editingLocked" class="w-full" />
-      <p class="page-note">New requests start with this provider. Each provider’s model and effort defaults are set below. Accepted requests retain their saved selection.</p>
+      <p class="page-note">This is the worker default. Project routing and accepted requests retain their own selections. Configure model and effort in Provider connections.</p>
       <p v-if="defaultNotice" role="status" class="page-note">{{ defaultNotice }}</p>
       <div class="actions"><UButton type="submit" :loading="busy" :disabled="editingLocked || !defaultDirty">Save default provider</UButton><UButton v-if="defaultNotice" color="neutral" variant="outline" :disabled="editingLocked" @click="fillDefault">Reload saved default</UButton></div>
     </form>
-    <div class="settings-grid" :class="{ 'provider-only': providerOnly || connectionOnly }">
+    <div v-if="!defaultOnly" class="settings-grid" :class="{ 'provider-only': providerOnly || connectionOnly }">
       <form v-if="!connectionOnly" class="settings-form" @submit.prevent="save(providerCommand())">
         <h2>Provider connections &amp; accounts</h2>
         <div v-if="providerNotice" role="status">

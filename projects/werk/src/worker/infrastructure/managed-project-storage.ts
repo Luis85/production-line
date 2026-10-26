@@ -19,8 +19,9 @@ export function managedProjectStorage(stateDirectory: string) {
         const value = object(JSON.parse(content), 'Managed project journal', ['schemaVersion', 'projects']);
         if (value.schemaVersion !== 1 || !Array.isArray(value.projects) || value.projects.length > 64) invalid();
         const projects = value.projects.map(item => {
-          const p = object(item, 'Managed project', ['id', 'name', 'mode', 'repository', 'branch', 'featuresDirectory', 'intake', 'path', 'operationId', 'status', 'attached', 'createdAt', 'updatedAt', 'detail', 'head', 'operations']);
+          const p = object(item, 'Managed project', ['id', 'name', 'mode', 'repository', 'branch', 'featuresDirectory', 'pollMs', 'intake', 'path', 'operationId', 'status', 'attached', 'createdAt', 'updatedAt', 'detail', 'head', 'operations']);
           const id = identifier(p.id, 'Project ID');
+          if (p.pollMs !== undefined && (!Number.isSafeInteger(p.pollMs) || Number(p.pollMs) < 1000 || Number(p.pollMs) > 300000)) invalid();
           if (p.intake === undefined) p.intake = 'local';
           if (p.intake !== 'shared' && p.intake !== 'local') invalid();
           if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(id) || !['clone', 'adopt'].includes(String(p.mode)) ||

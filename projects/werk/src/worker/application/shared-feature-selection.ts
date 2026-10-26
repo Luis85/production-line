@@ -18,6 +18,6 @@ export function assertSharedFeatureSelection(record: Pick<SharedFeatureRecord, '
 }
 /** Replies may clarify work, but cannot replace accepted model, profile or definition authority. */
 export function assertSharedFeatureReplySelection(record: SharedFeatureRecord, input: SharedFeatureInput): void {
-  if ((record.selection || record.deliveryExecution) && ['provider', 'model', 'effort', 'executionProfile', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'].some(key => input[key as keyof SharedFeatureInput] !== record.accepted[key as keyof SharedFeatureInput]))
-    throw new DomainError('conflict', 'Keep the accepted provider, model and effort unchanged when answering, including the execution profile and agent definition. Create a new Feature Request to use a different model selection.');
+  if ((record.selection || record.deliveryExecution || record.deliveryPolicy) && ['provider', 'model', 'effort', 'qualityProfile', 'executionProfile', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'].some(key => input[key as keyof SharedFeatureInput] !== record.accepted[key as keyof SharedFeatureInput]))
+    throw new DomainError('conflict', 'Keep the accepted provider, model and effort unchanged when answering, including the quality profile, execution profile and agent definition. Create a new Feature Request to use a different model selection.');
 }

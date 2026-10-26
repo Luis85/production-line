@@ -17,7 +17,7 @@ viewport; the mobile review and metrics pages are intentionally long.
 The baseline was captured on 2026-10-21 at 10:53 UTC (12:53 Europe/Berlin); the
 confirmation completed at 11:01 UTC (13:01 Europe/Berlin). Displayed October 15
 request dates and example accounts are fixture data. The
-[receipt](../evidence/local-delivery/ui-review-2026-10-21/receipt.json) records
+[receipt](../evidence/archive/local-delivery/ui-review-2026-10-21/receipt.json) records
 build-input digests, individual cases, dimensions and screenshot checksums.
 These digests identify working-tree build inputs, not a final clean commit.
 
@@ -28,32 +28,32 @@ These digests identify working-tree build inputs, not a final clean commit.
    current work. The mobile layout stacks the same controls with explicit links
    between the board and interaction. Labels explain queued work without implying
    an execution ETA.
-   [Desktop](../evidence/local-delivery/ui-review-2026-10-21/01-taskboard-desktop.png)
-   · [Mobile](../evidence/local-delivery/ui-review-2026-10-21/01-taskboard-mobile.png).
+   [Desktop](../evidence/archive/local-delivery/ui-review-2026-10-21/01-taskboard-desktop.png)
+   · [Mobile](../evidence/archive/local-delivery/ui-review-2026-10-21/01-taskboard-mobile.png).
 2. **Create a project request — healthy in the captured state.** The composer
    identifies the project and presents its permitted execution profile. It states
    that the request is saved as Markdown and that policy approval is needed before
    dispatch. The fixture exercises project selection and retained request identity;
    it does not dispatch a model.
-   [Request composer](../evidence/local-delivery/ui-review-2026-10-21/02-request-desktop.png).
+   [Request composer](../evidence/archive/local-delivery/ui-review-2026-10-21/02-request-desktop.png).
 3. **Understand execution — healthy in the captured state.** The review page
    separates Feature Request lifecycle, delivery run status and current phase.
    Current work and its next expected event precede expandable provider, policy,
    behavior and step evidence. Historical checks do not mark a running delivery as
    complete. Section links make the long review page navigable.
-   [Delivery progress](../evidence/local-delivery/ui-review-2026-10-21/03-progress-desktop.png).
+   [Delivery progress](../evidence/archive/local-delivery/ui-review-2026-10-21/03-progress-desktop.png).
 4. **Answer readiness decisions — healthy in the captured state.** A proposal
    has a reason field and explicit accept/reject actions. The view keeps an
    unanswered question distinct from an accepted assumption and explains that
    neither proves verification. The narrow layout wraps the content and actions.
-   [Readiness decision](../evidence/local-delivery/ui-review-2026-10-21/04-readiness-mobile.png).
+   [Readiness decision](../evidence/archive/local-delivery/ui-review-2026-10-21/04-readiness-mobile.png).
 5. **Review the candidate — healthy in the captured state.** Human criteria,
    review notes, observed checks and the current candidate remain separate.
    Background observation updates retain the typed criterion observation and
    keyboard focus. Stale combined evidence remains visible with decisions guarded.
    The review page is long on mobile; task-based anchor navigation is an important
    retained affordance.
-   [Human review](../evidence/local-delivery/ui-review-2026-10-21/05-review-desktop.png).
+   [Human review](../evidence/archive/local-delivery/ui-review-2026-10-21/05-review-desktop.png).
 6. **Inspect remote delivery — fixed.** Updating a revision of the same request
    previously cleared the publication panel while its policy was read. The receipt
    list and actions disappeared, collapsing layout and losing an open disclosure.
@@ -61,32 +61,32 @@ These digests identify working-tree build inputs, not a final clean commit.
    invalidates action freshness. A new request identity or locked access still
    clears private data. Failed reads retain the evidence, expose a recovery action
    and keep publication disabled until a current response arrives.
-   [Before](../evidence/local-delivery/ui-review-2026-10-21/06-publication-refresh-before.png)
-   · [During refresh after the fix](../evidence/local-delivery/ui-review-2026-10-21/06-publication-refresh-after.png)
-   · [Mobile confirmation](../evidence/local-delivery/ui-review-2026-10-21/06-publication-mobile.png).
+   [Before](../evidence/archive/local-delivery/ui-review-2026-10-21/06-publication-refresh-before.png)
+   · [During refresh after the fix](../evidence/archive/local-delivery/ui-review-2026-10-21/06-publication-refresh-after.png)
+   · [Mobile confirmation](../evidence/archive/local-delivery/ui-review-2026-10-21/06-publication-mobile.png).
 7. **Inspect resources and consumption — healthy in the captured state.**
    Metrics distinguishes configured allowance, reported usage and reservations;
    worker-process measurements remain separate from host and owned-service data.
    Missing delivery measurements stay unavailable. Coverage and interpretation
    disclosures prevent empty history from looking like measured zero usage.
-   [Metrics](../evidence/local-delivery/ui-review-2026-10-21/07-metrics-desktop.png).
+   [Metrics](../evidence/archive/local-delivery/ui-review-2026-10-21/07-metrics-desktop.png).
 8. **Configure project delivery — polished.** Committed policy, local approval
    and the editable draft remain distinct. The approval checkbox previously sat
    above its wrapped label because the scoped generic label rule overrode the
    shared layout. Its scoped layout now keeps the checkbox beside the label,
    preserves a 44-pixel label target and prevents the checkbox from shrinking.
-   [Desktop](../evidence/local-delivery/ui-review-2026-10-21/08-policy-desktop.png)
-   · [Mobile](../evidence/local-delivery/ui-review-2026-10-21/08-policy-mobile.png).
+   [Desktop](../evidence/archive/local-delivery/ui-review-2026-10-21/08-policy-desktop.png)
+   · [Mobile](../evidence/archive/local-delivery/ui-review-2026-10-21/08-policy-mobile.png).
 
 ## Publication refresh comparison
 
 Before: the same-request receipt list disappears while the new revision is read.
 
-![Publication history replaced by loading text](../evidence/local-delivery/ui-review-2026-10-21/06-publication-refresh-before.png)
+![Publication history replaced by loading text](../evidence/archive/local-delivery/ui-review-2026-10-21/06-publication-refresh-before.png)
 
 After: the receipt and disclosure remain visible while actions wait for current policy.
 
-![Retained publication history with actions awaiting fresh policy](../evidence/local-delivery/ui-review-2026-10-21/06-publication-refresh-after.png)
+![Retained publication history with actions awaiting fresh policy](../evidence/archive/local-delivery/ui-review-2026-10-21/06-publication-refresh-after.png)
 
 ## Implementation and regression coverage
 

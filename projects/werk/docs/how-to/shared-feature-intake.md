@@ -1,12 +1,12 @@
 # Run a shared Markdown queue with a local worker
 
-One teammate runs the worker from `bin/apps/worker` in the project. Everyone else
-uses the repository's template and **Create Feature Request** skill in their own
-editor or coding assistant. A teammate with worker access can also create requests
-and answer questions in the webview chat interface. Both interfaces target the
-same Feature Request and shared Git lifecycle. Requests, progress, human answers
-and review handoffs are Obsidian-compatible Markdown; offline authors need no
-worker connection or provider credentials.
+One teammate runs the central WerkHome worker. Repositories are visible beneath
+Home/projects/; no worker is installed in a source project. Everyone else uses the
+repository's template and **Create Feature Request** skill in an editor or coding
+assistant. Worker users prepare shared requests through **Workboard → New Feature
+Request**. Both interfaces target the same Feature Request and shared Git lifecycle.
+Requests, progress, human answers and review handoffs are Obsidian-compatible
+Markdown; offline authors need no worker connection or provider credentials.
 
 The shared branch is the communication channel: **commit and push** ready requests
 and Task answers, then **pull** the worker's updates. Saving a file or making a
@@ -14,11 +14,12 @@ local commit alone does not start shared work.
 
 ## Prepare the shared repository
 
-[Initialize a project worker](project-worker.md) from a verified release. This
-installs the app and the authoring kit. To install only the kit in another project:
+Register the remote project through [WerkHome project setup](project-worker.md).
+Preview and approve missing workflow files, then separately approve the committed
+policy and recheck setup. To install only the offline authoring kit elsewhere:
 
 ```sh
-node /path/to/werk/bin/apps/worker/cli.mjs feature setup --project-dir /path/to/project
+node /path/to/WerkHome/runtime/bin/apps/worker/cli.mjs feature setup --project-dir /path/to/project
 ```
 
 Review, commit and push the workflow configuration, template, Base, ready/done
@@ -31,80 +32,30 @@ are configurable. Older workflows without `tasksDirectory` use
 Choose the branch receiving requests and lifecycle notes. The worker's host Git
 credentials must be able to fetch it, push lifecycle commits and create feature
 branches. If branch protection forbids lifecycle pushes, use a dedicated shared
-intake branch with the intended permissions. The worker does not bypass branch
-protection or merge feature branches.
+intake branch with the intended permissions. The worker does not bypass branch protection. Its main-checkout merge requires
+separate exact-candidate human permission; it does not automatically push main.
 
 ## Connect the worker
 
-The `shared setup` bridge supports `claude-cli` and `codex-cli`. Sign in to the
-chosen CLI on the worker machine. API providers use the separate authenticated
-`provider configure`, repository assignment and `shared configure` commands;
-inspect `schema` for their JSON inputs. New templates created by `init --provider`
-include that provider explicitly; existing templates are preserved. Inspect the
-template before connecting, especially when using Claude instead of Codex.
+Start `node /path/to/WerkHome/worker.mjs`. In Settings, configure and check the
+provider under the same OS account. In Projects, register the remote/branch,
+choose the watched Feature Request folder and poll interval, preview workflow
+setup and approve its Git commit/push. Separately approve the exact committed
+policy and recheck setup. Projects chooses the project; Workflow files, Policy
+approval and Enable requests each open one focused project stage. Configure
+request polling opens that selected project's `step=intake` editor. New project
+registration is remote-clone only.
 
-From the project root:
+New clones are `Home/projects/<id>`; the default folder is `features` and poll
+interval is 30 seconds (allowed 1–300 seconds; stored as milliseconds). Provider login, setup publication
+and policy approval are separate gates. Do not create a second local watcher over
+the same shared queue. A request carrying `templateId` belongs to shared intake;
+do not remove that marker to force another execution path.
 
-```sh
-node bin/apps/worker/cli.mjs start
-node bin/apps/worker/cli.mjs repository status
-node bin/apps/worker/cli.mjs shared status
-```
-
-Review the discovered repository path, branch and remote. Create a local
-`setup.json`, replacing the discovery ID, shared configuration revision and
-provider executable with the values for your machine:
-
-```json
-{
-  "expectedRevision": 0,
-  "discoveryId": "ID_FROM_REPOSITORY_STATUS",
-  "provider": {
-    "id": "claude-cli",
-    "executable": "/absolute/path/to/claude"
-  },
-  "intake": {
-    "remote": "origin",
-    "branch": "main",
-    "workflowPath": ".werk/feature-workflow.json",
-    "pollMs": 5000
-  },
-  "resume": true
-}
-```
-
-Use `repositoryId` instead of `discoveryId` for a repository already assigned to
-the worker. Keep local setup files private; do not commit machine-specific paths
-or credentials. On Windows use the installed `claude.exe` path and follow the
-[Claude requirements](use-worker-webview.md#connect-claude-codex-or-cursor).
-
-```sh
-node bin/apps/worker/cli.mjs shared setup --file setup.json --dry-run
-node bin/apps/worker/cli.mjs shared setup --file setup.json
-node bin/apps/worker/cli.mjs shared status
-```
-
-Review the dry run before applying. Setup pauses new starts, checks/configures the
-provider, accepts only the selected repository, binds shared intake and synchronizes
-while paused. It resumes only when requested and setup succeeds. Finish or cancel
-queued/running work first. On failure, inspect the returned step and current state;
-after a confirmed pause, failures before resume leave starts paused. If a
-pause/resume acknowledgement is lost, inspect queue settings before retrying.
-Refresh stale revisions instead of overwriting another edit.
-Setup does not rewrite the committed template or rules, and a provider check does
-not invoke the model or prove available quota.
-
-Review [tool access](manage-model-tools.md) and [implementation checks](implement-feature.md)
-for serious coding work. Setup preserves existing grants unless its optional
-`toolAccess` field supplies an explicitly reviewed replacement. Repository rules,
-Task answers and successful login never grant tools. The optional Settings webview
-exposes the same provider, repository, tool and shared-intake controls.
-
-A request carrying `templateId` belongs to shared intake. The local folder watcher
-leaves it unchanged, even before a binding exists. Do not remove this marker to
-force execution. If an older worker already admitted it locally, cancel unfinished
-local work and restore the request from a clean Git revision while preserving
-newer team edits and its shared ID before connecting.
+Review [tool access](manage-model-tools.md) and [implementation checks](implement-feature.md).
+Repository rules, Task answers and successful login never grant tools. Unknown
+setup pushes reconcile before a new mutation; stale previews need a new approved
+operation. See the [primary tutorial](../tutorials/worker-home-to-main.md).
 
 ## Submit a request from any clone
 
@@ -163,7 +114,7 @@ next successful poll. Keep requests as drafts until the team wants work to start
    and local commits alone do not dispatch work. Leave unfinished requests draft.
 4. Confirm shared intake is enabled and new execution is resumed. Queue pause
    holds starts even when the notes are ready; the worker's read-only status and
-   Metrics view can help inspect capacity and allowance before leaving.
+   Worker health view can help inspect capacity and allowance before leaving.
 
 ### Overnight
 
@@ -198,7 +149,7 @@ configured worker until an explicit archival workflow is available.
 
 ## Submit through the worker webview
 
-Open **Taskboard → New request** and describe the outcome in **Request instructions**.
+Open **Workboard → New Feature Request** (`/requests/new`) and describe the outcome in **Request instructions**.
 Choose **Prepare request** to create a draft from the committed project template.
 This is guided authoring, not a model invocation. Complete the request details,
 approved paths and project-specific sections; **Check readiness** reports the

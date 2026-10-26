@@ -28,7 +28,7 @@ try {
     },
   });
   assert.equal(requests, 1);
-  assert.equal(root, join(directory, `werk-${release.version}`));
+  assert.equal(root, release.layout === 'werk-home-v1' ? directory : join(directory, `werk-${release.version}`));
   await assert.rejects(install(release, { directory }), /Destination already exists/);
   console.log(JSON.stringify({ ok: true, root, checksumVerified: true, existingInstallationPreserved: true }));
 } finally { server.closeAllConnections(); await new Promise(ok => server.close(ok)); }

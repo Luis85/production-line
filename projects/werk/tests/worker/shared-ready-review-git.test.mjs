@@ -1,6 +1,11 @@
+import { submitSharedFeature } from '../../src/worker/dist/worker/status/workspace-features.js';
+import { readDeliveryPolicy } from '../../src/worker/dist/worker/infrastructure/delivery-policy.js';
+import { defaultDeliveryProjectPolicy, deliveryPolicySnapshot } from '../../src/worker/dist/worker/application/delivery-policy.js';
+import { featureGitIo } from './runtime-fixtures.mjs';
 import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -21,7 +26,7 @@ const question = 'Which order fields must the CSV export include?';
 const waitingResult = { passed: false, summary: 'The export fields are not defined.', findings: [{ kind: 'question', message: question, blocking: true }] };
 const clearResult = { passed: true, summary: 'The team answered the required product decisions.', findings: [] };
 function render(parsed) { return '---\n' + parsed.document.toString({ lineWidth: 0 }) + '---\n' + parsed.body; }
-function answer(markdown) {
+function answer(markdown, includeAnswer = true) {
   const parsed = parseFeature(markdown);
   parsed.document.set('status', 'ready'); parsed.document.set('paths', ['orders.ts']);
   parsed.body = parsed.body
@@ -30,11 +35,12 @@ function answer(markdown) {
     .replace('<!-- Add one or more concrete, verifiable checklist items. -->', '- [ ] Every exported row includes the order ID and total.')
     .replace('<!-- Explain how each outcome will be checked and what evidence reviewers need. -->', 'Run order export tests and inspect the generated CSV field names.');
   const section = /(<!-- werk:ready-review:answer -->\r?\n)[\s\S]*?(\r?\n<!-- \/werk:ready-review:answer -->)/;
+  if (!includeAnswer) return render(parsed);
   assert.match(parsed.body, section);
   parsed.body = parsed.body.replace(section, '$1Export the existing order ID and total fields.$2');
   return render(parsed);
 }
-async function fixture(t) {
+async function fixture(t, delivery = false) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-rr-git-'))), remote = join(directory, 'remote.git');
   const producer = join(directory, 'producer'), repository = join(directory, 'worker'), stateDirectory = join(directory, 'state');
   await mkdir(stateDirectory, { mode: 0o700 });
@@ -44,11 +50,13 @@ async function fixture(t) {
   const configuration = { ...defaultFeatureWorkflow(), readyReviewPrompt: reviewPath, readyPrompt: 'prompts/ready.md', donePrompt: 'prompts/done.txt' };
   const template = authoringTemplateFor('openai-api'), source = parseFeature(template);
   source.document.set('id', 'fr-export-orders'); source.document.set('title', 'Export orders'); source.document.set('status', 'ready');
-  const initialMarkdown = render(source);
+  const initialMarkdown = delivery ? answer(render(source), false) : render(source);
   const files = { '.werk/feature-workflow.json': JSON.stringify(configuration), [configuration.readyCheck]: JSON.stringify(defaultFeatureCheck('ready')), [configuration.doneCheck]: JSON.stringify(defaultFeatureCheck('done')),
     [configuration.template]: template, [configuration.base]: authoringBase(configuration), [reviewPath]: reviewerText, [configuration.readyPrompt]: readyText, [configuration.donePrompt]: doneText, [sourcePath]: initialMarkdown, 'orders.ts': 'export const orders = [];\n' };
   for (const [path, text] of Object.entries(files)) { await mkdir(dirname(join(producer, path)), { recursive: true }); await writeFile(join(producer, path), text); }
   git(producer, 'add', '.'); git(producer, 'commit', '-m', 'Ready request with unanswered product decisions'); git(producer, 'push', 'origin', 'main');
+  const deliveryConfiguration = { ...defaultDeliveryProjectPolicy(), localMerge: true };
+  if (delivery) { await writeFile(join(producer, '.werk/delivery-policy.json'), JSON.stringify(deliveryConfiguration)); git(producer, 'add', '.werk/delivery-policy.json'); git(producer, 'commit', '-m', 'Approved delivery policy'); git(producer, 'push', 'origin', 'main'); }
   const originalCommit = git(producer, 'rev-parse', 'HEAD'); git(directory, 'clone', '--', remote, repository);
   /** @type {import('../../src/worker/application/ready-review-contracts.ts').ReadyReviewInput[]} */
   const reviewCalls = [];
@@ -74,11 +82,27 @@ async function fixture(t) {
     },
     inspect(input) { return attempts.get(input.operationId); },
   };
+  const admissions = [], approvedDigests = [deliveryPolicySnapshot(deliveryConfiguration, originalCommit).configurationDigest];
+  const project = { repository, sharedRuntime: { intake: { dependencyInputs: () => [] } } };
+  const workspace = /** @type {import('../../src/worker/status/workspace-context.ts').WorkspaceContext} */ (/** @type {unknown} */ ({
+    acceptingTasks: true, repositoryPreparations: 0, repositoryStop: new AbortController(), config: { stateDir: stateDirectory },
+    repositories: { resolve: () => ({ path: repository }) }, sessions: { requests: { list: () => ({ requests: [], hasMore: false }) } },
+    featureProjects: { primary: project, forRepository: () => project, id: () => 'project', repository: () => repository, all: () => [project] },
+    deliveryApprovals: { view: () => ({ approvals: approvedDigests.map(configurationDigest => ({ repositoryId: 'project', configurationDigest })) }) },
+    featureTracking: { async sync() {} }, board: { async create(_input, submission) {
+      assert.equal(submission.baseCommit, submission.deliveryPolicy.baseline, 'Admission policy and worktree must use the same answered source');
+      const worktree = join(directory, 'admission-' + admissions.length); git(repository, 'worktree', 'add', '--detach', worktree, submission.baseCommit);
+      assert.equal(git(worktree, 'rev-parse', 'HEAD'), submission.deliveryPolicy.baseline);
+      admissions.push(structuredClone(submission));
+    } },
+  }));
   async function open() {
     const initialized = new SharedIntakeRuntime({ stateDirectory, resolve: () => ({ path: repository }), allowed: async () => {}, readyReview,
+      ...(delivery ? { prepare: async (_input, _binding, baseline) => ({ deliveryPolicy: await readDeliveryPolicy(repository, AbortSignal.timeout(15000), undefined, baseline) }) } : {}),
       submit: async record => {
         assert.equal(record.ready?.passed, true, 'Definition of Ready passes before implementation admission');
         assert.equal(record.readyReviewState?.status, 'passed', 'The reviewer must clear the current committed answer');
+        if (delivery) await submitSharedFeature(workspace, record);
         submissions.push(structuredClone(record));
         executions.set(record.taskId, { status: 'queued', summary: null, patch: null, request: null });
       }, inspect: id => executions.get(id), canAdmit: () => true });
@@ -86,7 +110,7 @@ async function fixture(t) {
   }
   let runtime = await open();
   await runtime.intake.configure({ enabled: true, repositoryId: 'project', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 300000 }, 0);
-  return { directory, remote, producer, repository, stateDirectory, configuration, initialMarkdown, originalCommit, reviewCalls, submissions,
+  return { directory, remote, producer, repository, stateDirectory, configuration, initialMarkdown, originalCommit, reviewCalls, submissions, admissions, deliveryConfiguration, approvedDigests,
     get runtime() { return runtime; }, remoteSource,
     async sync() { await runtime.intake.sync(); },
     async until(predicate) { for (let index = 0; index < 12; index++) { await runtime.intake.sync(); if (predicate()) return; } assert.fail('Shared Ready Check did not reach its expected state: ' + JSON.stringify(runtime.intake.view())); },
@@ -152,4 +176,72 @@ test('changed worker-owned Ready Check output is preserved remotely and cannot t
   assert.equal(f.reviewCalls.length, 1); assert.equal(f.submissions.length, 0);
   assert.equal(git(f.remote, 'rev-parse', 'main'), head); assert.equal(f.remoteSource(), tampered.trim() + '\n');
   assert.equal(git(f.repository, 'status', '--porcelain=v1'), '');
+});
+
+
+test('web Ready Check answer commits only canonical Answers with guarded identity and survives restart without duplicate publication', { timeout: 120000 }, async t => {
+  const f = await fixture(t), checkoutHead = git(f.repository, 'rev-parse', 'HEAD'), checkoutIndex = git(f.repository, 'write-tree');
+  await f.until(() => f.reviewCalls.length === 1); f.complete(waitingResult); await f.until(() => f.runtime.intake.view().requests[0].status === 'waiting_ready_input');
+  const record = f.runtime.intake.view().requests[0], subject = record.readyReview.answerSubject; assert.ok(subject);
+  const command = { action: /** @type {const} */ ('answer_ready_review'), requestId: record.id, operationId: 'web-export-answer', ...subject, answer: 'Export the order ID and total fields.' };
+  const before = git(f.remote, 'rev-list', '--count', 'main'), source = parseFeature(f.remoteSource()), result = await f.runtime.intake.answerReadyReview(command);
+  const answered = parseFeature(f.remoteSource()); assert.equal(answered.data.status, 'ready'); assert.deepEqual(answered.data.werk, source.data.werk); assert.match(answered.body, /Export the order ID and total fields/); assert.ok(answered.body.includes(question));
+  assert.equal(Number(git(f.remote, 'rev-list', '--count', 'main')), Number(before) + 1); assert.equal(f.reviewCalls.length, 1); assert.equal(f.submissions.length, 0);
+  assert.equal(git(f.repository, 'rev-parse', 'HEAD'), checkoutHead); assert.equal(git(f.repository, 'write-tree'), checkoutIndex); assert.equal(git(f.repository, 'status', '--porcelain'), '');
+  await f.restart(); assert.deepEqual(await f.runtime.intake.answerReadyReview(command), result); assert.equal(Number(git(f.remote, 'rev-list', '--count', 'main')), Number(before) + 1);
+  await f.until(() => f.reviewCalls.length === 2); assert.match(f.reviewCalls[1].source.markdown, /Export the order ID and total fields/); assert.equal(f.submissions.length, 0);
+  assert.deepEqual(await f.runtime.intake.answerReadyReview(command), result); assert.equal(f.reviewCalls.length, 2);
+});
+
+
+test('three unrelated remote branch races retain the exact answer outbox and a later retry publishes once', { timeout: 120000 }, async t => {
+  const f = await fixture(t); await f.until(() => f.reviewCalls.length === 1); f.complete(waitingResult); await f.until(() => f.runtime.intake.view().requests[0].status === 'waiting_ready_input');
+  const record = f.runtime.intake.view().requests[0], subject = record.readyReview.answerSubject; assert.ok(subject);
+  const command = { action: /** @type {const} */ ('answer_ready_review'), requestId: record.id, operationId: 'answer-after-contention', ...subject, answer: 'Export order ID and total.' };
+  const sourceBefore = f.remoteSource(), sourceCommits = git(f.remote, 'rev-list', '--count', 'main', '--', sourcePath);
+  const adapters = Reflect.get(f.runtime, 'adapters'); assert.ok(adapters instanceof Map); const restore = []; let races = 0;
+  for (const adapter of adapters.values()) {
+    const io = featureGitIo(adapter), push = io.push.bind(io); restore.push(() => { io.push = push; });
+    io.push = async (...args) => {
+      races++; git(f.producer, 'pull', '--ff-only', 'origin', 'main'); const path = 'teammate-' + races + '.txt'; await f.saveProducer(path, 'Unrelated teammate work ' + races + '\n');
+      git(f.producer, 'add', '--', path); git(f.producer, 'commit', '-m', 'Unrelated concurrent branch update'); git(f.producer, 'push', 'origin', 'main');
+      return push(...args);
+    };
+  }
+  try { await assert.rejects(f.runtime.intake.answerReadyReview(command), { code: 'unavailable' }); } finally { for (const release of restore) release(); }
+  assert.equal(races, 3); const saved = (await f.state()).records[0]; assert.ok(saved.pending); assert.equal(saved.readyReviewAnswers[0].status, 'pending'); assert.equal(f.remoteSource(), sourceBefore); assert.equal(git(f.remote, 'rev-list', '--count', 'main', '--', sourcePath), sourceCommits); assert.equal(f.reviewCalls.length, 1);
+  const operationId = saved.pending.operationId, receiptPath = f.configuration.reviewDirectory + '/_operations/' + createHash('sha256').update(operationId).digest('hex') + '.json';
+  assert.equal(git(f.remote, 'ls-tree', '--name-only', 'main', '--', receiptPath), '');
+  const result = await f.runtime.intake.answerReadyReview(command); assert.equal(result.operationId, command.operationId); assert.match(f.remoteSource(), /Export order ID and total/);
+  assert.equal(Number(git(f.remote, 'rev-list', '--count', 'main', '--', sourcePath)), Number(sourceCommits) + 1); assert.equal(JSON.parse(git(f.remote, 'show', 'main:' + receiptPath)).operationId, operationId); assert.equal(git(f.remote, 'rev-list', '--count', 'main', '--', receiptPath), '1');
+  const head = git(f.remote, 'rev-parse', 'main'); assert.deepEqual(await f.runtime.intake.answerReadyReview(command), result); assert.equal(git(f.remote, 'rev-parse', 'main'), head); assert.equal(f.reviewCalls.length, 1); assert.equal(f.submissions.length, 0);
+});
+
+
+test('canonical answer continues after restart with the original approved policy rebound only to its exact execution commit', { timeout: 120000 }, async t => {
+  const f = await fixture(t, true); await f.until(() => f.reviewCalls.length === 1); f.complete(waitingResult);
+  await f.until(() => f.runtime.intake.view().requests[0].status === 'waiting_ready_input');
+  const view = f.runtime.intake.view().requests[0], subject = view.readyReview.answerSubject; assert.ok(subject);
+  await f.runtime.intake.answerReadyReview({ action: 'answer_ready_review', requestId: view.id, operationId: 'continue-approved-policy', ...subject, answer: 'Export order ID and total fields.' });
+  await f.until(() => f.reviewCalls.length === 2); const original = (await f.state()).records[0];
+  assert.notEqual(original.sourceCommit, original.deliveryPolicy.baseline); assert.equal(original.deliveryPolicy.baseline, f.originalCommit);
+  await f.restart(); f.complete(clearResult); await f.until(() => f.submissions.length === 1);
+  const admitted = f.admissions[0]; assert.equal(admitted.baseCommit, original.sourceCommit); assert.equal(admitted.deliveryPolicy.baseline, original.sourceCommit);
+  assert.deepEqual(admitted.deliveryPolicy.configuration, original.deliveryPolicy.configuration); assert.deepEqual(admitted.deliveryPolicy.profile, original.deliveryPolicy.profile);
+  assert.equal(admitted.deliveryPolicy.configurationDigest, original.deliveryPolicy.configurationDigest); assert.deepEqual(admitted.definitionPrompts, original.workflow.definitionPrompts);
+  const retained = (await f.state()).records[0]; assert.deepEqual(retained.deliveryPolicy, original.deliveryPolicy); assert.equal(retained.workflow.commit, f.originalCommit);
+  await f.restart(); await f.sync(); assert.equal(f.admissions.length, 1, 'Recovery must not admit the clarified request twice');
+});
+
+test('an answered request cannot adopt a changed committed policy even when that newer policy is approved', { timeout: 120000 }, async t => {
+  const f = await fixture(t, true); await f.until(() => f.reviewCalls.length === 1); f.complete(waitingResult);
+  await f.until(() => f.runtime.intake.view().requests[0].status === 'waiting_ready_input');
+  git(f.producer, 'pull', '--ff-only', 'origin', 'main'); const changed = { ...f.deliveryConfiguration, version: 2, reviewDirectory: 'changed-reviews' };
+  await f.saveProducer('.werk/delivery-policy.json', JSON.stringify(changed)); await f.saveProducer(sourcePath, answer(f.remoteSource()));
+  git(f.producer, 'add', '.'); git(f.producer, 'commit', '-m', 'Answer alongside changed policy'); git(f.producer, 'push', 'origin', 'main');
+  f.approvedDigests.push(deliveryPolicySnapshot(changed, git(f.producer, 'rev-parse', 'HEAD')).configurationDigest);
+  await f.until(() => f.reviewCalls.length === 2); f.complete(clearResult); await f.sync();
+  assert.equal(f.admissions.length, 0); assert.equal(f.submissions.length, 0); assert.match(f.runtime.intake.view().requests[0].error, /frozen delivery policy/);
+  const retained = (await f.state()).records[0]; assert.equal(retained.deliveryPolicy.configuration.version, 1); assert.equal(retained.deliveryPolicy.baseline, f.originalCommit);
+  await f.restart(); await f.sync(); assert.equal(f.admissions.length, 0); assert.deepEqual((await f.state()).records[0].deliveryPolicy, retained.deliveryPolicy);
 });

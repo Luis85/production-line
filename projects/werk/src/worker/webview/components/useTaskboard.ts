@@ -12,7 +12,7 @@ import type { LocalTaskDetailView } from "../../application/workspace-view";
 import { taskPriorityLabel } from '../task-priority';
 
 /** Owns this page's state, actions and lifecycle; the Vue component owns rendering. */
-export function useTaskboard() {
+export function useTaskboard(options: { focusedTaskId?: () => string } = {}) {
   const route = useRoute(),
     router = useRouter();
   const busy = ref(false),
@@ -75,20 +75,20 @@ export function useTaskboard() {
     heading?.scrollIntoView({ block: "start" });
   }
   async function openLinkedFileTask() {
-    if (!active.value || !state.unlocked || route.path !== "/history") return;
-    const id = typeof route.query.fileId === "string" ? route.query.fileId : "";
+    if (!active.value || !state.unlocked || !options.focusedTaskId?.() && route.path !== "/history") return;
+    const id = options.focusedTaskId?.() || (typeof route.query.fileId === "string" ? route.query.fileId : "");
     if (!id) { await focusFileTasks(); return; }
     if (selectedId.value === id && detailLoading.value) {
       await nextTick();
-      if (active.value && route.path === "/history" && route.query.fileId === id)
+      if (active.value && (options.focusedTaskId?.() === id || route.path === "/history" && route.query.fileId === id))
         document.getElementById("local-task-detail")?.focus();
       return;
     }
     await inspect(id);
-    if (active.value && route.path === "/history" && selectedId.value === id) {
+    if (active.value && (!!options.focusedTaskId?.() || route.path === "/history") && selectedId.value === id) {
       inspectTrigger = document.getElementById("taskboard-title");
       await nextTick();
-      if (active.value && route.path === "/history" && route.query.fileId === id)
+      if (active.value && (options.focusedTaskId?.() === id || route.path === "/history" && route.query.fileId === id))
         document.getElementById("local-task-detail")?.focus();
     }
   }
@@ -97,7 +97,7 @@ export function useTaskboard() {
     void openLinkedFileTask();
   });
   watch(
-    () => [route.path, route.query.fileId, route.query.fileState, state.unlocked],
+    () => [route.path, route.query.fileId, route.query.fileState, options.focusedTaskId?.(), state.unlocked],
     () => { void openLinkedFileTask(); },
   );
   const columns = [
@@ -205,7 +205,7 @@ export function useTaskboard() {
     detailRevision++; readingId = "";
     if (detailLoading.value && selectedId.value)
       detailError.value =
-        "Evidence loading was paused when you left History. Retry to load this task.";
+        "Evidence loading was paused when you left this view. Retry to load this task.";
     detailLoading.value = false;
   });
   const preparations = computed(() => state.board?.preparations ?? []);
@@ -239,7 +239,7 @@ export function useTaskboard() {
         return;
       }
       removing.value = false;
-      worktreeNotice.value = result.worktree?.outcome === "kept" ? `The task was deleted; its Git worktree was kept. ${result.worktree.reason}` : "";
+      worktreeNotice.value = result.worktree?.outcome === "kept" ? `The task was deleted; its Git worktree was kept. ${result.worktree.reason}` : body.action === "delete" ? "Saved task deleted." : "";
       if (body.action === "delete") await closeDetail();
       else await readDetail(body.id);
     } finally {
@@ -268,7 +268,7 @@ export function useTaskboard() {
           id: sessionId,
         })
       )
-        await router.push({ path: "/taskboard", query: { session: sessionId } });
+        await router.push({ path: "/request", query: { session: sessionId } });
       else
         actionError.value =
           state.actionError || "The conversation could not be opened. Try again.";

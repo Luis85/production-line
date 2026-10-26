@@ -32,14 +32,14 @@ beyond its viewport, particularly on mobile and at increased zoom.
 
 | View | Desktop | Mobile |
 | --- | --- | --- |
-| Factory | [3D](../evidence/spatial-polish-factory-1440.png) | [3D](../evidence/spatial-polish-factory-390.png) |
-| Rotated Factory | [3D](../evidence/spatial-polish-factory-rotated-1440.png) | [3D](../evidence/spatial-polish-factory-rotated-390.png) |
-| Factory topology | [2D](../evidence/spatial-polish-factory-2d-1440.png) | [2D](../evidence/spatial-polish-factory-2d-390.png) |
-| Line | [3D](../evidence/spatial-polish-line-1440.png) | [3D](../evidence/spatial-polish-line-390.png) |
-| Architecture guide | [3D](../evidence/spatial-polish-guide-1440.png) | [3D](../evidence/spatial-polish-guide-390.png) |
-| Worker and profiles | [3D](../evidence/spatial-polish-worker-1440.png) | [3D](../evidence/spatial-polish-worker-390.png) |
+| Factory | [3D](../evidence/archive/spatial-polish-factory-1440.png) | [3D](../evidence/archive/spatial-polish-factory-390.png) |
+| Rotated Factory | [3D](../evidence/archive/spatial-polish-factory-rotated-1440.png) | [3D](../evidence/archive/spatial-polish-factory-rotated-390.png) |
+| Factory topology | [2D](../evidence/archive/spatial-polish-factory-2d-1440.png) | [2D](../evidence/archive/spatial-polish-factory-2d-390.png) |
+| Line | [3D](../evidence/archive/spatial-polish-line-1440.png) | [3D](../evidence/archive/spatial-polish-line-390.png) |
+| Architecture guide | [3D](../evidence/archive/spatial-polish-guide-1440.png) | [3D](../evidence/archive/spatial-polish-guide-390.png) |
+| Worker and profiles | [3D](../evidence/archive/spatial-polish-worker-1440.png) | [3D](../evidence/archive/spatial-polish-worker-390.png) |
 
-Compare the [previous Factory capture](../evidence/visual-system-factory-1440.png)
+Compare the [previous Factory capture](../evidence/archive/visual-system-factory-1440.png)
 for the original screen-space boxes and labels. Historical screenshots are retained.
 
 ## Verification
@@ -56,7 +56,7 @@ The first overlapped Chromium; a separate rerun still exceeded the extracted
 runtime and worker readiness deadlines. A serial retry again exceeded the native
 runtime's 40-second deadline and was stopped. These are recorded failures, not a
 passing local full-suite claim. No test thresholds were relaxed. See the
-[validation evidence](../evidence/spatial-polish-validation.json) for exact results
+[validation evidence](../evidence/archive/spatial-polish-validation.json) for exact results
 and [PR4](https://github.com/Luis85/production-line/pull/4) for the full-platform
 CI result on the pushed head.
 

@@ -10,7 +10,8 @@ export async function packageApp(root, kind) {
   try {
     await cp(join(root, 'src', kind, 'dist'), join(staging, 'src', kind, 'dist'), { recursive: true });
     await mkdir(join(staging, 'scripts/runtime'), { recursive: true });
-    for (const file of ['config.mjs', 'execution.mjs', 'component.mjs', 'control.mjs', 'shared-http.mjs', 'browser.mjs']) await cp(join(root, 'scripts/runtime', file), join(staging, 'scripts/runtime', file));
+    for (const file of ['config.mjs', 'execution.mjs', 'component.mjs', 'control.mjs', 'shared-http.mjs', 'browser.mjs', 'home-update.mjs']) await cp(join(root, 'scripts/runtime', file), join(staging, 'scripts/runtime', file));
+    await cp(join(root, 'scripts/runtime/home-update'), join(staging, 'scripts/runtime/home-update'), { recursive: true });
     await cp(join(root, 'scripts/runtime/portable'), join(staging, 'scripts/runtime/portable'), { recursive: true });
     // Self-update needs the stopped-state snapshot core, release discovery and the release installer/verifier.
     // The verifier and installer sit beside remote.mjs: release packaging excludes nested "release" folders.

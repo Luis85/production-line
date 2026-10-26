@@ -2,24 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { extractionTimeoutMs, install, parse, restartCommand } from '../../scripts/release/install.mjs';
+import { create as createTar } from 'tar';
 import { createArchives } from '../../scripts/release/archives.mjs';
 
-async function fixture(t) {
+async function fixture(t, home = false) {
   const directory = await mkdtemp(join(tmpdir(), 'werk download test '));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const payloads = [
     { path: 'werk.mjs', content: Buffer.from('console.log("fixture")\n'), mode: 0o755 },
-    { path: 'scripts/release/verify.mjs', content: await readFile(new URL('../../scripts/release/verify.mjs', import.meta.url)), mode: 0o644 },
+    { path: home ? 'runtime/scripts/release/verify.mjs' : 'scripts/release/verify.mjs', content: await readFile(new URL('../../scripts/release/verify.mjs', import.meta.url)), mode: 0o644 },
   ];
   const hash = content => createHash('sha256').update(content).digest('hex');
-  const manifest = { schemaVersion: 1, name: 'werk', version: '0.1.0', files: payloads.map(({ path, content }) => ({ path, bytes: content.length, sha256: hash(content) })) };
+  const manifest = { schemaVersion: 1, name: 'werk', version: '0.1.0', ...(home ? { layout: 'werk-home-v1', updateProtocol: 2, stateFormat: 1 } : {}), files: payloads.map(({ path, content }) => ({ path, bytes: content.length, sha256: hash(content) })) };
   payloads.push({ path: 'release-manifest.json', content: Buffer.from(JSON.stringify(manifest)), mode: 0o644 });
-  const { tarGzip } = await createArchives(payloads.map(entry => ({ ...entry, path: `werk-0.1.0/${entry.path}` })));
-  const config = { version: '0.1.0', repository: 'example/werk', sha256: hash(tarGzip) };
+  const { tarGzip } = await createArchives(payloads.map(entry => ({ ...entry, path: home ? entry.path : `werk-0.1.0/${entry.path}` })));
+  const config = { version: '0.1.0', repository: 'example/werk', sha256: hash(tarGzip), ...(home ? { layout: 'werk-home-v1' } : {}) };
   const transport = { fetcher: async url => {
     assert.equal(url, 'https://github.com/example/werk/releases/download/v0.1.0/werk-0.1.0.tar.gz');
     return new Response(new Uint8Array(tarGzip));
@@ -118,4 +119,30 @@ for (const platform of ['linux', 'win32']) test(`installer restart guidance pres
     : execFileSync('bash', ['--noprofile', '--norc', '-c', command], { encoding: 'utf8', cwd: directory });
   assert.deepEqual(JSON.parse(output), ['up', '--file', options.file, '--state-dir', options.stateDir, '--no-open']);
   assert.match(restartCommand(root, {}, platform), / up$/);
+});
+
+test('Home installer extracts directly into the selected empty Home and never merges into populated mutable state', async t => {
+  const { directory, config, transport } = await fixture(t, true);
+  const installed = await install(config, { directory }, transport); assert.equal(installed, directory);
+  assert.match(await readFile(join(installed, 'werk.mjs'), 'utf8'), /fixture/);
+  await mkdir(join(directory, 'projects/company'), { recursive: true }); await writeFile(join(directory, 'projects/company/user.txt'), 'keep');
+  await assert.rejects(install(config, { directory }, transport), /Destination already exists/);
+  assert.equal(await readFile(join(directory, 'projects/company/user.txt'), 'utf8'), 'keep');
+  assert.equal((await readdir(directory)).some(name => name.startsWith('werk-')), false);
+});
+test('Home installer rejects legacy system state overrides before any network call', async t => {
+  const { directory, config } = await fixture(t, true);
+  const transport = { fetcher() { assert.fail('must reject before download'); }, log() {} };
+  for (const options of [{ directory, file: 'system.yaml' }, { directory, stateDir: 'legacy' }]) await assert.rejects(install(config, options, transport), /legacy system installer options/);
+  assert.deepEqual(await readdir(directory), []);
+});
+
+test('installer rejects archive symlinks before invoking extraction', async t => {
+  const { directory, config, transport } = await fixture(t);
+  const seed = join(directory, 'seed'), root = join(seed, 'werk-0.1.0'); await mkdir(root, { recursive: true });
+  try { await symlink('../../outside', join(root, 'link')); } catch (error) { if (process.platform === 'win32' && error.code === 'EPERM') return t.skip('Windows symlink privilege unavailable'); throw error; }
+  const archive = join(directory, 'unsafe.tar.gz'); await createTar({ cwd: seed, file: archive, gzip: true }, ['werk-0.1.0']);
+  const bytes = await readFile(archive), destination = join(directory, 'fresh'); let extracts = 0;
+  await assert.rejects(install({ ...config, sha256: createHash('sha256').update(bytes).digest('hex') }, { directory: destination }, { ...transport, fetcher: async () => new Response(new Uint8Array(bytes)), exec: (file, args, options) => { if (args[0] === '-xzf') extracts++; return execFileSync(file, args, options); } }), /links and special files/);
+  assert.equal(extracts, 0); await assert.rejects(readFile(join(directory, 'outside')), { code: 'ENOENT' });
 });

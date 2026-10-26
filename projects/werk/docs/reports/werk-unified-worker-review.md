@@ -76,7 +76,7 @@ the New task form grid at 320 pixels with scoped CSS; it passed typecheck and
 capture; the gate component is unchanged from the corrected gate journey. The
 Concept focus follow-up passed typecheck and 43 focused concept/asset tests.
 
-[Machine-readable qualification and comparison](../evidence/werk-unified-worker-validation.json)
+[Machine-readable qualification and comparison](../evidence/archive/werk-unified-worker-validation.json)
 records the exact archive identities and changed paths. Source commit is null
 because these qualification archives were built before the final commit.
 

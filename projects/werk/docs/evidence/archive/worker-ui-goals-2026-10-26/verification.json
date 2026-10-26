@@ -1,0 +1,308 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-26",
+  "candidate": "polished working tree before commit; no clean-head claim",
+  "liveProvider": false,
+  "storyConfirmation": {
+    "initialCases": 68,
+    "initialPassing": 64,
+    "correctedReruns": [
+      {
+        "id": "worker-main-checkout-workflow--first-worker-home",
+        "width": 1440,
+        "ready": true,
+        "overflow": false,
+        "errors": [],
+        "timeout": ""
+      },
+      {
+        "id": "worker-project-goals--keep-recovery-with-its-project",
+        "width": 1440,
+        "ready": true,
+        "overflow": false,
+        "errors": [],
+        "timeout": ""
+      },
+      {
+        "id": "worker-main-checkout-workflow--first-worker-home",
+        "width": 390,
+        "ready": true,
+        "overflow": false,
+        "errors": [],
+        "timeout": ""
+      },
+      {
+        "id": "worker-project-goals--keep-recovery-with-its-project",
+        "width": 390,
+        "ready": true,
+        "overflow": false,
+        "errors": [],
+        "timeout": ""
+      }
+    ]
+  },
+  "sourceBrowser": {
+    "checks": [
+      "private unlock, invalid token, Workboard default, reload keeps independent HttpOnly access; durable token absent from URL/storage/cookie",
+      "Settings directory opens independent provider/default goals; saved provider sign-in probe and inert definition preview/import",
+      "labelled legacy fixture admission stays idempotent with frozen definition/model; exact Markdown download, busy follow-up gating, isolated drafts and full-capacity admission refusal retain accepted work",
+      "Workboard pause preserves active task; request route distinguishes stopping active work from cancelling queued work",
+      "request follow-up preserves draft/reading position on rejection, scrolls after success, keeps exact session; formatted output/code copy and inert provider HTML",
+      "Workboard opens exact checkpoint; choice never auto-submits, answer draft survives navigation, paused queue holds continuation, lost acknowledgement retries the identical answer once",
+      "Workboard Board/List/search and desktop/tablet/mobile bounds; canonical creation has explicit setup boundary; focused mobile request, composer focus and retained per-request draft",
+      "History Inspect request is read-only for archived exact evidence; worker health owns resources without configuration forms or request editing",
+      "Settings directory and separate capacity/time/default goals; navigation-retained drafts, CAS stale-save refusal, explicit reload, exact uncertain-save retry, duration save and mobile navigation",
+      "tour, worker restart relocks and preserves transcript/draft; exact legacy bookmark opens focused request, plain Chat redirects to Workboard; explicit Lock clears draft and survives reload",
+      "labelled approved-file legacy fixture yields unapplied patch; Workboard exact file/session-only Review preserves scope and selection; explicit conversation action keeps exact identity"
+    ],
+    "screenshots": [
+      "login-desktop",
+      "login-mobile",
+      "definition-preview-desktop",
+      "running-request-desktop",
+      "checkpoint-uncertain-desktop",
+      "search-list-desktop",
+      "workboard-desktop",
+      "workboard-tablet",
+      "workboard-mobile",
+      "request-mobile",
+      "history-inspected-desktop",
+      "worker-health-desktop",
+      "settings-queue-stale-desktop",
+      "settings-duration-desktop",
+      "settings-duration-mobile",
+      "settings-consumption-mobile",
+      "tour-desktop",
+      "file-patch-review-desktop",
+      "file-patch-review-mobile"
+    ],
+    "pageErrors": [],
+    "fixtureAdmissions": [
+      {
+        "title": "Review worker lifecycle",
+        "sessionId": "2bc2b08e-378f-4c21-bb16-8a132b1194cc",
+        "kind": "legacy-conversation"
+      },
+      {
+        "title": "Prepare release notes",
+        "sessionId": "e2f73dad-ba9b-443c-b3a2-878b23ca26de",
+        "kind": "legacy-conversation"
+      },
+      {
+        "title": "Review task results",
+        "sessionId": "eed6659e-dfa1-4da2-8a79-d8a4f2e9c7bd",
+        "kind": "legacy-conversation"
+      },
+      {
+        "title": "Choose delivery target",
+        "sessionId": "b15bb943-2506-4e67-95b6-7ca1ff766e1d",
+        "kind": "legacy-conversation"
+      },
+      {
+        "title": "Review navigation patch",
+        "sessionId": "local-6434359c-92fe-4dd6-a695-31e002799108",
+        "kind": "legacy-approved-files"
+      }
+    ],
+    "liveProvider": false,
+    "retiredContracts": [
+      "Inline generic New task intake, optional task tabs and generic intake draft were deliberately removed from the product. API fixture seeding retains legacy lifecycle coverage; worker-home-browser.mjs qualifies real canonical project/template/prepare/publish creation."
+    ]
+  },
+  "extractedHomeBrowser": {
+    "fixture": "Deterministic Claude CLI protocol; no real provider login or inference",
+    "liveProvider": false,
+    "checks": [
+      "Verified archive starts in an empty dedicated home and unlocks through the real browser without source/npm/init.",
+      "Browser clones and acknowledges the project, publishes its workflow after consent, approves the exact scoped policy, and explicitly enables intake.",
+      "Browser prepares, completes, checks and commits/pushes a ready Feature Request before any inference.",
+      "Real candidate tools, committed verification, feature commit/push and Markdown pull request appear before browser acceptance; explicit exact-main consent merges into checkout."
+    ],
+    "screenshots": [
+      "01-first-worker-home",
+      "01a-project-ready",
+      "02-published-feature-request",
+      "03-taskboard-in-progress",
+      "04-taskboard-review-ready",
+      "05-markdown-candidate-review",
+      "06-main-checkout-merge-confirmed"
+    ],
+    "pageErrors": [],
+    "version": "0.16.0",
+    "sourceCommit": null,
+    "archiveSha256": "65f5f69e6d655f21eb62ffbecfb21e665684191c13e4f755e876b263af429d01",
+    "manifestSha256": "7f03351792974a8cfa4b7fbfea348f132bef31ddd86e0028eae8e5e840ce6b25",
+    "candidateCommit": "0d7a6cddbabebd3acd98b7fa747bd95f08a75391",
+    "publishedFeatureCommit": "d9f5cd44771ca780acb197f3095125bf99da00b5",
+    "mergedCommit": "0d7a6cddbabebd3acd98b7fa747bd95f08a75391",
+    "reviewNote": "feature-reviews/fr-f3a21c9e80bbf57fbd37be00-0a62c32a0f70.md",
+    "providerInvocations": [
+      {
+        "fixture": true,
+        "mode": "ready-review"
+      },
+      {
+        "fixture": true,
+        "mode": "candidate-tools"
+      }
+    ]
+  },
+  "standaloneAuthoringConfirmation": [
+    {
+      "id": "worker-shared-feature-requests--describe-request",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--complete-request-details",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--submit-for-ready-check",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--select-request-model",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--new-request-uses-updated-defaults",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--describe-request",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--complete-request-details",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--submit-for-ready-check",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--select-request-model",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--new-request-uses-updated-defaults",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    }
+  ],
+  "remainingCatalogueConfirmation": {
+    "cases": 126,
+    "passed": 126,
+    "viewports": [
+      1440,
+      390
+    ],
+    "missingDeclaredComponents": [],
+    "errors": [],
+    "overflow": [],
+    "stories": [
+      "worker-workboard-journey--retain-draft",
+      "worker-workboard-journey--retain-prepared-draft",
+      "worker-workboard-journey--review-lane",
+      "worker-workboard-journey--saved-draft-consent",
+      "worker-workboard-journey--visible-home-projects",
+      "worker-workflow--empty-workflow",
+      "worker-workflow--failed-refresh",
+      "worker-workflow--filter-workflow",
+      "worker-workflow--loading-workflow",
+      "worker-workflow--missing-evidence",
+      "worker-workflow--observed-delivery",
+      "worker-workflow--paused-observations",
+      "worker-workflow-recovery--held-project-setup",
+      "worker-workflow-recovery--registration-in-progress",
+      "worker-workflow-recovery--retry-template-read",
+      "worker-workspace--agent-definitions",
+      "worker-workspace--answer-checkpoint",
+      "worker-workspace--assigned-attempt-history",
+      "worker-workspace--assigned-request-rules",
+      "worker-workspace--consumption-blocked-capacity",
+      "worker-workspace--default-provider",
+      "worker-workspace--diagnostic-export",
+      "worker-workspace--draft-task",
+      "worker-workspace--empty-taskboard",
+      "worker-workspace--evidence-unavailable",
+      "worker-workspace--execution-evidence",
+      "worker-workspace--execution-time-limits",
+      "worker-workspace--failed-attempt",
+      "worker-workspace--feature-request-checkpoint",
+      "worker-workspace--feature-request-read-failure",
+      "worker-workspace--feature-request-save-failure",
+      "worker-workspace--file-task-intake",
+      "worker-workspace--file-task-reply",
+      "worker-workspace--follow-up",
+      "worker-workspace--formatted-model-reply",
+      "worker-workspace--full-local-capacity",
+      "worker-workspace--interrupted-request-preparation",
+      "worker-workspace--json-example-reply",
+      "worker-workspace--legacy-conversation",
+      "worker-workspace--local-repository-consent",
+      "worker-workspace--locked-workspace",
+      "worker-workspace--model-controls",
+      "worker-workspace--original-assignment-evidence",
+      "worker-workspace--paused-worker-capacity",
+      "worker-workspace--populated-taskboard",
+      "worker-workspace--project-integration-settings",
+      "worker-workspace--project-requests",
+      "worker-workspace--queue-and-duration-settings",
+      "worker-workspace--reconsider-repository",
+      "worker-workspace--repository-assignments",
+      "worker-workspace--repository-consent",
+      "worker-workspace--request-review",
+      "worker-workspace--resource-policy",
+      "worker-workspace--review-file-patch",
+      "worker-workspace--running-task",
+      "worker-workspace--saved-feature-request",
+      "worker-workspace--saved-task-maintenance",
+      "worker-workspace--settings-directory",
+      "worker-workspace--stale-worker-capacity",
+      "worker-workspace--task-history",
+      "worker-workspace--tool-access-settings",
+      "worker-workspace--worker-dashboard",
+      "worker-workspace--worker-settings"
+    ]
+  }
+}

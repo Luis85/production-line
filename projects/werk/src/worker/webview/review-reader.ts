@@ -18,7 +18,7 @@ export function reviewIdentity(query: Record<string, unknown>): ReviewIdentity {
   return { sessionId: one(query.session), fileId: one(query.fileId) };
 }
 export function reviewActionHref(action: string | undefined, sessionId: string): string {
-  if (action === 'answer' || action === 'resume') return '/taskboard?session=' + encodeURIComponent(sessionId);
+  if (action === 'answer' || action === 'resume') return '/request?session=' + encodeURIComponent(sessionId);
   if (action === 'inspect_history') return '/history?view=runs&runSession=' + encodeURIComponent(sessionId);
   if (action === 'inspect_checks') return '#review-checks';
   if (action === 'delivery_controls') return '#review-decision';
@@ -32,17 +32,17 @@ export async function readFeatureReview(identity: ReviewIdentity, read: Read): P
   if (identity.fileId) {
     task = await read<LocalTaskDetailView>('/api/taskboard/detail', 'POST', { id: identity.fileId });
     if (task.id !== identity.fileId || identity.sessionId && task.sessionId !== identity.sessionId)
-      throw new Error('The saved task does not belong to this feature request. Return to the taskboard and open it again.');
+      throw new Error('The saved task does not belong to this feature request. Return to Workboard and open it again.');
   }
   const sessionId = identity.sessionId || task?.sessionId;
-  if (!sessionId) throw new Error('Choose a feature request from the taskboard to open its review.');
+  if (!sessionId) throw new Error('Choose a feature request from Workboard to open its review.');
   const detail = await read<FeatureRequestDetail>('/api/tasks', 'POST', { action: 'get', id: sessionId });
   if (detail.session.id !== sessionId) throw new Error('The returned conversation does not match this feature request.');
   const session = detail.session;
   if (!task && session.kind === 'local') {
     const board = await read<LocalTaskboardView>('/api/taskboard');
     const matching = board.tasks.filter(item => item.sessionId === session.id);
-    if (matching.length !== 1) throw new Error('The local task for this conversation is unavailable or ambiguous. Return to the taskboard and open it again.');
+    if (matching.length !== 1) throw new Error('The local task for this conversation is unavailable or ambiguous. Return to Workboard and open it again.');
     task = await read('/api/taskboard/detail', 'POST', { id: matching[0]!.id });
     if (!task || task.id !== matching[0]!.id) throw new Error('The returned local task does not match this conversation.');
   }

@@ -7,13 +7,15 @@ import { emptyFeatureAuthoringEditor } from '../feature-authoring-editor';
 const editorState = reactive(emptyFeatureAuthoringEditor());
 const emptySeed = () => ({ title: '', message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', paths: '', selectionEdited: false, executionProfile: '', priority: 3, templateId: '' });
 const seed = reactive(emptySeed());
+const draftProject = reactive({ id: '' });
 watchPrivateDraft(() => workerState.draftEpoch, () => {
   Object.assign(editorState, emptyFeatureAuthoringEditor());
-  Object.assign(seed, emptySeed());
+  Object.assign(seed, emptySeed()); draftProject.id = '';
 }, { flush: 'sync' });
 </script>
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onDeactivated, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import ProjectExecutionSelection from './ProjectExecutionSelection.vue';
@@ -24,20 +26,26 @@ import MessageContent from './MessageContent.vue';
 import FeatureRequestDetails from './FeatureRequestDetails.vue';
 import FeatureTemplateSelection from './FeatureTemplateSelection.vue';
 import { state, request, refresh } from '../store';
+import { readFeatureDetails } from '../feature-authoring-fields';
 import { createFeatureAuthoringEditor } from '../feature-authoring-editor';
 import { sharedReadyReviewView } from '../shared-ready-review-view';
 import { splitFeatureRequestMarkdown } from '../feature-request-note';
 import type { FeatureAuthoringResult } from '../../application/feature-authoring-contracts';
 import { featurePriorityOptions } from '../feature-priority';
-const props = defineProps<{ initialProjectId?: string }>();
+const props = defineProps<{ initialProjectId?: string; draftName?: string; heading?: boolean; registeredProjects?: { id: string; label: string; enabled: boolean }[] }>();
 const emit = defineEmits<{ project: [id: string]; created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
-const projectId = ref(props.initialProjectId ?? ''), projectProfiles = ref(false), projectTemplates = ref(false);
-watch(projectId, id => { seed.templateId = ''; emit('project', id); });
-watch(() => props.initialProjectId, value => { if (!editorState.result && !seed.message.trim()) projectId.value = value ?? ''; });
+const router = useRouter();
+const projectId = ref(editorState.result?.binding.repositoryId || draftProject.id || props.initialProjectId || '');
+if (!draftProject.id) draftProject.id = projectId.value;
+const projectProfiles = ref(false), projectTemplates = ref(false), active = ref(true);
+onActivated(() => { active.value = true; });
+onDeactivated(() => { active.value = false; });
+watch(projectId, id => { draftProject.id = id; seed.templateId = ''; emit('project', id); });
+watch(() => props.initialProjectId, value => { if (!editorState.result && !editorState.pending && !editorState.busy && !seed.message.trim()) projectId.value = value ?? ''; });
 const projectSnapshot = useWorkerSnapshot(() => request<NonNullable<NonNullable<typeof state.environment>['sharedIntake']>>('/api/shared-intake' + (projectId.value ? '?projectId=' + encodeURIComponent(projectId.value) : '')), [projectId]);
-const projectChoices = computed(() => projectSnapshot.data.value?.projects ?? state.environment?.sharedIntake?.projects ?? []);
+const projectChoices = computed(() => props.registeredProjects ?? projectSnapshot.data.value?.projects ?? state.environment?.sharedIntake?.projects ?? []);
 const view = computed(() => projectSnapshot.data.value ?? (!projectId.value ? state.environment?.sharedIntake : undefined));
-const binding = () => view.value?.config.repositoryId ? { repositoryId: view.value.config.repositoryId, remote: view.value.config.remote, branch: view.value.config.branch, workflowPath: view.value.config.workflowPath } : null;
+const binding = () => view.value?.config.repositoryId && (!props.registeredProjects || props.registeredProjects.some(project => project.id === projectId.value) && view.value.config.repositoryId === projectId.value) ? { repositoryId: view.value.config.repositoryId, remote: view.value.config.remote, branch: view.value.config.branch, workflowPath: view.value.config.workflowPath } : null;
 const editor = createFeatureAuthoringEditor({ state: editorState, binding, active: () => state.unlocked,
   epoch: () => state.draftEpoch, uuid: () => crypto.randomUUID(), command: command => request<FeatureAuthoringResult>('/api/features', 'POST', { ...command, projectId: command.expectedBinding?.repositoryId ?? projectId.value }) });
 const locked = computed(() => editorState.busy || !!editorState.pending || state.workspaceBusy || !state.unlocked);
@@ -48,6 +56,7 @@ const unsaved = computed(() => !!editorState.result && (!editorState.result.revi
 const ready = computed(() => editable.value && !locked.value && !changed.value && editorState.result?.readiness.valid);
 const reviewRequired = computed(() => editorState.result?.readiness.reviewRequired === true);
 const selectedReview = computed(() => selected.value?.readyReview && !selected.value.taskId ? sharedReadyReviewView(selected.value) : null);
+const requestTitle = computed(() => { try { return readFeatureDetails(editorState.markdown).title || editorState.result?.name; } catch { return seed.title || seed.message.slice(0, 80) || editorState.result?.name; } });
 const preview = computed(() => splitFeatureRequestMarkdown(editorState.markdown).body);
 const requests = computed(() => view.value?.requests ?? []);
 const selected = computed(() => requests.value.find(item => item.id === editorState.result?.featureId));
@@ -69,34 +78,53 @@ async function prepare() {
 }
 async function publish(status: 'draft' | 'ready') { if (await editor.publish(status)) await refresh(); }
 async function retry() { if ((await editor.retry())?.publication) await refresh(); }
-async function reopen(name: string) { if (await editor.reopen(name)) await focusInstructions(); }
-function newRequest() {
-  if (locked.value) return;
-  editor.reset(); Object.assign(seed, emptySeed(), { provider: defaultProvider.value }); void focusInstructions();
+const requestedDraft = ref(''), reopenRevision = ref(0);
+watch([() => props.draftName, view, active, reopenRevision], async ([name]) => {
+  if (!active.value || !name || requestedDraft.value === name || !binding() || locked.value) return;
+  if (props.initialProjectId && projectId.value !== props.initialProjectId) { editorState.notice = 'This retained draft belongs to another project. Save or discard it before opening the requested project draft.'; return; }
+  if (editorState.result?.name === name && editorState.result.binding.repositoryId === projectId.value) { requestedDraft.value = name; return; }
+  if (unsaved.value || seed.message.trim() || editorState.result || editorState.pending) {
+    editorState.notice = 'Your retained draft is still open. Save or discard it before opening another project draft.'; return;
+  }
+  requestedDraft.value = name;
+  if (await editor.reopen(name)) await focusInstructions();
+});
+function resetComposer() {
+  editor.reset(); Object.assign(seed, emptySeed(), { provider: defaultProvider.value });
+  if (props.initialProjectId) projectId.value = props.initialProjectId;
+  requestedDraft.value = ''; reopenRevision.value++; void focusInstructions();
 }
+async function newRequest() {
+  if (locked.value) return;
+  if (props.draftName) await router.replace({ path: '/requests/new', query: { project: props.initialProjectId || projectId.value } });
+  resetComposer();
+}
+function discardAndOpen() { if (!locked.value) resetComposer(); }
 function keydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing && !editorState.result) { event.preventDefault(); void prepare(); }
 }
 defineExpose({ focusInstructions });
 </script>
 <template>
-  <section class="shared-feature-composer" aria-labelledby="shared-feature-title" :aria-busy="editorState.busy">
-    <h3 id="shared-feature-title">Create a feature request</h3>
-    <p class="composer-intro">Describe the outcome here. Your request uses the same project template, Markdown queue and checks as your team.</p>
-    <label for="shared-project-choice">Project</label><select id="shared-project-choice" v-model="projectId" :disabled="locked || !!editorState.result || !!seed.message.trim()"><option value="">Worker installation project</option><option v-for="project in projectChoices" :key="project.id" :value="project.id">{{ project.label }}{{ project.enabled ? '' : ' · intake paused' }}</option></select><p v-if="projectSnapshot.error.value" role="alert" class="error-text">{{ projectSnapshot.error.value }}</p><p v-if="view && !view.config.repositoryId" class="notice">Shared Git intake is not configured for this project. Add requests to its local feature folder, or configure shared intake.</p>
+  <section class="shared-feature-composer" :aria-labelledby="heading === false ? undefined : 'shared-feature-title'" :aria-label="heading === false ? 'Project request draft' : undefined" :aria-busy="editorState.busy">
+    <h3 v-if="heading !== false" id="shared-feature-title">Create a feature request</h3>
+    <p v-if="heading !== false" class="composer-intro">Describe the outcome here. Your request uses the same project template, Markdown queue and checks as your team.</p>
+    <label for="shared-project-choice">Project</label><select id="shared-project-choice" v-model="projectId" :disabled="locked || !!editorState.result || !!seed.message.trim()"><option v-if="!registeredProjects" value="">Retained legacy project</option><option v-for="project in projectChoices" :key="project.id" :value="project.id">{{ project.label }}{{ project.enabled ? '' : ' · intake paused' }}</option></select><p v-if="projectSnapshot.error.value" role="alert" class="error-text">{{ projectSnapshot.error.value }}</p><p v-if="view && !view.config.repositoryId" class="notice">Shared Git intake is not configured for this project. Finish project setup and recheck its shared intake before preparing a request.</p>
     <p class="destination">{{ view?.config.repositoryId }} · {{ view?.config.remote }} / {{ view?.config.branch }}</p>
     <p v-if="view && !view.config.enabled" class="notice">Shared intake is paused. You can publish requests; execution waits until intake resumes.</p>
+    <p v-if="editorState.notice" class="notice" role="status">{{ editorState.notice }}</p>
+    <UButton v-if="draftName && editorState.notice && !editorState.result && !editorState.pending" color="neutral" variant="outline" :disabled="locked" @click="discardAndOpen">Discard retained instructions and open the saved draft</UButton>
     <form v-if="!editorState.result" :aria-busy="editorState.busy" @submit.prevent="prepare">
       <fieldset :disabled="locked">
-        <FeatureTemplateSelection id="shared-request" v-model="seed.templateId" :project-id="view?.config.repositoryId || projectId || undefined" :disabled="locked" @configured="projectTemplates = $event" />
-        <label for="shared-request-priority">Priority</label><select id="shared-request-priority" v-model="seed.priority"><option v-for="priority in featurePriorityOptions" :key="priority.value" :value="priority.value">{{ priority.label }}</option></select>
+        <label for="shared-request-title">Request name · optional</label>
+        <UInput id="shared-request-title" v-model="seed.title" :maxlength="120" placeholder="Named from your instructions" class="w-full" />
         <label for="new-task-instructions">Request instructions</label>
         <UTextarea id="new-task-instructions" v-model="seed.message" :rows="6" :maxrows="12" autoresize :maxlength="8000" required placeholder="What would you like this worker to do?" class="w-full" aria-describedby="shared-instructions-help" @keydown="keydown" />
         <p id="shared-instructions-help" class="help">Start with your goal. Preparing a draft does not run the model or start implementation.</p>
         <details class="request-options">
           <summary>Request options</summary>
-          <label for="shared-request-title">Request name · optional</label>
-          <UInput id="shared-request-title" v-model="seed.title" :maxlength="120" placeholder="Named from your instructions" class="w-full" />
+          <FeatureTemplateSelection id="shared-request" v-model="seed.templateId" :project-id="view?.config.repositoryId || projectId || undefined" :disabled="locked" @configured="projectTemplates = $event" />
+          <label for="shared-request-priority">Priority</label><select id="shared-request-priority" v-model="seed.priority"><option v-for="priority in featurePriorityOptions" :key="priority.value" :value="priority.value">{{ priority.label }}</option></select>
           <ProjectExecutionSelection id="shared-request" v-model="seed.executionProfile" :project-id="view?.config.repositoryId || projectId || undefined" mode="patch" :disabled="locked" @configured="projectProfiles = $event" />
           <ModelSelectionFields v-if="!projectProfiles" id="shared-request" @update:provider="seed.selectionEdited = true" @update:model="seed.selectionEdited = true" @update:effort="seed.selectionEdited = true" v-model:provider="seed.provider" v-model:model="seed.model" v-model:effort="seed.effort" :providers="state.settings?.providers ?? []" :disabled="locked" />
           <label for="shared-request-paths">Approved repository paths · one per line</label>
@@ -107,9 +135,8 @@ defineExpose({ focusInstructions });
       <UButton type="submit" :loading="editorState.busy" :disabled="locked || !seed.message.trim() || !binding() || !projectProfiles && !seed.provider">Prepare request</UButton>
     </form>
     <template v-else>
-      <div class="request-identity"><strong>{{ editorState.result.name }}</strong><span>{{ editorState.result.revision ? 'Published ' + editorState.result.status : 'Unpublished draft' }}</span></div>
+      <div class="request-identity"><strong>{{ requestTitle }}</strong><span>{{ editorState.result.revision ? 'Published ' + editorState.result.status : 'Unpublished draft' }}</span></div>
       <p v-if="!current" class="error-text" role="alert">The shared connection changed. This draft still belongs to {{ editorState.result.binding.repositoryId }} / {{ editorState.result.binding.branch }}. Restore that connection to continue.</p>
-      <p v-if="editorState.notice" class="notice" role="status">{{ editorState.notice }}</p>
       <template v-if="editable">
         <FeatureRequestDetails v-model="editorState.markdown" :disabled="locked" :project-id="editorState.result.binding.repositoryId" />
         <section class="readiness" aria-labelledby="shared-readiness-title" aria-live="polite">
@@ -127,7 +154,7 @@ defineExpose({ focusInstructions });
       <template v-else-if="current">
         <p class="notice">{{ selectedReview ? selectedReview.description : selected?.owner ? selected.isLocal ? 'This worker owns the request. Continue in its conversation or answer its Task note.' : 'Another worker owns this request. Follow its progress in the shared Markdown notes.' : 'Your request is in the shared queue. It starts after validation, ownership and capacity checks.' }}</p>
         <UButton v-if="selected && sessionId(selected.taskId)" :disabled="locked" @click="openConversation(selected.taskId)">Open conversation</UButton>
-        <RouterLink v-else to="/settings#shared-intake">Inspect shared progress</RouterLink>
+        <RouterLink v-else to="/workboard">Follow request on Workboard</RouterLink>
       </template>
       <details class="request-preview"><summary>Preview Feature Request</summary><MessageContent :text="preview" /></details>
       <UButton v-if="!editorState.pending" color="neutral" variant="ghost" :disabled="locked" @click="newRequest">{{ unsaved ? 'Discard unpublished edits' : 'Start another request' }}</UButton>
@@ -138,17 +165,8 @@ defineExpose({ focusInstructions });
       <p class="notice">The result is unconfirmed. Your exact request is retained; retry before editing or starting another request.</p>
       <UButton :disabled="state.workspaceBusy || !state.unlocked" @click="retry">Retry same request</UButton>
     </div>
-    <details class="saved-requests">
-      <summary>Shared requests · {{ requests.length }}</summary>
-      <p v-if="unsaved" class="help">Save or discard your current edits before opening another draft.</p>
-      <p v-if="!requests.length" class="help">Published requests appear here after synchronization.</p>
-      <ul v-else><li v-for="item in requests" :key="item.id"><div><strong>{{ item.title || item.name }}</strong><span>{{ item.status.replaceAll('_', ' ') }} · {{ item.name }}</span></div>
-        <UButton v-if="!item.owner && item.status === 'draft'" color="neutral" variant="outline" :disabled="locked || unsaved" @click="reopen(item.name)">Open draft</UButton>
-        <UButton v-else-if="item.isLocal && sessionId(item.taskId)" color="neutral" variant="outline" :disabled="locked" @click="openConversation(item.taskId)">Open conversation</UButton>
-        <RouterLink v-else to="/settings#shared-intake">Inspect progress</RouterLink>
-      </li></ul>
-    </details>
-    <p class="privacy">Unpublished edits stay in this tab until you reload or lock it. Saved drafts remain in Git.</p>
+    <RouterLink v-if="projectId" class="saved-request-link" :to="'/request?project=' + encodeURIComponent(projectId)">Browse saved project requests</RouterLink>
+    <p class="privacy">Unpublished edits stay in this tab while you navigate, until you reload or lock it. Saved drafts remain in Git.</p>
   </section>
 </template>
 <style scoped>
@@ -168,7 +186,7 @@ fieldset > label:first-child { margin-top: 0; }
 .help, .privacy { font-size: .75rem; color: var(--ui-text-muted); margin: 8px 0 16px; }
 .notice { font-size: .8125rem; margin: 12px 0 20px; color: var(--ui-text-muted); }
 .error-text { overflow-wrap: anywhere; margin: 16px 0; }
-.request-options, .request-preview, .saved-requests { border-top: 1px solid var(--ui-border); margin-top: 20px; padding-block: 4px 12px; }
+.request-options, .request-preview { border-top: 1px solid var(--ui-border); margin-top: 20px; padding-block: 4px 12px; }
 summary { cursor: pointer; min-height: 44px; padding-block: 12px; font-size: .875rem; font-weight: 600; }
 .request-identity { display: grid; gap: 5px; margin: 20px 0; overflow-wrap: anywhere; }
 .request-identity span { font-size: .75rem; color: var(--ui-text-muted); }
@@ -178,10 +196,7 @@ summary { cursor: pointer; min-height: 44px; padding-block: 12px; font-size: .87
 .publish-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .publish-actions :deep(button) { white-space: normal; justify-content: center; }
 .request-preview :deep(pre), .request-preview :deep(table) { max-width: 100%; overflow-x: auto; }
-.saved-requests ul { list-style: none; padding: 0; margin: 0; max-height: 360px; overflow-y: auto; }
-.saved-requests li { display: grid; gap: 10px; justify-items: start; padding-block: 16px; border-top: 1px solid var(--ui-border); }
-.saved-requests li > div { display: grid; gap: 5px; min-width: 0; font-size: .875rem; overflow-wrap: anywhere; }
-.saved-requests li span { font-size: .75rem; color: var(--ui-text-muted); }
+.saved-request-link { min-height:44px;display:inline-flex;align-items:center;margin-top:var(--space-4); }
 a { color: var(--ui-primary); text-underline-offset: 3px; }
 .privacy { margin-top: 24px; }
 @media (max-width: 420px) { .publish-actions { flex-direction: column; } }

@@ -1,67 +1,66 @@
 # Werk
 
-Start a standalone worker in your own worker home, then connect your model and
-project through its webview. The downloaded runtime is prebuilt: native Windows,
-macOS and Linux need Node.js 24, with no source checkout, npm install or project
-initialization step.
+Run one worker from a transparent WerkHome: create a Feature Request, follow live
+delivery and review the resulting increment before allowing its exact merge.
+The runtime is prebuilt. Native Windows, macOS and Linux need Node.js 24 and Git;
+there is no npm installation or project-local worker installation.
 
 ## Start your worker
 
-Create a dedicated worker-home folder and extract the verified archive there.
-Keep the archive's `werk-{{version}}` folder intact. Open a terminal in the outer
-worker-home folder and run:
+Verify the runtime archive against its exact `SHA256SUMS` entry. Extract its
+contents directly into a fresh Home such as `C:\WerkHome`; there is no inner
+`werk-{{version}}` folder. Then run:
 
 ```sh
-node ./werk-{{version}}/worker.mjs
+node ./worker.mjs
 ```
 
-PowerShell uses the same command, or
-`node .\werk-{{version}}\worker.mjs`. You can also open a terminal inside the
-extracted version folder and run `node worker.mjs`; that folder then becomes the
-worker home. To select the home explicitly from any working directory, use
-`node /path/to/extracted/worker.mjs --home /path/to/worker-home`.
+PowerShell: `node .\worker.mjs`. You can invoke the launcher from elsewhere:
+`node C:\WerkHome\worker.mjs`. Home is anchored to that launcher's directory,
+not the shell working directory; `--home PATH` explicitly selects another Home.
 
-The launcher starts one standalone worker in the background and opens its local
-webview. It prints the URL and private credential-file path. Read that file
-locally and paste the token into the unlock form; the token is never put in the
-URL or launcher output. Private worker state lives in `.werk/worker` beneath the
-selected home. Starting again reopens the existing worker. Use `--no-open` on a
-headless machine, or `--port 0` to allocate an unused local port.
+The root contains stable launchers and documentation. `runtime/` holds replaceable
+prebuilt programs, `projects/` contains visible cloned Git repositories, and
+`state/worker` holds fresh private worker state. Never commit the private state.
+The launcher starts one worker in the background and opens its local webview.
+Startup prints its URL and private credential-file path, never the token itself.
+Read the token locally to unlock. `--no-open` avoids launching a browser.
 
-In the webview, connect **Claude Code CLI** or another supported provider, review
-its tool access, and register your project. Then create a Feature Request, follow
-its Kanban progress and inspect the resulting increment before permitting merge.
-No model runs merely because the worker started. Git and provider credentials
-remain under your local account. Follow the [worker workflow guide](docs/how-to/deliver-worker-release.md)
-for project setup, independent checks, review and recovery.
-
-From the same worker home, inspect or stop the worker with:
+Configure the provider, then register the remote project in **Projects**. Preview
+and approve workflow setup, separately approve the committed delivery policy,
+and recheck setup. **Workboard → New Feature Request** uses the project's Git
+request template and readiness flow. Follow live progress and review changes and
+checks before explicitly approving the displayed main-checkout merge.
+**Workflow** shows delivery health and honest measurement coverage.
 
 ```sh
-node ./werk-{{version}}/worker.mjs status
-node ./werk-{{version}}/worker.mjs stop
+node ./worker.mjs status
+node ./worker.mjs stop
 ```
 
-For verified downloads and installer options, see the
-[release reference](docs/reference/releases.md). Read the [changelog](CHANGELOG.md)
-for this version's changes. Existing project-local installations remain supported
-through [project setup](docs/how-to/project-worker.md) and
-[shared Markdown intake](docs/how-to/shared-feature-intake.md).
+Follow [archive to main checkout](docs/tutorials/worker-home-to-main.md) for the
+complete journey, and [release verification](docs/reference/releases.md) for exact
+artifact checks. GitHub PRs and Releases remain separately approved extensions.
+No model call runs merely because the worker starts.
 
-## Portable apps for another project
+## Existing 0.16 installations
 
-Copy any complete `bin/apps/factory`, `bin/apps/orchestrator` or `bin/apps/worker`
-folder into your project. Each provides a Node 24 webview and JSON automation CLI.
-Start with `node bin/apps/worker/cli.mjs start`, then inspect `schema` for task and
-management commands. Project worker `init` creates private `.env` and
-credential-free `.env.example`; each app also supports `env init`. Use the
-project's `WERK_WORKER_TOKEN` for optional browser access; the local CLI reads
-its credential file itself. Process environment
-wins over dotenv and CLI launch flags win over environment defaults. Update a copied
-app from the project directory with `node bin/apps/worker/cli.mjs update apply --stop`:
-it verifies the release, backs up state and keeps the previous folder for
-`update rollback`. See [portable apps](docs/reference/portable-apps.md) and
-[environment configuration](docs/reference/configuration.md#project-environment-files).
+Keep the old runtime and a verified backup. Extract into a fresh Home, inspect
+`node worker.mjs migration plan --state-dir ABSOLUTE_OLD_STATE`, stop the old worker
+with its matching CLI, then explicitly adopt compatible standalone Home state.
+Adoption retains original absolute paths; it does not move/copy state or projects.
+Project-installed state is refused and needs old-runtime recovery/export.
+See [retained-state adoption](docs/how-to/project-worker.md#existing-standalone-installations).
+Do not overwrite an existing Home with an archive or delete retained old paths.
+
+## Advanced component automation
+
+The complete prebuilt CLI lives at `runtime/bin/apps/<kind>/cli.mjs`. Raw worker
+commands require an explicit `--state-dir` naming the effective state path;
+`state/worker` is only the fresh Home default. The root launcher resolves an
+adopted state's selection for lifecycle commands. New worker `init` is retired.
+Factory and Orchestrator can still be deployed independently with their complete
+app folders. See [prebuilt apps and automation](docs/reference/portable-apps.md).
 
 ## Grow from your worker into a Factory
 
@@ -102,17 +101,17 @@ workers. Tasks are submitted inside a line after startup. See
 Native (Node 24):
 
 ```text
-node werk.mjs system plan --file examples/system.yaml --json
-node werk.mjs system up --file examples/system.yaml
+node werk.mjs system plan --file runtime/examples/system.yaml --json
+node werk.mjs system up --file runtime/examples/system.yaml
 ```
 
 Docker (no host Node/npm):
 
 ```bash
-bash werk-docker.sh system up --file examples/system.yaml --environment docker
+bash werk-docker.sh system up --file runtime/examples/system.yaml --environment docker
 ```
 
-On Windows, use `./werk-docker.ps1 system up --file examples/system.yaml --environment docker`.
+On Windows, use `./werk-docker.ps1 system up --file runtime/examples/system.yaml --environment docker`.
 Choose one environment for a state directory. The system opens the Factory landing
 page after all services are healthy. Follow the
 [system tutorial](docs/tutorials/system-from-yaml.md) for prerequisites, separate

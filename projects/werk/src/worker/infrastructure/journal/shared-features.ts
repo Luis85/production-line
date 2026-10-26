@@ -1,3 +1,5 @@
+import { validateSharedReadyReviewAnswers } from '../../application/shared-ready-review-answer.js';
+import { readReadyReviewResponse } from '../features/ready-review-document.js';
 import { sharedFeaturePolicy } from '../../application/shared-feature-policy.js';
 import { validateSharedReviewReworks } from '../../application/shared-review-rework.js';
 import { validateFeatureIntakeMeasurements } from '../../application/feature-intake-measurement.js';
@@ -48,6 +50,7 @@ export class SharedFeatureJournal {
         validateFeaturePreparation(record); sharedFeaturePolicy(record);
         assertSharedFeatureSelection(record);
         if (review) validateSharedReadyReview(record);
+        validateSharedReadyReviewAnswers(record);
         if (!readiness.valid || !readiness.input || record.id !== readiness.input.id || canonicalJson({ ...record.accepted, providerExplicit: undefined }) !== canonicalJson({ ...readiness.input, providerExplicit: undefined }) || record.owner !== state.workerId || record.taskId !== 'shared-feature-' + sharedHash(record.id + bindingKey(record.binding)).slice(0, 32)) throw Error('Invalid accepted shared feature.');
         if (record.inputHash !== sharedFeatureInputHash(record) || typeof record.claimed !== 'boolean' || typeof record.submitted !== 'boolean' || record.submitted && !record.claimed || !/^[a-f0-9]{64}$/.test(record.remoteRevision)) throw Error('Invalid shared feature reservation.');
         if (record.sourcePath !== snapshot.configuration.requestsDirectory + '/' + record.name || !/^[^/\\]+\.md$/.test(record.name) || record.name.startsWith('_')) throw Error('Invalid shared feature source path.');
@@ -78,6 +81,11 @@ export class SharedFeatureJournal {
         if (record.pending) {
           const pending = record.pending;
           if (pending.request.path !== record.sourcePath || pending.request.expectedRevision !== record.remoteRevision || !/^[a-zA-Z0-9_-]{1,100}$/.test(pending.operationId) || typeof pending.request.content !== 'string' || Buffer.byteLength(pending.request.content) > 65536 || !Array.isArray(pending.artifacts) || pending.artifacts.length > 3) throw Error('Invalid shared publication outbox.');
+          if (pending.operationId.startsWith('ready-answer-')) {
+            if (!record.publishedSource) throw Error('Missing prior Ready Check source.');
+            const prior = readReadyReviewResponse(record.publishedSource, record), response = readReadyReviewResponse(pending.request.content, record);
+            if (response.status !== 'ready' || response.sourceMarkdown !== prior.sourceMarkdown || response.answer === prior.answer || !response.answer.startsWith(prior.answer ? prior.answer + '\n\n' : '')) throw Error('Invalid answer-only Ready Check outbox.');
+          }
           const publication = parseFeature(pending.request.content), original = parseFeature(record.sourceMarkdown);
           const shared = (publication.data.werk as { shared?: { owner?: string; sourceCommit?: string; sourceHash?: string } })?.shared;
           if (publication.data.id !== record.id || acceptedSharedBody(publication) !== original.body || shared?.owner !== state.workerId || shared?.sourceCommit !== record.sourceCommit || shared?.sourceHash !== record.inputHash) throw Error('Invalid shared claim outbox.');

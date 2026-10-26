@@ -36,77 +36,77 @@ Captures use 1440×1000 and 390×1000 viewports and retain the full page where n
 
 New task plus its first message queues one task session. Follow-ups preserve its context. Chat, local file tasks and remote assignments share one execution slot.
 
-![Give one worker a task](../evidence/worker-system-worker-chat-1440.png)
+![Give one worker a task](../evidence/archive/worker-system-worker-chat-1440.png)
 
 ### 2. Approve local file input
 
 Run task is an explicit file-task editor. It captures the approved files into a separate task session and produces a review patch.
 
-![Approve local file input](../evidence/worker-system-worker-run-task-1440.png)
+![Approve local file input](../evidence/archive/worker-system-worker-run-task-1440.png)
 
 ### 3. Manage the worker’s queue
 
 History combines task sessions, the configurable local taskboard and retained orchestrator evidence. More queue places do not increase execution concurrency.
 
-![Manage the worker’s queue](../evidence/worker-system-worker-history-1440.png)
+![Manage the worker’s queue](../evidence/archive/worker-system-worker-history-1440.png)
 
 ### 4. Inspect the worker and its environment
 
 Dashboard shows connection state, queued and active work, execution profiles and host/process observations. A standalone worker is healthy without an orchestrator.
 
-![Inspect the worker and its environment](../evidence/worker-system-worker-dashboard-1440.png)
+![Inspect the worker and its environment](../evidence/archive/worker-system-worker-dashboard-1440.png)
 
 ### 5. Add an independent production line
 
 An independently started orchestrator accepts worker enrollment and opens on its dashboard. The 3D/2D process map and focused workspaces share current observations.
 
-![Add an independent production line](../evidence/worker-system-orchestrator-dashboard-1440.png)
+![Add an independent production line](../evidence/archive/worker-system-orchestrator-dashboard-1440.png)
 
 ### 6. Choose how a line assigns work
 
 Automatic matching uses compatible worker profiles and available capacity. Manual routing pins a destination; ordering and pause are explicit controls.
 
-![Choose how a line assigns work](../evidence/worker-system-orchestrator-routing-1440.png)
+![Choose how a line assigns work](../evidence/archive/worker-system-orchestrator-routing-1440.png)
 
 ### 7. Add a Factory when needed
 
 Register existing production lines and inspect aggregate operational state. Factory owns intake and routing without owning the independently launched processes.
 
-![Add a Factory when needed](../evidence/worker-system-factory-dashboard-1440.png)
+![Add a Factory when needed](../evidence/archive/worker-system-factory-dashboard-1440.png)
 
 ### 8. Focus on one production line
 
 Each line has a dedicated dashboard. Compact mobile controls and the 3D/2D map precede the aggregate counts.
 
-![Focus on one production line](../evidence/worker-system-line-dashboard-1440.png)
+![Focus on one production line](../evidence/archive/worker-system-line-dashboard-1440.png)
 
 ### 9. Route Factory intake durably
 
 Automatic capability/capacity matching and manual line selection are available. Unmatched work remains queued with a reason; retries preserve the pinned delivery and idempotency key.
 
-![Route Factory intake durably](../evidence/worker-system-factory-intake-1440.png)
+![Route Factory intake durably](../evidence/archive/worker-system-factory-intake-1440.png)
 
 ## Complete desktop and mobile evidence
 
 | Feature | What it demonstrates | Desktop | Mobile |
 | --- | --- | --- | --- |
-| Give one worker a task | New task plus its first message queues one task session. Follow-ups preserve its context. Chat, local file tasks and remote assignments share one execution slot. | [1440px](../evidence/worker-system-worker-chat-1440.png) | [390px](../evidence/worker-system-worker-chat-390.png) |
-| Approve local file input | Run task is an explicit file-task editor. It captures the approved files into a separate task session and produces a review patch. | [1440px](../evidence/worker-system-worker-run-task-1440.png) | [390px](../evidence/worker-system-worker-run-task-390.png) |
-| Manage the worker’s queue | History combines task sessions, the configurable local taskboard and retained orchestrator evidence. More queue places do not increase execution concurrency. | [1440px](../evidence/worker-system-worker-history-1440.png) | [390px](../evidence/worker-system-worker-history-390.png) |
-| Review before applying | The worker prepares a downloadable patch from approved file snapshots. The user reviews and applies it; model output does not silently modify the checkout. | [1440px](../evidence/worker-system-worker-patch-review-1440.png) | [390px](../evidence/worker-system-worker-patch-review-390.png) |
-| Inspect the worker and its environment | Dashboard shows connection state, queued and active work, execution profiles and host/process observations. A standalone worker is healthy without an orchestrator. | [1440px](../evidence/worker-system-worker-dashboard-1440.png) | [390px](../evidence/worker-system-worker-dashboard-390.png) |
-| Connect providers and enroll later | Configure subscription CLI or API connections on the worker. Add an orchestrator when needed; private keys are never returned to the browser. | [1440px](../evidence/worker-system-worker-connections-1440.png) | [390px](../evidence/worker-system-worker-connections-390.png) |
-| Learn the worker | The replayable tour explains task chat, history and monitoring in place. | [1440px](../evidence/worker-system-worker-tour-1440.png) | [390px](../evidence/worker-system-worker-tour-390.png) |
-| Add an independent production line | An independently started orchestrator accepts worker enrollment and opens on its dashboard. The 3D/2D process map and focused workspaces share current observations. | [1440px](../evidence/worker-system-orchestrator-dashboard-1440.png) | [390px](../evidence/worker-system-orchestrator-dashboard-390.png) |
-| Choose how a line assigns work | Automatic matching uses compatible worker profiles and available capacity. Manual routing pins a destination; ordering and pause are explicit controls. | [1440px](../evidence/worker-system-orchestrator-routing-1440.png) | [390px](../evidence/worker-system-orchestrator-routing-390.png) |
-| Interact without leaving the line | The interaction widget offers worker-backed task chat and separate routed task submission. Only the worker prompts the model. | [1440px](../evidence/worker-system-orchestrator-chat-1440.png) | [390px](../evidence/worker-system-orchestrator-chat-390.png) |
-| Learn the orchestrator | The tour explains the line dashboard, routing, workers and evidence. | [1440px](../evidence/worker-system-orchestrator-tour-1440.png) | [390px](../evidence/worker-system-orchestrator-tour-390.png) |
-| Add a Factory when needed | Register existing production lines and inspect aggregate operational state. Factory owns intake and routing without owning the independently launched processes. | [1440px](../evidence/worker-system-factory-dashboard-1440.png) | [390px](../evidence/worker-system-factory-dashboard-390.png) |
-| Focus on one production line | Each line has a dedicated dashboard. Compact mobile controls and the 3D/2D map precede the aggregate counts. | [1440px](../evidence/worker-system-line-dashboard-1440.png) | [390px](../evidence/worker-system-line-dashboard-390.png) |
-| Act from the line dashboard | Open a registered worker’s task chat or submit work through the selected line’s router from the same interaction widget. | [1440px](../evidence/worker-system-line-interaction-1440.png) | [390px](../evidence/worker-system-line-interaction-390.png) |
-| Learn the selected line | The contextual line tour points to the dashboard, interaction and orchestrator navigation. | [1440px](../evidence/worker-system-line-tour-1440.png) | [390px](../evidence/worker-system-line-tour-390.png) |
-| Route Factory intake durably | Automatic capability/capacity matching and manual line selection are available. Unmatched work remains queued with a reason; retries preserve the pinned delivery and idempotency key. | [1440px](../evidence/worker-system-factory-intake-1440.png) | [390px](../evidence/worker-system-factory-intake-390.png) |
-| Learn Factory scope | The Factory tour explains ownership, registration, aggregate monitoring and intake. | [1440px](../evidence/worker-system-factory-tour-1440.png) | [390px](../evidence/worker-system-factory-tour-390.png) |
+| Give one worker a task | New task plus its first message queues one task session. Follow-ups preserve its context. Chat, local file tasks and remote assignments share one execution slot. | [1440px](../evidence/archive/worker-system-worker-chat-1440.png) | [390px](../evidence/archive/worker-system-worker-chat-390.png) |
+| Approve local file input | Run task is an explicit file-task editor. It captures the approved files into a separate task session and produces a review patch. | [1440px](../evidence/archive/worker-system-worker-run-task-1440.png) | [390px](../evidence/archive/worker-system-worker-run-task-390.png) |
+| Manage the worker’s queue | History combines task sessions, the configurable local taskboard and retained orchestrator evidence. More queue places do not increase execution concurrency. | [1440px](../evidence/archive/worker-system-worker-history-1440.png) | [390px](../evidence/archive/worker-system-worker-history-390.png) |
+| Review before applying | The worker prepares a downloadable patch from approved file snapshots. The user reviews and applies it; model output does not silently modify the checkout. | [1440px](../evidence/archive/worker-system-worker-patch-review-1440.png) | [390px](../evidence/archive/worker-system-worker-patch-review-390.png) |
+| Inspect the worker and its environment | Dashboard shows connection state, queued and active work, execution profiles and host/process observations. A standalone worker is healthy without an orchestrator. | [1440px](../evidence/archive/worker-system-worker-dashboard-1440.png) | [390px](../evidence/archive/worker-system-worker-dashboard-390.png) |
+| Connect providers and enroll later | Configure subscription CLI or API connections on the worker. Add an orchestrator when needed; private keys are never returned to the browser. | [1440px](../evidence/archive/worker-system-worker-connections-1440.png) | [390px](../evidence/archive/worker-system-worker-connections-390.png) |
+| Learn the worker | The replayable tour explains task chat, history and monitoring in place. | [1440px](../evidence/archive/worker-system-worker-tour-1440.png) | [390px](../evidence/archive/worker-system-worker-tour-390.png) |
+| Add an independent production line | An independently started orchestrator accepts worker enrollment and opens on its dashboard. The 3D/2D process map and focused workspaces share current observations. | [1440px](../evidence/archive/worker-system-orchestrator-dashboard-1440.png) | [390px](../evidence/archive/worker-system-orchestrator-dashboard-390.png) |
+| Choose how a line assigns work | Automatic matching uses compatible worker profiles and available capacity. Manual routing pins a destination; ordering and pause are explicit controls. | [1440px](../evidence/archive/worker-system-orchestrator-routing-1440.png) | [390px](../evidence/archive/worker-system-orchestrator-routing-390.png) |
+| Interact without leaving the line | The interaction widget offers worker-backed task chat and separate routed task submission. Only the worker prompts the model. | [1440px](../evidence/archive/worker-system-orchestrator-chat-1440.png) | [390px](../evidence/archive/worker-system-orchestrator-chat-390.png) |
+| Learn the orchestrator | The tour explains the line dashboard, routing, workers and evidence. | [1440px](../evidence/archive/worker-system-orchestrator-tour-1440.png) | [390px](../evidence/archive/worker-system-orchestrator-tour-390.png) |
+| Add a Factory when needed | Register existing production lines and inspect aggregate operational state. Factory owns intake and routing without owning the independently launched processes. | [1440px](../evidence/archive/worker-system-factory-dashboard-1440.png) | [390px](../evidence/archive/worker-system-factory-dashboard-390.png) |
+| Focus on one production line | Each line has a dedicated dashboard. Compact mobile controls and the 3D/2D map precede the aggregate counts. | [1440px](../evidence/archive/worker-system-line-dashboard-1440.png) | [390px](../evidence/archive/worker-system-line-dashboard-390.png) |
+| Act from the line dashboard | Open a registered worker’s task chat or submit work through the selected line’s router from the same interaction widget. | [1440px](../evidence/archive/worker-system-line-interaction-1440.png) | [390px](../evidence/archive/worker-system-line-interaction-390.png) |
+| Learn the selected line | The contextual line tour points to the dashboard, interaction and orchestrator navigation. | [1440px](../evidence/archive/worker-system-line-tour-1440.png) | [390px](../evidence/archive/worker-system-line-tour-390.png) |
+| Route Factory intake durably | Automatic capability/capacity matching and manual line selection are available. Unmatched work remains queued with a reason; retries preserve the pinned delivery and idempotency key. | [1440px](../evidence/archive/worker-system-factory-intake-1440.png) | [390px](../evidence/archive/worker-system-factory-intake-390.png) |
+| Learn Factory scope | The Factory tour explains ownership, registration, aggregate monitoring and intake. | [1440px](../evidence/archive/worker-system-factory-tour-1440.png) | [390px](../evidence/archive/worker-system-factory-tour-390.png) |
 
 ## Independent review and polishing
 
@@ -195,4 +195,4 @@ cross-platform result.
 
 For operating instructions, see [Use the worker webview](../how-to/use-worker-webview.md)
 and [Assemble independent components](../how-to/assemble-independent-components.md).
-Machine-readable observations are in [validation evidence](../evidence/worker-system-validation.json).
+Machine-readable observations are in [validation evidence](../evidence/archive/worker-system-validation.json).

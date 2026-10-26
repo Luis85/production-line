@@ -15,9 +15,9 @@ function plan(value: ManagedSetupPlan, projectId: string) {
     }) || new Set(value.files.map(file => file.path.toLowerCase())).size !== value.files.length || managedSetupDigest(subject) !== planDigest) invalid();
 }
 /** A bounded private outbox keeps the preview and exact commit before the first remote mutation. */
-export function managedProjectSetupStorage(stateDirectory: string, projectId: string) {
+export function managedProjectSetupStorage(stateDirectory: string, projectId: string, privateDirectory = join(stateDirectory, 'projects', projectId)) {
   identifier(projectId, 'Project ID');
-  const directory = join(stateDirectory, 'projects', projectId), path = join(directory, 'workflow-setup.json');
+  const directory = privateDirectory, path = join(directory, 'workflow-setup.json');
   return {
     async load(): Promise<ManagedSetupState> {
       let raw: string;

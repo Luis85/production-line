@@ -1,3 +1,4 @@
+import { waitForRuntimeReadiness as until } from '../helpers/runtime-readiness.mjs';
 import { testErrorStatus } from '../helpers/process-errors.mjs';
 import { testErrorMessage, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
@@ -13,7 +14,6 @@ import { parse as nativeParse } from '../../scripts/runtime/cli.mjs';
 import { parse as systemParse } from '../../scripts/system/cli.mjs';
 import { captureServiceLogs } from '../../scripts/runtime/service-logs.mjs';
 const source = fileURLToPath(new URL('../../', import.meta.url));
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 function launch(args, environment = {}) {
   const env = { ...process.env }; for (const key of ['WERK_STATE_DIR', 'WERK_SYSTEM_FILE', 'WERK_LOG_OUTPUT']) delete env[key];
   const child = spawn(process.execPath, [join(source, 'werk.mjs'), ...args], { cwd: source, env: { ...env, ...environment }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -21,7 +21,7 @@ function launch(args, environment = {}) {
   const done = new Promise((resolve, reject) => { child.once('error', reject); child.once('close', code => resolve({ code, output, errors })); });
   return { child, done, get output() { return output; }, get errors() { return errors; } };
 }
-async function until(check, label) { const deadline = Date.now() + 20000; while (Date.now() < deadline) { const result = await check(); if (result) return result; await delay(30); } throw Error('Timed out: ' + label); }
+
 function records(owner) { return owner.output.split('\n').filter(line => line.startsWith('{')).map(line => { try { return JSON.parse(line); } catch { return {}; } }); }
 async function ports(count) { const servers = []; try { for (let n = 0; n < count; n++) { const server = createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined))); servers.push(server); } return servers.map(server => testListeningAddress(server).port); } finally { await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve)))); } }
 async function fixture(t) { const root = await mkdtemp(join(tmpdir(), 'werk-log-output-')); t.after(() => rm(root, { recursive: true, force: true })); return root; }
@@ -63,7 +63,7 @@ test('native human stream sends both service types to stdout, omits local logs a
   assert.equal(setup.code, 0, setup.output + setup.errors); assert.equal(JSON.parse(setup.output).created, true);
   const credentials = JSON.parse(await readFile(join(stateDir, 'credentials.json'), 'utf8'));
   const owner = launch(['start', '--no-open'], env); await stopOnFinish(t, owner);
-  await until(() => owner.output.includes('Werk is ready:'), 'native readiness');
+  await until(() => owner.output.includes('Werk is ready:'), 'native readiness', owner);
   const marker = 'private-request-marker'; await request(port, '/v1/tasks/' + marker + '?token=' + marker, credentials.WERK_ADMIN_TOKEN); await request(workerPort, '/status?token=' + marker);
   await until(() => ['orchestrator', 'worker'].every(service => records(owner).some(value => value.entry?.service === service && value.entry?.event === 'request_finished')), 'both native service logs');
   const status = await launch(['status', '--json'], env).done; assert.equal(status.code, 0); assert.equal(JSON.parse(status.output).state, 'running');
@@ -80,7 +80,7 @@ for (const mode of ['stream', 'both']) test(`system ${mode} propagates Factory, 
   const env = { WERK_STATE_DIR: stateDir, WERK_SYSTEM_FILE: file, WERK_LOG_OUTPUT: mode };
   const setup = await launch(['system', 'setup', '--json'], env).done; assert.equal(setup.code, 0, setup.output + setup.errors); assert.equal(JSON.parse(setup.output).created, true);
   const owner = launch(['system', 'start', '--json'], env); await stopOnFinish(t, owner);
-  await until(() => records(owner).some(record => record.event === 'ready'), 'system readiness');
+  await until(() => records(owner).some(record => record.event === 'ready'), 'system readiness', owner);
   const credentials = JSON.parse(await readFile(join(stateDir, 'lines/alpha/credentials.json'), 'utf8'));
   const factoryCredentials = JSON.parse(await readFile(join(stateDir, 'factory/credentials.json'), 'utf8'));
   const marker = 'private-request-marker'; await request(port, '/v1/tasks/' + marker + '?token=' + marker, credentials.WERK_ADMIN_TOKEN); await request(workerPort, '/status?token=' + marker);

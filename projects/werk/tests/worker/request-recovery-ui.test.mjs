@@ -6,14 +6,14 @@ import { reactive, ref, computed, watch, nextTick, effectScope } from 'vue';
 import { frontend } from '../ui/helpers/frontend-loader.mjs';
 const { buildWorkerCapacityView } = await frontend('src/worker/webview/worker-capacity.ts');
 
-async function fixture(t) {
+async function fixture(t, props = {}) {
   const source = await readFile(new URL('../../src/worker/webview/components/TaskInteraction.vue', import.meta.url), 'utf8');
   const parsed = ts.createSourceFile('interaction.ts', source.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1], ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
   const script = ts.createPrinter().printFile(ts.factory.updateSourceFile(parsed, parsed.statements.filter(statement => !ts.isImportDeclaration(statement))));
   const reason = 'No file snapshots were accepted. Inspect the preserved worktree, then create a new request.';
   const state = reactive({ unlocked: true, workspaceBusy: false, draft: 'Retain my follow-up draft', actionError: '', settings: { providers: [] }, sessions: { selected: 'local-failed', execution: { currentSessionId: null }, records: [{ id: 'local-failed', title: 'Failed request', status: 'failed', provider: 'codex-cli', continuationBlockedReason: reason }, { id: 'normal', title: 'Normal request', status: 'completed', provider: 'codex-cli' }] }, board: { tasks: [{ id: 'failed', sessionId: 'local-failed', admissionFailure: { paths: ['src/a.ts'] }, error: reason, worktree: '/worktrees/preserved' }] }, chat: { available: true, busy: false, messages: [], phase: 'idle' } });
   const calls = [], focused = [], navigations = [];
-  const ports = { reactive, ref, computed, watch, nextTick, state, useRouter: () => ({ push: async path => { navigations.push(path); } }), buildWorkerCapacityView, getCapacityFreshness: () => 'fresh', onActivated() {}, onDeactivated() {}, onBeforeUnmount() {}, defineEmits: () => () => {}, defineExpose() {}, chatAction: async action => calls.push(action), request: async () => ({}), workspaceAction: async (path, body) => { calls.push({ path, body }); return {}; }, document: { getElementById: id => ({ focus: () => focused.push(id), scrollIntoView() {} }) } };
+  const ports = { defineProps: () => props, reactive, ref, computed, watch, nextTick, state, useRouter: () => ({ push: async path => { navigations.push(path); } }), buildWorkerCapacityView, getCapacityFreshness: () => 'fresh', onActivated() {}, onDeactivated() {}, onBeforeUnmount() {}, defineEmits: () => () => {}, defineExpose() {}, chatAction: async action => calls.push(action), request: async () => ({}), workspaceAction: async (path, body) => { calls.push({ path, body }); return {}; }, document: { getElementById: id => ({ focus: () => focused.push(id), scrollIntoView() {} }) } };
   const javascript = ts.transpile(script, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
   const scope = effectScope(); t.after(() => scope.stop());
   const result = scope.run(() => new Function(...Object.keys(ports), javascript + '\nreturn { failedAdmission, available, act, mode, created, savedRequest, active, intakeBusy, openNewTask, focusConversation, focusControls };')(...Object.values(ports)));
@@ -74,4 +74,16 @@ test('recovery review opens the canonical request without selecting or continuin
   assert.equal(f.state.sessions.selected, 'local-failed');
   assert.deepEqual(f.calls, []);
   assert.equal(f.available.value, false, 'Inspection does not authorize continuation');
+});
+
+
+test('focused request sends New request navigation to its own page without changing selection or draft', async t => {
+  const f = await fixture(t, { existingOnly: true });
+  assert.equal(f.mode.value, 'followup');
+  await f.openNewTask();
+  assert.deepEqual(f.navigations, ['/requests/new']);
+  assert.equal(f.mode.value, 'followup');
+  assert.equal(f.state.sessions.selected, 'local-failed');
+  assert.equal(f.state.draft, 'Retain my follow-up draft');
+  assert.deepEqual(f.calls, []);
 });

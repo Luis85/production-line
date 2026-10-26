@@ -1,3 +1,4 @@
+import { assertManagedProjectIsolation } from './workspace-managed-isolation.js';
 import type { SharedFeatureAuthoring } from '../application/feature-authoring.js';
 import { identifier } from '../../shared/contracts.js';
 import { DomainError } from '../../shared/errors.js';
@@ -5,12 +6,13 @@ import type { WorkspaceContext } from './workspace-context.js';
 import { withRepositoryAdmission } from './workspace-settings.js';
 
 /** Transport selection cannot create an alternate lifecycle for a bound project. */
-export function assertDirectFeatureCreation(workspace: WorkspaceContext, input?: unknown) {
+export async function assertDirectFeatureCreation(workspace: WorkspaceContext, input?: unknown) {
   const body = input as { projectId?: unknown; repository?: unknown; files?: { repository?: unknown }; id?: unknown } | undefined;
   const repository = body?.repository ?? body?.files?.repository;
   const retained = typeof body?.id === 'string' ? workspace.sessions.view().records.find(record => record.id === body.id) : undefined;
   const projectId = body?.projectId ?? retained?.feature?.repositoryId;
   const project = projectId !== undefined ? workspace.featureProjects.resolve(identifier(projectId, 'projectId')) : typeof repository === 'string' ? workspace.featureProjects.forRepository(repository) ?? workspace.featureProjects.primary : workspace.featureProjects.primary;
+  if (workspace.config.homeDir) await assertManagedProjectIsolation(workspace, workspace.featureProjects.id(project), workspace.featureProjects.repository(project));
   if (project.sharedRuntime.intake.binding?.repositoryId)
     throw new DomainError('conflict', 'Shared Git intake owns this project’s Feature Requests. Use New request in the webview or feature prepare/publish to save the project template and publish it before execution.');
 }
@@ -30,5 +32,8 @@ export async function authorFeature(workspace: WorkspaceContext, input: unknown)
   const { projectId, ...command } = input as Record<string, unknown>;
   const project = workspace.featureProjects.resolve(projectId === undefined ? undefined : identifier(projectId, 'projectId'));
   const authoring: SharedFeatureAuthoring = project.sharedRuntime.authoring;
-  return withRepositoryAdmission(workspace, () => authoring.command(command));
+  return withRepositoryAdmission(workspace, async () => {
+    if (workspace.config.homeDir) await assertManagedProjectIsolation(workspace, workspace.featureProjects.id(project), workspace.featureProjects.repository(project));
+    return authoring.command(command);
+  });
 }

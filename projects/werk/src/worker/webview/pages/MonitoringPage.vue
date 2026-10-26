@@ -5,7 +5,6 @@ import UAlert from '@nuxt/ui/components/Alert.vue';
 import MetricsConsumptionPanel from '../components/MetricsConsumptionPanel.vue';
 import MetricsResourcesPanel from '../components/MetricsResourcesPanel.vue';
 import MetricsExecutionPanel from '../components/MetricsExecutionPanel.vue';
-import DeliveryMetricsPanel from '../components/DeliveryMetricsPanel.vue';
 import MetricsProcessesPanel from '../components/MetricsProcessesPanel.vue';
 import { state, date, getCapacityFreshness } from '../store';
 import { buildWorkerCapacityView } from '../worker-capacity';
@@ -34,7 +33,7 @@ const uptime = computed(() => {
 <template>
   <section class="dashboard-page metrics-page">
     <header class="page-heading metrics-heading">
-      <div><p class="metrics-worker">{{ identity }}<span v-if="env?.hostname && env.hostname !== identity"> · {{ env.hostname }}</span></p><h1 tabindex="-1">Metrics</h1><p>Capacity, resources and consumption for this worker.</p></div>
+      <div><p class="metrics-worker">{{ identity }}<span v-if="env?.hostname && env.hostname !== identity"> · {{ env.hostname }}</span></p><h1 tabindex="-1">Worker health</h1><p>Capacity, resources and consumption for this worker.</p></div>
       <UButton to="/settings" color="neutral" variant="outline" icon="i-lucide-settings">Worker settings</UButton>
     </header>
     <UAlert v-for="alert in state.monitoring?.alerts" :key="alert.code" :title="alert.message"
@@ -43,7 +42,7 @@ const uptime = computed(() => {
     <template v-if="state.unlocked">
       <section class="metrics-activity" :data-activity="activity.state" aria-labelledby="metrics-activity-title">
         <div class="activity-summary">
-          <p class="activity-kicker">{{ activity.stale ? 'Last reported activity' : 'Current activity' }}</p>
+
           <h2 id="metrics-activity-title"><span class="activity-dot" aria-hidden="true" />{{ activity.title }}</h2>
           <p v-if="activeTask && capacity?.execution.inUse" class="active-task">{{ activeTask }}</p>
           <p class="activity-description">{{ activity.description }}</p>
@@ -53,7 +52,7 @@ const uptime = computed(() => {
           <div><dt>Local places</dt><dd>{{ capacity ? capacity.local.used + ' / ' + capacity.local.limit : 'Unavailable' }}<small>Includes queued, active &amp; preparing</small></dd></div>
           <div v-if="remoteVisible"><dt>Accepted assignments</dt><dd>{{ capacity?.remote.accepted == null ? 'Unavailable' : capacity.remote.accepted + ' / ' + (capacity.remote.extraQueuePlaces + 1) }}<small>Separate remote buffer</small></dd></div>
         </dl>
-        <UButton to="/taskboard" color="neutral" variant="outline" icon="i-lucide-arrow-up-right">View taskboard</UButton>
+        <UButton to="/workboard" color="neutral" variant="outline" icon="i-lucide-arrow-up-right">Open Workboard</UButton>
       </section>
 
       <div class="metrics-overview">
@@ -61,8 +60,8 @@ const uptime = computed(() => {
         <MetricsResourcesPanel />
       </div>
       <MetricsProcessesPanel />
-      <DeliveryMetricsPanel />
-      <MetricsExecutionPanel />
+      <details class="metrics-diagnostics"><summary>Execution usage and outcomes</summary><MetricsExecutionPanel /></details>
+      <p class="page-note"><RouterLink to="/workflow">Inspect delivery health</RouterLink> for Feature Request flow, delivered increments and quality evidence.</p>
 
       <details class="metrics-diagnostics">
         <summary>Runtime &amp; connection details</summary>
@@ -112,9 +111,9 @@ const uptime = computed(() => {
 .metrics-heading .metrics-worker { color: var(--ui-text-muted); font-size: .875rem; margin-bottom: var(--space-1); overflow-wrap: anywhere; }
 .metrics-heading h1 { margin-bottom: var(--space-1); }
 .metrics-page :deep(button), .metrics-page :deep(a[class]) { min-height: 44px; }
-.metrics-activity { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-6); padding: var(--space-6); margin-bottom: var(--space-6); background: var(--ui-bg-muted); border-left: 3px solid var(--ui-border-accented); }
-.metrics-activity[data-activity=running], .metrics-activity[data-activity=available] { border-left-color: var(--ui-primary); }
-.metrics-activity[data-activity=blocked], .metrics-activity[data-activity=paused] { border-left-color: var(--ui-warning); }
+.metrics-activity { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-6); padding: var(--space-6); margin-bottom: var(--space-6); background: var(--ui-bg-muted);  }
+
+
 .activity-summary { flex: 1 1 310px; min-width: 0; }
 .activity-kicker { color: var(--ui-text-muted); font-size: .8125rem; margin: 0 0 var(--space-1); }
 .activity-summary h2 { margin: 0; font-size: 1.125rem; display: flex; align-items: center; gap: var(--space-2); }

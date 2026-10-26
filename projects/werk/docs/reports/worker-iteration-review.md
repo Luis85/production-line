@@ -67,16 +67,16 @@ Deletion cleanup failure can leave an unindexed transcript in the private state 
 
 ### Chat on mobile
 
-![Chat on mobile](../evidence/worker-iteration-chat-mobile.png)
+![Chat on mobile](../evidence/archive/worker-iteration-chat-mobile.png)
 
 ### File editor at 320px
 
-![File task editor](../evidence/worker-iteration-file-editor-320.png)
+![File task editor](../evidence/archive/worker-iteration-file-editor-320.png)
 
 ### History on desktop
 
-![History](../evidence/worker-iteration-history-desktop.png)
+![History](../evidence/archive/worker-iteration-history-desktop.png)
 
 ### Dashboard on desktop
 
-![Dashboard](../evidence/worker-iteration-dashboard-desktop.png)
+![Dashboard](../evidence/archive/worker-iteration-dashboard-desktop.png)

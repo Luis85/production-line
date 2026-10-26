@@ -18,6 +18,7 @@ export interface ReadyReviewOptions {
   model(profile: ModelProvider, binding: ModelSessionBinding): ConversationModel | undefined;
   assertCanAdmit(): void;
   authorize?(authority: NonNullable<ReadyReviewInput['deliveryAuthority']>): void;
+  verifyAuthority?(authority: NonNullable<ReadyReviewInput['deliveryAuthority']>): Promise<void>;
   maxRuntimeMs?: () => number;
 }
 interface Prepared { attempt: ReadyReviewAttempt; model: ConversationModel; dispatch: ModelRequest; }
@@ -91,6 +92,10 @@ export class ReadyReviewManager implements ReadyReviewPort {
     let turn: InteractionTurn | undefined, runId: string | undefined;
     try {
       signal.throwIfAborted();
+      if (input.deliveryAuthority && this.options.verifyAuthority) {
+        await this.verifyAuthority(input, signal);
+        this.authorize(input);
+      }
       const provider = structuredClone(this.options.profile(input));
       if (provider.id !== input.provider || input.selection && (provider.model !== input.selection.model || provider.effort !== input.selection.effort || provider.authenticationMode !== input.selection.authenticationMode))
         throw new DomainError('conflict', 'Ready Check provider, model and effort do not match the accepted selection.');
@@ -128,6 +133,7 @@ export class ReadyReviewManager implements ReadyReviewPort {
       release = await this.options.executor.acquire(sessionId, controller.signal);
       signal = AbortSignal.any([controller.signal, AbortSignal.timeout(dispatch.policy.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS)]);
       if (this.persistenceError) throw new DomainError('unavailable', 'Ready Check evidence storage is unavailable.');
+      await this.verifyAuthority(input, signal);
       this.inspect(input); // Verify the durable scope again before any paid call.
       this.authorize(input);
       await this.options.runs.start(runId);
@@ -164,6 +170,11 @@ export class ReadyReviewManager implements ReadyReviewPort {
       catch { this.failEvidence(); }
       release?.();
     }
+  }
+  private async verifyAuthority(input: ReadyReviewInput, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    if (input.deliveryAuthority && this.options.verifyAuthority) await this.options.verifyAuthority(input.deliveryAuthority);
+    signal.throwIfAborted();
   }
   private authorize(input: ReadyReviewInput): void {
     if (!input.deliveryAuthority) return;

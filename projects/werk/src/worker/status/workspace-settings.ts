@@ -177,7 +177,7 @@ export async function integrations(workspace: WorkspaceContext, input: unknown =
     if (body.action === "apply")
       throw new DomainError(
         "conflict",
-        "Start an installed project worker or configure its project directory before synchronizing integrations.",
+        "This legacy integration requires its retained project configuration. For Werk Home, manage the registered project and its committed instructions from Projects.",
       );
     return {
       schemaVersion: 1 as const,

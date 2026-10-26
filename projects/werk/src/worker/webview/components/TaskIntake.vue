@@ -120,7 +120,7 @@ defineExpose({ focusInstructions });
     <p class="intake-intro">Describe the outcome. The worker saves a Markdown feature request and tracks its progress and results.</p>
     <form :aria-busy="sending" @submit.prevent="create">
       <fieldset :disabled="sending || state.workspaceBusy || !!intake.pending" class="contents">
-        <div v-if="repositories.length" class="intake-field"><label for="new-task-project">Project</label><select id="new-task-project" v-model="intake.repository"><option value="">Worker installation project</option><option v-for="repository in repositories" :key="repository.id" :value="repository.id">{{ repository.id }}</option></select></div>
+        <div v-if="repositories.length" class="intake-field"><label for="new-task-project">Project</label><select id="new-task-project" v-model="intake.repository"><option value="">Retained legacy project</option><option v-for="repository in repositories" :key="repository.id" :value="repository.id">{{ repository.id }}</option></select></div>
         <p v-if="projectLoading" class="intake-help" role="status">Checking the selected project’s intake…</p><p v-if="selectedProject.error.value" class="error-text" role="alert">{{ selectedProject.error.value }} Refresh before submitting this project request.</p>
         <div class="intake-field"><label for="new-task-priority">Priority</label><select id="new-task-priority" v-model="intake.priority"><option v-for="priority in featurePriorityOptions" :key="priority.value" :value="priority.value">{{ priority.label }}</option></select></div>
         <div class="intake-field intake-message">

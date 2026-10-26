@@ -6,6 +6,7 @@ import { cp, mkdtemp, mkdir, readFile, writeFile, rm, chmod, stat, access, realp
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { legacyProjectFixture } from '../helpers/legacy-project-worker.mjs';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url)), exec = promisify(execFile);
 const cleanEnvironment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('WERK_')));
@@ -62,10 +63,10 @@ for (const kind of ['worker', 'factory', 'orchestrator']) test(`${kind} portable
   await ok(entry, elsewhere, ['stop', '--state-dir', state]);
 });
 
-test('project init and npm use the same root environment while Docker receives explicit env-file guidance', { timeout: 120000 }, async t => {
+test('legacy project fixture and npm use the same root environment while Docker receives explicit env-file guidance', { timeout: 120000 }, async t => {
   const outer = await realpath(await mkdtemp(join(tmpdir(), 'werk environment npm '))), project = join(outer, 'project'), elsewhere = join(outer, 'caller');
   await mkdir(project); await mkdir(elsewhere);
-  const installed = await ok(join(root, 'bin/apps/worker/cli.mjs'), elsewhere, ['init', '--project-dir', project]);
+  const installed = await legacyProjectFixture(project);
   const entry = join(installed.application, 'cli.mjs'), state = join(project, '.werk/worker'), path = join(project, '.env');
   await ownWorkspace(t, outer, async () => { await invoke(entry, elsewhere, ['stop', '--state-dir', state]); });
   const contents = await readFile(path, 'utf8'), token = parseEnv(contents).WERK_WORKER_TOKEN;
@@ -79,7 +80,7 @@ test('project init and npm use the same root environment while Docker receives e
   assert.equal(started.stateDirectory, state);
   assert.equal((await fetch(started.url + '/api/settings', { headers: { authorization: 'Bearer ' + token } })).status, 200);
   await ok(entry, elsewhere, ['stop', '--state-dir', state]);
-  await ok(entry, elsewhere, ['init', '--project-dir', project]); assert.equal(await readFile(path, 'utf8'), contents);
+  await legacyProjectFixture(project); assert.equal(await readFile(path, 'utf8'), contents);
   if (process.platform !== 'win32') {
     await chmod(path, 0o644);
     assert.equal((await invoke(entry, elsewhere, ['start', '--project-dir', project, '--port', '0'])).code, 2);
@@ -87,7 +88,7 @@ test('project init and npm use the same root environment while Docker receives e
   }
 });
 
-test('project init adopts custom state selected by dotenv or process and never copies installer credentials', { timeout: 60000 }, async t => {
+test('legacy fixture preserves custom state selected by dotenv or process and never copies installer credentials', { timeout: 60000 }, async t => {
   const outer = await realpath(await mkdtemp(join(tmpdir(), 'werk environment setup ')));
   t.after(() => rm(outer, { recursive: true, force: true }));
   const source = join(outer, 'installer'); await cp(join(root, 'bin/apps/worker'), source, { recursive: true });
@@ -98,7 +99,7 @@ test('project init adopts custom state selected by dotenv or process and never c
     await writeFile(join(state, 'webview-token'), 'e'.repeat(64) + '\n', { mode: 0o600 });
     if (selector === 'dotenv') await writeFile(join(project, '.env'), 'WERK_WORKER_STATE_DIR=existing-state\n', { mode: 0o600 });
     const environment = selector === 'process' ? { WERK_WORKER_STATE_DIR: 'existing-state', WERK_WORKER_PORT: '4209' } : {};
-    const installed = await ok(join(source, 'cli.mjs'), outer, ['init', '--project-dir', project], environment);
+    const installed = await legacyProjectFixture(project, [], source, { ...cleanEnvironment, ...environment });
     assert.equal(installed.stateDirectory, state);
     const values = parseEnv(await readFile(join(project, '.env'), 'utf8'));
     assert.equal(values.WERK_WORKER_TOKEN, 'e'.repeat(64)); assert.equal(values.WERK_WORKER_STATE_DIR, 'existing-state');
@@ -109,14 +110,13 @@ test('project init adopts custom state selected by dotenv or process and never c
   }
 });
 
-test('project init rejects invalid installer entries before creating environment secrets', { timeout: 60000 }, async t => {
+test('legacy fixture rejects invalid installer entries before creating environment secrets', { timeout: 60000 }, async t => {
   const outer = await realpath(await mkdtemp(join(tmpdir(), 'werk environment preflight ')));
   t.after(() => rm(outer, { recursive: true, force: true }));
   const source = join(outer, 'installer'), project = join(outer, 'project'), target = join(outer, 'target');
   await mkdir(project); await mkdir(target); await cp(join(root, 'bin/apps/worker'), source, { recursive: true });
   try { await symlink(target, join(source, 'invalid-entry'), process.platform === 'win32' ? 'junction' : 'dir'); }
   catch (error) { if (process.platform === 'win32' && error.code === 'EPERM') return t.skip('Junction creation unavailable'); throw error; }
-  const result = await invoke(join(source, 'cli.mjs'), outer, ['init', '--project-dir', project]);
-  assert.equal(result.code, 2); assert.match(result.stderr, /symbolic links/);
+  await assert.rejects(legacyProjectFixture(project, [], source), /symbolic links/);
   await assert.rejects(access(join(project, '.env')), { code: 'ENOENT' });
 });

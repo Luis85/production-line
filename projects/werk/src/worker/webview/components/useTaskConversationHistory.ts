@@ -1,10 +1,10 @@
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { computed, nextTick, ref, watch, onActivated } from 'vue';
-import { state, date, workspaceAction, taskStatus } from '../store';
+import { state, date, taskStatus } from '../store';
 
-/** Filters saved conversations and restores their task context when opened. */
+/** Read-only filters for retained request conversations. */
 export function useTaskConversationHistory() {
-  const route = useRoute(), router = useRouter(), opening = ref('');
+  const route = useRoute();
   const chatSearch = ref(''), chatStatus = ref('all'), chatArchive = ref('active'), taskKind = ref('all');
   const taskKindOptions = [{ label: 'All task types', value: 'all' }, { label: 'Chat tasks', value: 'chat' }, { label: 'File tasks', value: 'local' }, { label: 'Assigned tasks', value: 'orchestrator' }];
   const kindLabel = (kind: string) => kind === 'local' ? 'File task' : kind === 'orchestrator' ? 'Assigned task' : 'Chat task';
@@ -30,7 +30,6 @@ export function useTaskConversationHistory() {
     [item.title, item.taskId, item.provider].join(' ').toLowerCase().includes(chatSearch.value.trim().toLowerCase())
   ).slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
   function clearChatFilters() { chatSearch.value = ''; chatStatus.value = 'all'; chatArchive.value = 'all'; taskKind.value = 'all'; }
-  async function openChat(id: string) { if (opening.value) return; opening.value = id; try { if (await workspaceAction('/api/sessions', { action: 'select', id })) await router.push({ path: '/taskboard', query: { session: id } }); } finally { opening.value = ''; } }
 
   return {
     allChatTasks,
@@ -43,8 +42,6 @@ export function useTaskConversationHistory() {
     clearChatFilters,
     date,
     kindLabel,
-    openChat,
-    opening,
     state,
     taskKind,
     taskKindOptions,

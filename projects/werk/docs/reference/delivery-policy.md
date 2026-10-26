@@ -11,7 +11,7 @@ The JSON schema is strict: unknown fields and invalid enum values are rejected. 
 The installed CLI uses the same authenticated application commands and reads the worker's local credentials privately. With the worker running, save a JSON command to a file and submit it:
 
 ```sh
-node bin/apps/worker/cli.mjs api --path /api/requests --method POST --file policy-command.json
+node runtime/bin/apps/worker/cli.mjs api --path /api/requests --method POST --file policy-command.json --state-dir state/worker
 ```
 
 In Git Bash, prefix the command with `MSYS_NO_PATHCONV=1` (or use PowerShell or cmd). MSYS converts arguments that start with `/` into Windows paths, which makes `api --path /api/requests` fail with "Use a local API path and supported method".
