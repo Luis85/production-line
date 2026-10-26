@@ -31,7 +31,7 @@ Qualification: native archive, browser, Git, Docker and VM checks use labelled p
 
 ### Fixed
 
-- Linux CI browser setup uses the canonical Ubuntu mirror for system libraries while retaining the locked Playwright browser, signed packages and existing verification/job limits.
+- Linux CI browser setup covers direct apt sources and runner mirror lists, using the canonical Ubuntu mirror for system libraries while retaining the locked Playwright browser, signed packages and existing verification/job limits.
 
 - Synthetic Docker packaging tests isolate and restore the complete GitHub ref environment, so tagged qualification checks the real release version without applying that version to the fixture. Production tag/version guards remain unchanged.
 
