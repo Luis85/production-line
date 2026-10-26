@@ -1,7 +1,7 @@
 /** Independent release gate: one definition, Factory, two isolated lines, three workers. */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, rm, access, cp } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, access, cp, realpath } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -10,11 +10,11 @@ import { extractRelease } from './extract.mjs';
 import { apply as applyHomeUpdate, homeUpdateStatus } from '../runtime/home-update/transaction.mjs';
 const args = process.argv.slice(2);
 if (![2, 4].includes(args.length) || args[0] !== '--root' || (args.length === 4 && args[2] !== '--update-archives')) throw Error('Usage: node scripts/release/system-smoke.mjs --root EXTRACTED_RELEASE [--update-archives ARCHIVES]');
-let root = resolve(args[1]);
+let root = await realpath(resolve(args[1]));
 const homeLayout = JSON.parse(await readFile(join(root, 'release-manifest.json'), 'utf8')).layout === 'werk-home-v1';
 let homeUpdateConfirmed = false;
-const updateArchives = args[3] ? resolve(args[3]) : undefined;
-const scratch = await mkdtemp(join(tmpdir(), 'werk system smoke '));
+const updateArchives = args[3] ? await realpath(resolve(args[3])) : undefined;
+const scratch = await realpath(await mkdtemp(join(tmpdir(), 'werk system smoke ')));
 if (updateArchives) {
   const original = root; root = join(scratch, 'previous release');
   await cp(original, root, { recursive: true });
