@@ -2,7 +2,7 @@
 
 The current WerkHome runtime is packaged as `werk-VERSION.tar.gz` and
 `werk-VERSION.zip`. Archive entries extract directly into the chosen Home; there
-is no inner version directory. This layout starts with Werk 0.17.0; the published 0.16 archive retains its original layout. Obtain the matching archive and
+is no inner version directory. This layout starts with Werk 0.17.1; the published 0.16 archive retains its original layout. Obtain the matching archive and
 `SHA256SUMS` from a delivery source you trust. Checksums detect corruption or mismatch; an unsigned checksum
 file does not independently authenticate its publisher.
 
@@ -269,14 +269,14 @@ Forge generates `.github/workflows/werk--release.yml`. Edit the source, then run
 manual branch runs qualify candidates without publishing.
 
 1. Update `projects/werk/package.json` and its lockfile to the desired version in
-   a reviewed change (for example, `0.16.0`). Merge to `main` after checks pass.
+   a reviewed change (for example, `0.17.1`). Merge to `main` after checks pass.
 2. From a clean checkout of the merged commit, create and push its matching tag:
 
    ```sh
    git switch main
    git pull --ff-only origin main
-   git tag -a v0.16.0 -m "Werk 0.16.0"
-   git push origin v0.16.0
+   git tag -a v0.17.1 -m "Werk 0.17.1"
+   git push origin v0.17.1
    ```
 
 3. Watch **Actions → Werk release**. The tag must match `package.json`, use a
