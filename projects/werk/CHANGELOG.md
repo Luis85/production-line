@@ -24,7 +24,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 ### Fixed
 
 - A lost checkpoint-answer acknowledgement keeps its recovery controls visible after the server advances; retry replays the same immutable command once before another response is allowed. Project setup stays on the chosen goal through publication and retains uncertain operations with their original project.
-- Review names passed required checks separately from pending human acceptance. Project next-step links retain readable text and focused task/history controls meet the 44 px target.
+- Review names passed required checks separately from pending human acceptance. Project next-step links retain readable text and focused task/history controls meet the 44 px target. Long unbroken project names wrap within narrow screens.
 
 ## [0.16.0] - 2026-10-25
 

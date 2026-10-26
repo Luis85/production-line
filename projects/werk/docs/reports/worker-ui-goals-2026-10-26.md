@@ -199,6 +199,14 @@ Post-change verification on the polished working tree:
   no blocking goal, identity, consent, stale-data or recovery issues. Sampled
   primary-action text contrast measured 11.18:1. Its minor retained task shortcut
   target-size finding was corrected to 44 px.
+- All 126 remaining catalogue desktop/mobile cases pass actual readiness,
+  console/page errors, overflow and declared-component mount checks.
+- Catalogue declarations now match the actual scenario: private-instruction
+  retention does not claim the unmounted prepared-details editor. Prepared
+  scenarios retain that editor coverage. The long unbroken project-name case
+  also exposed a narrow-screen row overflow; project names now wrap. Windows
+  temporary-directory cleanup retries transient filesystem locks within a bounded
+  budget, preserving assertions and the existing test time limits.
 - All quality gates pass: lint, LOC, dead-code/architecture analysis, application
   and test types. The full local suite exposed two old direct-evaluation test
   harnesses; their props/ports and read-only History contract were updated. All

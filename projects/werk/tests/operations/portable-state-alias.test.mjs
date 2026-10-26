@@ -24,7 +24,7 @@ async function fixture(t) {
   }
   async function cli(...args) { const result = await invoke(...args); assert.equal(result.code, 0, result.stderr); return JSON.parse(result.stdout); }
   async function start(state) { states.add(state); return cli('start', '--state-dir', state, '--port', '0'); }
-  t.after(async () => { for (const state of states) await invoke('stop', '--state-dir', state).catch(() => {}); await rm(outer, { recursive: true, force: true }); });
+  t.after(async () => { for (const state of states) await invoke('stop', '--state-dir', state).catch(() => {}); await rm(outer, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
   async function api(started, path, body) {
     const token = (await readFile(started.credentialsFile, 'utf8')).trim();
     const response = await fetch(started.url + path, { method: body === undefined ? 'GET' : 'POST', headers: { authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
