@@ -146,5 +146,87 @@
         "mode": "candidate-tools"
       }
     ]
-  }
+  },
+  "standaloneAuthoringConfirmation": [
+    {
+      "id": "worker-shared-feature-requests--describe-request",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--complete-request-details",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--submit-for-ready-check",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--select-request-model",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--new-request-uses-updated-defaults",
+      "width": 1440,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--describe-request",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--complete-request-details",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--submit-for-ready-check",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--select-request-model",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    },
+    {
+      "id": "worker-shared-feature-requests--new-request-uses-updated-defaults",
+      "width": 390,
+      "ready": true,
+      "overflow": false,
+      "errors": [],
+      "timeout": ""
+    }
+  ]
 }

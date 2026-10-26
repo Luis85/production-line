@@ -192,6 +192,9 @@ Post-change verification on the polished working tree:
 - Confirmation: all 68 selected desktop/mobile cases pass, combining the 64
   passing confirmation cases with four passing reruns of the last two navigation
   stories. This includes all ten project-goal journeys and lost-answer recovery.
+- All ten standalone authoring desktop/mobile cases pass. The model-editing
+  example now explicitly opens Execution options before its nested provider
+  controls, rather than trying to focus a hidden field.
 - Independent finish review: SHIP; 32 captures covering 16 selected stories,
   no blocking goal, identity, consent, stale-data or recovery issues. Sampled
   primary-action text contrast measured 11.18:1. Its minor retained task shortcut
