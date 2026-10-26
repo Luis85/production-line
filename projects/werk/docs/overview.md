@@ -51,7 +51,7 @@ and replaceable prebuilt files in `<home>/runtime/`. Startup prints the local UR
 file path; unlock locally without putting the token in the URL. This starts the
 standalone worker; no project-local `init`, npm step or Factory fleet is needed.
 
-Use Werk 0.17.0 or later for this Home layout; older archives keep their original
+Use Werk 0.17.1 or later for this Home layout; older archives keep their original
 layout and require the adoption procedure below.
 
 In the webview, configure the provider, clone/register the project, preview its

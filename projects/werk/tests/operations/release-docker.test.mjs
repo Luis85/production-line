@@ -51,9 +51,11 @@ test('packaged flat Home Docker launcher builds the internal runtime without req
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = join(root, 'source'), home = join(root, 'Home with spaces'), tools = join(root, 'host-tools');
   const put = async (path, value = 'Fixture guidance.\n') => { await mkdir(dirname(join(source, path)), { recursive: true }); await writeFile(join(source, path), value); };
-  const previousType = process.env.GITHUB_REF_TYPE;
-  process.env.GITHUB_REF_TYPE = 'branch';
-  t.after(() => { if (previousType === undefined) delete process.env.GITHUB_REF_TYPE; else process.env.GITHUB_REF_TYPE = previousType; });
+  // Synthetic packages have their own version and must not inherit the outer release tag.
+  const refKeys = ['GITHUB_REF_TYPE', 'GITHUB_REF_NAME', 'GITHUB_REF'];
+  const previousRef = Object.fromEntries(refKeys.map(key => [key, process.env[key]]));
+  Object.assign(process.env, { GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'docker-fixture', GITHUB_REF: 'refs/heads/docker-fixture' });
+  t.after(() => { for (const key of refKeys) { if (previousRef[key] === undefined) delete process.env[key]; else process.env[key] = previousRef[key]; } });
   await put('package.json', JSON.stringify({ version: '0.1.0' }));
   for (const path of releaseFiles) await put(path);
   for (const path of ['werk-docker.sh', 'werk-docker.ps1', 'Dockerfile.release', 'compose.release.yaml']) await put(path, await readFile(path, 'utf8'));

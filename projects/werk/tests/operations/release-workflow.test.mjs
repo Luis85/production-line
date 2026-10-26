@@ -122,7 +122,7 @@ test('release publication requires screenshot qualification and downloads its ex
   assert.ok(workflow.jobs.publish.needs.includes('storybook'));
   const qualification = workflow.jobs.storybook.steps;
   const commands = qualification.flatMap(step => step.run ? [step.run] : []);
-  assert.ok(commands.includes('npm exec -- playwright install --with-deps chromium'));
+  assert.ok(commands.includes('npm run ci:browser'));
   assert.ok(commands.indexOf('npm run storybook:ci') < commands.indexOf('npm run release:storybook'));
   const upload = qualification.find(step => step.with?.name === 'werk-storybook-candidate');
   assert.equal(upload.with['if-no-files-found'], 'error');

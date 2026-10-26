@@ -2,7 +2,7 @@
 
 This is the primary standalone worker journey: extract a runtime archive into a dedicated worker home, start the worker, create a Feature Request in its webview, observe implementation and Git updates, review the delivered increment, and explicitly allow its merge into the displayed main checkout. Git and a PullRequest Markdown handoff are sufficient; GitHub PRs and Releases are an optional, separately approved extension.
 
-Use a verified Werk 0.17.0 or later archive for this tutorial. The 0.16.0 archive retains its older directory layout; follow the adoption guide before reusing its stopped state. The [qualification ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md) names the evidence actually obtained for candidate packaging, Git fixtures, browser interaction and native/live execution.
+Use a verified Werk 0.17.1 or later archive for this tutorial. The 0.16.0 archive retains its older directory layout; follow the adoption guide before reusing its stopped state. The [qualification ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md) names the evidence actually obtained for candidate packaging, Git fixtures, browser interaction and native/live execution.
 
 ## Before you start
 

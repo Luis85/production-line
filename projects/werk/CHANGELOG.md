@@ -7,7 +7,9 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
-## [0.17.0] - 2026-10-26
+## [0.17.1] - 2026-10-26
+
+The v0.17.0 candidate was not published: tag qualification exposed a synthetic-package test inheriting its outer GitHub tag. Its tag remains intact; these changes first ship in 0.17.1.
 
 Qualification: native archive, browser, Git, Docker and VM checks use labelled protocol fixtures. Real Windows/Claude-account execution and live worker-managed GitHub Release publication remain separately qualified in the [acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md).
 
@@ -28,6 +30,10 @@ Qualification: native archive, browser, Git, Docker and VM checks use labelled p
 - New worker project-local installation is retired. New projects clone their remote into `Home/projects/<id>` with configurable watched folder/poll interval, and Workboard request creation uses committed templates and Git publication rather than generic local chat.
 
 ### Fixed
+
+- Linux CI browser setup covers direct apt sources and runner mirror lists, using the canonical Ubuntu mirror for system libraries while retaining the locked Playwright browser, signed packages and existing verification/job limits.
+
+- Synthetic Docker packaging tests isolate and restore the complete GitHub ref environment, so tagged qualification checks the real release version without applying that version to the fixture. Production tag/version guards remain unchanged.
 
 - A lost checkpoint-answer acknowledgement keeps its recovery controls visible after the server advances; retry replays the same immutable command once before another response is allowed. Project setup stays on the chosen goal through publication and retains uncertain operations with their original project.
 - Review names passed required checks separately from pending human acceptance. Project next-step links retain readable text and focused task/history controls meet the 44 px target. Long unbroken project names wrap within narrow screens.
