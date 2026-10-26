@@ -4,6 +4,7 @@ import { userEvent, within } from 'storybook/test';
 import { h, KeepAlive, nextTick, type Component } from 'vue';
 import UApp from '@nuxt/ui/components/App.vue';
 import App from '../src/worker/webview/App.vue';
+import { state } from '../src/worker/webview/store';
 import WorkerShell from '../src/worker/webview/components/WorkerShell.vue';
 import RequestPage from '../src/worker/webview/pages/RequestPage.vue';
 import TaskboardPage from '../src/worker/webview/pages/TaskboardPage.vue';
@@ -31,11 +32,12 @@ type Story = StoryObj;
 const source = (path: string) => 'src/worker/webview/' + path + '.vue';
 
 const storymap = (summary: string, covers: string[], route = '/workboard', step?: number) => ({ app: 'Worker', summary, covers: covers.map(source), route, ready: '[data-worker-story-ready]', ...(step ? { journey: 'Give work to a worker, steer it, and review its evidence', step } : {}) });
-function renderPage(component: Component, variant: WorkerFixture = 'populated') {
+function renderPage(component: Component, variant: WorkerFixture = 'populated', home = false) {
   return () => ({ setup() {
     installWorkerFixture(variant);
+    if (home) state.environment!.homeLayout = 'central';
     return () => h(UApp, null, { default: () => h(WorkerShell, { links, homePath: '/workboard', homeLabel: 'Werk worker home', navLabel: 'Worker pages' }, {
-      identity: () => h('div', { class: 'worker-identity' }, [h('div', [h('strong', 'Werk release'), h('span', 'Worker storybook · example data')])]),
+      identity: () => h('div', { class: 'worker-identity' }, [h('div', [h('strong', home ? 'Werk Home' : 'Werk release'), h('span', 'Worker storybook · example data')])]),
       status: () => h('span', { class: 'muted' }, 'Isolated example · no model connected'),
       default: () => h(KeepAlive, null, { default: () => h(component) }),
       footer: () => 'Illustrative fixture · saved tasks and model evidence',
@@ -300,7 +302,7 @@ export const DefaultProvider: Story = {
   name:'Choose the default provider',parameters:{storymap:storymap('The default provider has its own saved baseline, separate from changing credentials for a connection.',['pages/SettingsPage','components/SettingsPanel'],'/settings#default-provider')},render:renderPage(SettingsPage,'settings-ready'),play:async({canvasElement})=>{await element(canvasElement,'#worker-default-provider');if(canvasElement.querySelector('#provider-connection'))throw Error('The default view must not configure a second account.');await ready(canvasElement);},
 };
 export const SettingsDirectory: Story = {
-  name:'Choose one worker setting',parameters:{storymap:storymap('Settings opens as a grouped task directory. No settings form or save is active until an operator chooses a goal.',['pages/SettingsPage'],'/settings')},render:renderPage(SettingsPage,'settings-ready'),play:async({canvasElement})=>{const q=within(canvasElement);await q.findByRole('heading',{name:'Worker settings'});if(canvasElement.querySelector('form'))throw Error('Settings directory must not mount unrelated editors.');await ready(canvasElement);},
+  name:'Choose one worker setting',parameters:{storymap:storymap('Settings opens as a grouped task directory. No settings form or save is active until an operator chooses a goal.',['pages/SettingsPage'],'/settings')},render:renderPage(SettingsPage,'settings-ready',true),play:async({canvasElement})=>{const q=within(canvasElement);await q.findByRole('heading',{name:'Worker settings'});if(q.queryByText('Legacy project configuration'))throw Error('Central Home must not expose legacy project configuration.');if(canvasElement.querySelector('form'))throw Error('Settings directory must not mount unrelated editors.');await ready(canvasElement);},
 };
 export const ToolAccessSettings: Story = {
   name: '30 · Configure tools and MCP',

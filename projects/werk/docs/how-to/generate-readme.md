@@ -84,7 +84,7 @@ pictures.
 
 ## Keep current images separate from history
 
-[Documentation evidence](../evidence/README.md) separates the current curated
+[Documentation evidence](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/evidence/README.md) separates the current curated
 `readme/` pictures from `archive/`. Never replace historical screenshots with a
 new UI: they substantiate dated reports. Keep raw validation and mutation receipts.
 Before removing an unreferenced image, check maintained links and receipt references,

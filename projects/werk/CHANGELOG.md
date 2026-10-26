@@ -9,7 +9,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [0.17.0] - 2026-10-26
 
-Qualification: native archive, browser, Git, Docker and VM checks use labelled protocol fixtures. Real Windows/Claude-account execution and live worker-managed GitHub Release publication remain separately qualified in the [acceptance ledger](docs/reports/worker-release-workflow-acceptance.md).
+Qualification: native archive, browser, Git, Docker and VM checks use labelled protocol fixtures. Real Windows/Claude-account execution and live worker-managed GitHub Release publication remain separately qualified in the [acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/worker-release-workflow-acceptance.md).
 
 ### Added
 

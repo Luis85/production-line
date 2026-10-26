@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "version": "0.12.0",
-  "commit": "8aa2f88ddce2b51e2e011ab194fadd848db3d994",
-  "sourceDigest": "a6e8c5a036f2f2e0f0a0565bb2d74e3fa1283afe327e64959d2f7cb20efcb7d0",
-  "capturedAt": "2026-10-18T13:15:56.947Z",
+  "version": "0.17.0",
+  "commit": "773dc427539e6d9c7ad371eafe671b810c8d3cf0",
+  "sourceDigest": "260a96f3b88ec3465590e8e498c231a29819c902a03f74ba318fac9b83fb4ac2",
+  "capturedAt": "2026-10-26T17:48:47.572Z",
   "fixtureTime": "2026-10-15T09:30:00.000Z",
   "sampleData": true,
   "qualification": "Every Storybook story and desktop/mobile handbook passed before selection.",
@@ -11,39 +11,63 @@
   "screenshots": [
     {
       "file": "worker-taskboard.png",
-      "story": "worker-workspace--populated-taskboard",
+      "story": "worker-workboard-journey--review-lane",
       "viewport": "desktop",
-      "alt": "Worker taskboard showing capacity and requests grouped by their current state.",
-      "caption": "The real worker taskboard with sample local requests. Select a request to inspect its conversation and progress; use Metrics, History and Settings to inspect and configure the worker.",
+      "alt": "Workboard prioritizing requests that need input and increments ready for review.",
+      "caption": "Workboard with deterministic sample requests. Choose the next request to advance; authoring, conversation and review have separate focused views.",
       "path": "docs/evidence/readme/worker-taskboard.png",
       "width": 1440,
-      "height": 1246,
-      "sha256": "02378d05534754650b1c904b77200fddb3f45947c34733b24ff44c66af249be6",
-      "capture": "storymap/screenshots/worker-workspace--populated-taskboard-desktop.png"
+      "height": 1524,
+      "sha256": "18deb34a9364cceef3ecacab20400e4d1a3a796de9fbd5704ef83710252b9bfa",
+      "capture": "storymap/screenshots/worker-workboard-journey--review-lane-desktop.png"
+    },
+    {
+      "file": "worker-projects.png",
+      "story": "worker-workboard-journey--visible-home-projects",
+      "viewport": "desktop",
+      "alt": "Project directory showing isolated Home checkout paths and an explicit Add a project action.",
+      "caption": "Choose a registered project. Cloning, workflow publication, exact policy approval and intake recheck are separate explicit steps.",
+      "path": "docs/evidence/readme/worker-projects.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "3e351cce49d2b762b73f4a1ed27e3a2c4d421c7503022c4bf8e6a87fc1acf8e4",
+      "capture": "storymap/screenshots/worker-workboard-journey--visible-home-projects-desktop.png"
     },
     {
       "file": "worker-create-request.png",
-      "story": "worker-shared-feature-requests--describe-request",
+      "story": "worker-workboard-journey--canonical-request",
       "viewport": "desktop",
-      "alt": "Shared Feature Request authoring in the worker, with request instructions and the Prepare request action.",
-      "caption": "The shared-request entry screen with example instructions. The next step lets you review the template, approved scope and readiness before publishing.",
+      "alt": "Focused New Feature Request view with project, goal, acceptance criteria and explicit Git publication.",
+      "caption": "One project request, from its committed template to an explicit publication decision. Draft preparation does not invoke a model or commit to Git.",
       "path": "docs/evidence/readme/worker-create-request.png",
       "width": 1440,
-      "height": 1000,
-      "sha256": "183cc2fc5af957b4b534d15264d94f6e727ac865026f3e7bd7a4c2bae85d3ebc",
-      "capture": "storymap/screenshots/worker-shared-feature-requests--describe-request-desktop.png"
+      "height": 2173,
+      "sha256": "8a077727548bd5164f37711ae3f011d227416c67e7916e229c131233a3b9644b",
+      "capture": "storymap/screenshots/worker-workboard-journey--canonical-request-desktop.png"
     },
     {
       "file": "worker-metrics.png",
       "story": "worker-metrics--active-worker",
       "viewport": "desktop",
-      "alt": "Worker Metrics with current capacity, configured token allowance, resources and execution activity.",
-      "caption": "Metrics in the real worker UI with deterministic sample measurements. Worker process resources, host observations and the configured allowance are separate; these are not live account balances.",
+      "alt": "Worker health with resources, measured consumption and execution activity.",
+      "caption": "Worker health with deterministic sample measurements. Resource use and allowance are separate from delivery quality and live provider account balances.",
       "path": "docs/evidence/readme/worker-metrics.png",
       "width": 1440,
-      "height": 3198,
-      "sha256": "254f3c9bfe04bb51cec507699628e15620696e88bd4531be9c6ffc8faebe4eeb",
+      "height": 2645,
+      "sha256": "f9dcab1217e43fecfc4bbc3ceaa4582cfd76bdd6df3ddeb969a89f488a491c01",
       "capture": "storymap/screenshots/worker-metrics--active-worker-desktop.png"
+    },
+    {
+      "file": "worker-workflow.png",
+      "story": "worker-workflow--observed-delivery",
+      "viewport": "desktop",
+      "alt": "Workflow health with recorded stage pressure, confirmed-increment velocity and measurement coverage.",
+      "caption": "Recorded delivery health and operational EBM proxies. Unmeasured customer or business outcomes remain unavailable rather than being inferred.",
+      "path": "docs/evidence/readme/worker-workflow.png",
+      "width": 1440,
+      "height": 2169,
+      "sha256": "b71a92b2037455776983d633cd2f742c85c26a8eebc2abebea60b68014de1065",
+      "capture": "storymap/screenshots/worker-workflow--observed-delivery-desktop.png"
     },
     {
       "file": "worker-review.png",
@@ -53,21 +77,21 @@
       "caption": "The real review workspace with a fictional verified candidate and a policy requiring human acceptance. Recording acceptance is separate from merging the change.",
       "path": "docs/evidence/readme/worker-review.png",
       "width": 1440,
-      "height": 3827,
-      "sha256": "93004620fbf9f0073642320edd9b25dbef6efc6f1b64731aa091a0aee1b95e1c",
+      "height": 3186,
+      "sha256": "593127070f01ded25230546f8ba2bb5a0bc7560ef58d56e54e97cf5f21e1de4b",
       "capture": "storymap/screenshots/worker-review--verified-candidate-desktop.png"
     },
     {
       "file": "worker-settings.png",
-      "story": "worker-workspace--worker-settings",
+      "story": "worker-workspace--settings-directory",
       "viewport": "desktop",
-      "alt": "Worker settings with provider connections and navigation to repositories, tool access and consumption settings.",
-      "caption": "Settings in the real worker UI, using sample configuration. Keep credentials local to the worker machine.",
+      "alt": "Settings directory grouping independent worker settings by the task to perform.",
+      "caption": "Choose one setting, then edit it on its own focused view. Provider connection, default provider, capacity and time limits have independent saves.",
       "path": "docs/evidence/readme/worker-settings.png",
       "width": 1440,
-      "height": 1275,
-      "sha256": "c69cc2486b697beaf2b8c377961fd95a8eb39a97b13dda0726321c9b6b5b9a14",
-      "capture": "storymap/screenshots/worker-workspace--worker-settings-desktop.png"
+      "height": 1000,
+      "sha256": "b73066daa5c99df79cb9b3c38f00a57c410effbe84be79dfce3618b187c6e53c",
+      "capture": "storymap/screenshots/worker-workspace--settings-directory-desktop.png"
     }
   ]
 }
