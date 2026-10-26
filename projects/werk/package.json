@@ -22,6 +22,7 @@
     "audit:dependencies": "npm audit --audit-level=low",
     "release:package": "node scripts/release/package.mjs",
     "release:build": "npm run readme:check && npm run changelog:check && npm run build && npm run storybook:ci && npm run release:package && npm run release:storybook && npm run release:readme",
+    "ci:browser": "node scripts/quality/install-browser.mjs",
     "storybook": "npm run storybook:generate && storybook dev -p 6006 --no-open",
     "storybook:generate": "node scripts/storybook/generate.mjs",
     "storybook:build": "npm run storybook:generate && storybook build --disable-telemetry",

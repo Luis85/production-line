@@ -31,6 +31,8 @@ Qualification: native archive, browser, Git, Docker and VM checks use labelled p
 
 ### Fixed
 
+- Linux CI browser setup uses the canonical Ubuntu mirror for system libraries while retaining the locked Playwright browser, signed packages and existing verification/job limits.
+
 - Synthetic Docker packaging tests isolate and restore the complete GitHub ref environment, so tagged qualification checks the real release version without applying that version to the fixture. Production tag/version guards remain unchanged.
 
 - A lost checkpoint-answer acknowledgement keeps its recovery controls visible after the server advances; retry replays the same immutable command once before another response is allowed. Project setup stays on the chosen goal through publication and retains uncertain operations with their original project.

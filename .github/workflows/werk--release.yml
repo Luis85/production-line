@@ -304,7 +304,7 @@ jobs:
           path: ${{ env.FORGE_PROJECT_PATH }}/release
       - run: npm ci --ignore-scripts
       - name: Install the locked browser and system libraries
-        run: npm exec -- playwright install --with-deps chromium
+        run: npm run ci:browser
       - name: Extract, start, submit, review and approve the plain Git main checkout merge
         env:
           WERK_WORKER_HOME_ARCHIVES: release
@@ -400,7 +400,7 @@ jobs:
           cache-dependency-path: ${{ env.FORGE_PROJECT_PATH }}/package-lock.json
       - run: npm ci --ignore-scripts
       - name: Install the locked browser version and system libraries
-        run: npm exec -- playwright install --with-deps chromium
+        run: npm run ci:browser
       - name: Verify generated README before building documentation
         run: npm run readme:check
       - name: Build the code-derived stories and qualify every component screenshot

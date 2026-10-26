@@ -283,6 +283,7 @@ manual branch runs qualify candidates without publishing.
    three-part version (optionally with a prerelease suffix), and point to a
    commit contained in `main`. Build, full checks, dependency audit, native
    Linux/macOS/Windows, Docker, cloud-init VM and Storybook qualification must all pass.
+   Linux browser jobs use the canonical Ubuntu package mirror and the locked Playwright CLI; dependency signatures and verification limits are preserved.
 4. The publishing job uses GitHub's automatic `GITHUB_TOKEN` with `contents: write`.
    No separate release secret is required. It uploads both runtime archives,
    `install.mjs`, `SHA256SUMS`, the versioned Storybook ZIP,
